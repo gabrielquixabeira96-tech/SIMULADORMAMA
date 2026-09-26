@@ -23,6 +23,8 @@ export interface MalhaCarregada {
   indicesCanonicos: boolean;
   origem: "glb" | "obj" | "ply";
   quadro?: "scan" | "anatomico";
+  /** asset.extras do GLB (unidade, quadro, esquema, nao_calibrado, modelo, ...) */
+  extras?: Record<string, unknown>;
 }
 
 const COR_NEUTRA = 0xd9b8a3;
@@ -63,7 +65,9 @@ export async function carregarGlb(url: string, esquemaEsperado?: string): Promis
   if (comTransformacao) throw new Error("GLB recusado: nó com transformação (a malha deve estar em mm, sem escala)");
   const malha = primeiraMalha(gltf.scene);
   const g = malha.geometry as THREE.BufferGeometry;
-  return finalizar(gltf.scene, "glb", g.index !== null, v.quadro);
+  const r = finalizar(gltf.scene, "glb", g.index !== null, v.quadro);
+  r.extras = { ...((gltf.asset as { extras?: Record<string, unknown> }).extras ?? {}) };
+  return r;
 }
 
 /** Carrega OBJ + MTL + texturas a partir de arquivos locais (File) ou de URLs nomeadas. */

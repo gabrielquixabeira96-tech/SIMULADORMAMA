@@ -12,7 +12,7 @@ import {
   type Vetor3,
 } from "@simulador/contratos";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConfigPublica } from "@/config/publica";
 import { distanciaEuclidiana, distanciasEuclidianas } from "@/medidas/geometria";
 import type { MalhaCarregada } from "@/viewer/carregar";
@@ -20,11 +20,14 @@ import type { CliqueNaMalha, Marcador } from "@/viewer/Visualizador";
 import { NOMES_VISTAS, VISTAS, type NomeVista } from "@/viewer/vistas";
 import { FormularioTepid, valoresTepidVazios, type ErroCampoUI, type ResultadoTepidUI, type ValoresTepidForm } from "./FormularioTepid";
 import { PainelDistancias, PainelVolume, type EstadoMedicao } from "./PainelMedidas";
+import { PainelSimulacao, type EstadoSimulacao } from "@/simulacao/PainelSimulacao";
 
-const Visualizador = dynamic(() => import("@/viewer/Visualizador"), {
+const VisualizadorDinamico = dynamic(() => import("@/viewer/Visualizador"), {
   ssr: false,
   loading: () => <div className="viewer-vazio">Carregando visualizador 3D…</div>,
 });
+// Memo: mudanças de estado alheias ao viewer (simulação, TEPID) não re-renderizam o canvas principal.
+const Visualizador = memo(VisualizadorDinamico);
 
 type Fonte =
   | { tipo: "servidor"; malhaId: string; pseudonimo: string; sintetica: boolean; versao: number }
@@ -93,6 +96,11 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   const [tepidValidado, setTepidValidado] = useState<Record<string, { dir: number; esq: number }> | null>(null);
   const [errosTepid, setErrosTepid] = useState<ErroCampoUI[]>([]);
   const [avaliandoTepid, setAvaliandoTepid] = useState(false);
+  /**
+   * Estado da simulação mostrada (implantes, plano, IMF, peso, envelope, não calibrado, previsto só em B).
+   * Disponível para o relatório/PDF do Marco 2b (PainelRelatorio) — ver README.
+   */
+  const [estadoSimulacao, setEstadoSimulacao] = useState<EstadoSimulacao | null>(null);
 
   // ---------------------------------------------------------------- efeitos
   useEffect(() => {
@@ -254,6 +262,14 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     }
   }
 
+  // callback estável para o viewer memoizado (sempre chama a versão mais recente de aoClicar)
+  const aoClicarRef = useRef(aoClicar);
+  useLayoutEffect(() => {
+    aoClicarRef.current = aoClicar;
+  });
+  const aoClicarEstavel = useCallback((c: CliqueNaMalha) => aoClicarRef.current(c), []);
+  const linhaRegua = useMemo<[Vetor3, Vetor3] | null>(() => (pontosRegua.length === 2 ? [pontosRegua[0]!, pontosRegua[1]!] : null), [pontosRegua]);
+
   const fatorPrevisto = useMemo(() => {
     const [p1, p2] = pontosRegua;
     const mm = Number(reguaMm.replace(",", "."));
@@ -356,12 +372,22 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     : null;
   const podeMarcar = !!carregada && (calibrada || fonte?.tipo !== "servidor" || (fonte.tipo === "servidor" && fonte.sintetica));
 
+  const todosLandmarks = LANDMARK_IDS.every((id) => landmarks[id]);
+  const motivoBloqueioSimulacao = !fonte || fonte.tipo !== "servidor"
+    ? "Envie a malha ao serviço (ou processe um torso sintético) para simular."
+    : !indicesOk
+      ? "Malha sem índices canônicos."
+      : !todosLandmarks
+        ? "Marque os 10 landmarks (os 4 da base definem a pegada do implante)."
+        : null;
+
   return (
+    <>
     <div className="consulta">
       <div className="coluna-viewer">
         <div className="viewer" data-testid="viewer">
           {carregada || carregando ? (
-            <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={pontosRegua.length === 2 ? [pontosRegua[0]!, pontosRegua[1]!] : null} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicar} />
+            <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={linhaRegua} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicarEstavel} />
           ) : (
             <div className="viewer-vazio">Nenhuma malha aberta. Envie um OBJ/PLY, abra um arquivo local ou um torso sintético.</div>
           )}
@@ -564,5 +590,18 @@ export function Consulta({ config }: { config: ConfigPublica }) {
         )}
       </div>
     </div>
+    <PainelSimulacao
+      recursos={recursos}
+      envelopeMm={config.envelope_rms_mm}
+      malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
+      landmarks={landmarks}
+      prontoParaSimular={motivoBloqueioSimulacao === null}
+      motivoBloqueio={motivoBloqueioSimulacao}
+      pincaPoloSuperiorMm={tepidValidado?.pinca_polo_superior_mm ?? null}
+      onEstado={setEstadoSimulacao}
+    />
+    {/* Marco 2b (outro agente): montar aqui <PainelAnamnese /> e <PainelRelatorio estadoSimulacao={estadoSimulacao} ... /> */}
+    <span hidden data-testid="estado-simulacao" data-implantes={estadoSimulacao?.implantes.map((i) => i.id).join(",") ?? ""} data-plano={estadoSimulacao?.plano ?? ""} data-imf={estadoSimulacao?.imf ?? ""} />
+    </>
   );
 }

@@ -133,3 +133,46 @@ export async function inserirTepid(t: {
   if (!id) throw new Error("falha ao inserir tepid");
   return id;
 }
+
+/** Cache do catálogo no banco (ADR 0002 item 6): upsert idempotente por id. */
+export async function upsertImplante(
+  it: { id: string; fabricante: string; verificado: boolean; exemplo_nao_clinico: boolean } & Record<string, unknown>,
+  cliente?: pg.ClientBase,
+): Promise<void> {
+  const sql = `insert into implantes (id, fabricante, payload, verificado, exemplo_nao_clinico) values ($1,$2,$3,$4,$5)
+    on conflict (id) do update set fabricante = excluded.fabricante, payload = excluded.payload, verificado = excluded.verificado,
+      exemplo_nao_clinico = excluded.exemplo_nao_clinico, carregado_em = now()`;
+  const p = [it.id, it.fabricante, JSON.stringify(it), it.verificado, it.exemplo_nao_clinico];
+  if (cliente) await cliente.query(sql, p);
+  else await consultar(sql, p);
+}
+
+export interface SimulacaoLinha {
+  id: string;
+  malha_id: string;
+  implante_id: string;
+  plano: "subglandular" | "dual_plane";
+  imf: "manter" | "rebaixar";
+  lado: "ambos" | "dir" | "esq";
+  versao_config_simulacao: string;
+  nao_calibrado: boolean;
+  previsto: unknown;
+  mostrada_em: Date;
+}
+
+/** Cada exibição de simulação à paciente é uma linha (ADR 0002 item 5). */
+export async function inserirSimulacao(
+  s: { malhaId: string; implanteId: string; plano: string; imf: string; lado: string; versaoConfig: string; naoCalibrado: boolean; previsto: unknown },
+  cliente?: pg.ClientBase,
+): Promise<string> {
+  const sql = `insert into simulacoes (malha_id, implante_id, plano, imf, lado, versao_config_simulacao, nao_calibrado, previsto)
+    values ($1,$2,$3,$4,$5,$6,$7,$8) returning id`;
+  const p = [s.malhaId, s.implanteId, s.plano, s.imf, s.lado, s.versaoConfig, s.naoCalibrado, s.previsto === undefined ? null : JSON.stringify(s.previsto)];
+  const r = cliente ? await cliente.query<{ id: string }>(sql, p) : await consultar<{ id: string }>(sql, p);
+  return r.rows[0]!.id;
+}
+
+export async function listarSimulacoes(malhaId: string): Promise<SimulacaoLinha[]> {
+  const r = await consultar<SimulacaoLinha>("select * from simulacoes where malha_id = $1 order by mostrada_em, id", [malhaId]);
+  return r.rows;
+}

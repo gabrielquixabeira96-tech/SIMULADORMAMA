@@ -112,3 +112,18 @@ describe("medidas/1.0", () => {
     expect(medirRequisicaoSchema.safeParse({ ...req, malha_dir: "pacientes/P-7K2M9Q/malhas/x" }).success).toBe(true);
   });
 });
+
+describe("morphs/1.0", () => {
+  it("zod do manifest = campos do morphs_manifest.schema.json", async () => {
+    const { manifestMorphsSchema } = await import("../src/morphs");
+    const json = lerJson("config/schemas/morphs_manifest.schema.json");
+    expect(Object.keys(manifestMorphsSchema.shape).sort()).toEqual(Object.keys(json.properties).sort());
+  });
+  it("nome canônico do target", async () => {
+    const { nomeTarget, NOME_TARGET_REGEX } = await import("../src/morphs");
+    expect(nomeTarget("motiva-ergonomix-round-300", "dual_plane", "rebaixar")).toBe("mt__motiva-ergonomix-round-300__dual_plane__rebaixar");
+    expect(nomeTarget("a-1", "subglandular", "manter", "dir")).toBe("mt__a-1__subglandular__manter__dir");
+    expect(NOME_TARGET_REGEX.test("mt__a__dual_plane__manter__esq")).toBe(true);
+    expect(NOME_TARGET_REGEX.test("mt__a__submuscular__manter")).toBe(false);
+  });
+});

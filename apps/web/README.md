@@ -12,6 +12,7 @@ DESENHO=B pnpm --filter web dev                # http://localhost:3000 (DESENHO=
 pnpm --filter web lint | typecheck | test      # ESLint, tsc, Vitest (unit + API + banco + UI)
 pnpm --filter web test:e2e                     # build de teste + Playwright contra o stack REAL (ver abaixo)
 pnpm --filter web validacao:marcos             # provas dos Marcos 0 e 1 → docs/validacao/v<versao>-web-marcos-0-1.{md,json}
+pnpm --filter web validacao:latencia           # benchmark do Marco 2 → docs/validacao/v<versao>-web-marco2-latencia.{md,json}
 pnpm --filter web build
 ```
 
@@ -28,7 +29,13 @@ O serviço de malha (`services/mesh`, `MESH_SERVICE_URL`, padrão `http://127.0.
 5. Medidas (só B): euclidianas no cliente; geodésicas e volume ± incerteza via `/medir`. Gravação (`POST /api/medidas`) recalcula no servidor.
 6. TEPID digitado: campos/faixas de `config/tepid.json`, nota "conferir no texto original"; alertas e tabelas só em B.
 
+7. Simulação (Marco 2, `src/simulacao/`): escolha MANUAL do implante no catálogo (`EscolhaImplante`, A e B; até 2 para comparar) → `POST /api/malhas/<id>/morphs` (exige os 10 landmarks) → os 4 `.glb` (plano × IMF) são pré-carregados e a troca de plano/IMF/implante não recarrega nada. Slider antes/depois = `morphTargetInfluences`; comparação lado a lado com câmeras sincronizadas; selo "coeficientes não calibrados". Cada combinação mostrada vira linha em `simulacoes` (`POST /api/malhas/<id>/simulacoes`, auditoria `simulou`); `GET` lista (sem `previsto` em A).
+
+**Envelope de incerteza (restrição 3):** `criarCenaSimulada` (`src/simulacao/cena.ts`) é o único caminho para a pele simulada e já a entrega com o envelope ±`envelope_rms_mm` (config/simulacao.json): casca translúcida a +envelope ao longo da normal deformada (mais forte no contorno) + faixa laranja pintada na pele sobre a região que o implante altera. `garantirEnvelope` roda a cada quadro e esconde a pele se o envelope sumir; `tests/unit/cena.test.ts` falha se for possível mostrar simulação sem envelope.
+
 Aviso fixo "Ilustração, não previsão de resultado" no layout raiz; não existe botão de compartilhar/exportar.
+
+**Para o Marco 2b (relatório/PDF):** `Consulta.tsx` guarda `estadoSimulacao: EstadoSimulacao | null` (tipo em `src/simulacao/PainelSimulacao.tsx`): `malha_id`, `implantes` (id, rótulo, volume, base, projeção), `implante_mostrado`, `comparacao`, `plano`, `imf`, `envelope_rms_mm`, `nao_calibrado`, `modelo`, `versao_config_simulacao` e `previsto` (só em B). O histórico persistido está em `GET /api/malhas/<id>/simulacoes`. Montar `PainelAnamnese`/`PainelRelatorio` logo abaixo de `<PainelSimulacao />` (marcado com comentário no JSX).
 
 ## Flag DESENHO (ADR 0005)
 

@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { POST as postReescalar } from "@/app/api/malhas/[id]/reescalar/route";
+import { POST as postMorphs } from "@/app/api/malhas/[id]/morphs/route";
+import { GET as getArquivo } from "@/app/api/malhas/[id]/arquivo/route";
 import { POST as postMalha } from "@/app/api/malhas/route";
 import { POST as postMedidas } from "@/app/api/medidas/route";
 import { POST as postMedir } from "@/app/api/medidas/medir/route";
@@ -92,6 +94,27 @@ describe.skipIf(!pronto)("integração com o services/mesh real", () => {
     }
     expect(reg.geodesica.algoritmo).toBe("mmp");
   }, 120_000);
+
+  it("morphs reais: manifest morphs/1.0 com os 2 implantes escolhidos, 4 .glb servidos pela rota auditada", async () => {
+    const r = await postMorphs(new Request("http://x", json({ landmarks: landmarksDoGabarito(), implantes: ["motiva-rsd-300", "polytech-21631-255"] })), params(malhaId));
+    const m = await r.json();
+    expect(r.status, JSON.stringify(m)).toBe(200);
+    expect(m.nao_calibrado).toBe(true);
+    expect(m.arquivos.map((a: any) => a.arquivo).sort()).toEqual(["dual_plane__manter.glb", "dual_plane__rebaixar.glb", "subglandular__manter.glb", "subglandular__rebaixar.glb"]);
+    for (const a of m.arquivos) {
+      expect(a.targets.map((t: any) => t.nome)).toEqual(expect.arrayContaining([`mt__motiva-rsd-300__${a.plano}__${a.imf}`, `mt__polytech-21631-255__${a.plano}__${a.imf}__dir`]));
+    }
+    const g = await getArquivo(new Request(`http://x/api/malhas/${malhaId}/arquivo?nome=morphs/dual_plane__rebaixar.glb`), params(malhaId));
+    expect(g.status).toBe(200);
+    const buf = new Uint8Array(await g.arrayBuffer());
+    expect(new TextDecoder().decode(buf.slice(0, 4))).toBe("glTF");
+    // sem os 4 landmarks da base: 422 do serviço
+    const lm = landmarksDoGabarito();
+    delete lm.base_lateral_esq;
+    const e = await postMorphs(new Request("http://x", json({ landmarks: lm, implantes: ["motiva-rsd-300"] })), params(malhaId));
+    expect(e.status).toBe(422);
+    expect((await e.json()).erro.codigo).toBe("landmarks_da_base_ausentes");
+  }, 240_000);
 
   it("volume sem landmarks da base → null por lado (aviso volume_X:landmarks_da_base_ausentes)", async () => {
     const lm = landmarksDoGabarito();

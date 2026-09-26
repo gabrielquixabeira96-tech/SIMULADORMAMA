@@ -7,3 +7,4 @@ export * from "./meshApi";
 export * from "./simulacao";
 export * from "./catalogo";
 export * from "./catalogoFiltro";
+export * from "./morphs";

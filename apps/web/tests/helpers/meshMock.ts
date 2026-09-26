@@ -6,6 +6,7 @@
 import {
   DISTANCIAS,
   medirRequisicaoSchema,
+  morphsRequisicaoSchema,
   processarRequisicaoSchema,
   reescalarRequisicaoSchema,
   type DistanciaId,
@@ -119,6 +120,38 @@ export const handlers = [
     return HttpResponse.json({ distancias, volumes, quadro_anatomico: null, geodesica: { algoritmo: "mmp", biblioteca: "pygeodesic", versao: "0.1.0" }, avisos: [] });
   }),
 ];
+
+handlers.push(
+  http.post(`${MESH}/morphs`, async ({ request }) => {
+    const corpo = await registrar("/morphs", request);
+    if (indisponivel) return HttpResponse.error();
+    const r = morphsRequisicaoSchema.safeParse(corpo);
+    if (!r.success) return erro(422, "contrato_violado", r.error.message);
+    const previsto = { delta_projecao_mamilo_mm: { dir: 29.1, esq: 29.1 }, delta_y_sulco_mm: { dir: 0, esq: 0 }, delta_y_mamilo_mm: { dir: 3.4, esq: 3.4 } };
+    const arquivos = r.data.planos.flatMap((plano) =>
+      r.data.imfs.map((imf) => ({
+        arquivo: `${plano}__${imf}.glb`,
+        plano,
+        imf,
+        sha256: "c".repeat(64),
+        targets: r.data.implantes.flatMap((id, k) =>
+          (["ambos", "dir", "esq"] as const).map((lado, j) => ({ nome: `mt__${id}__${plano}__${imf}${lado === "ambos" ? "" : `__${lado}`}`, implante_id: id, lado, indice: k * 3 + j, previsto })),
+        ),
+      })),
+    );
+    return HttpResponse.json({
+      esquema: "morphs/1.0",
+      malha_id: r.data.malha_dir.split("/").pop(),
+      sha256_malha_base: "d".repeat(64),
+      versao_software: "0.0.1",
+      versao_config_simulacao: "1.1",
+      nao_calibrado: true,
+      gerado_em: "2026-09-26T14:10:00-04:00",
+      lados: r.data.lados,
+      arquivos,
+    });
+  }),
+);
 
 export const servidorMesh = setupServer(...handlers);
 

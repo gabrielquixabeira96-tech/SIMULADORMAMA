@@ -2,13 +2,17 @@ import {
   CABECALHO_DESENHO,
   erroApiSchema,
   malhaMetaSchema,
+  manifestMorphsSchema,
   medirRespostaSchema,
+  morphsRequisicaoSchema,
   processarRequisicaoSchema,
   reescalarRequisicaoSchema,
   saudeRespostaSchema,
   type Desenho,
   type Landmarks,
   type MalhaMeta,
+  type ManifestMorphs,
+  type MorphsRequisicao,
   type MedirResposta,
   type ProcessarRequisicao,
   type ReescalarRequisicao,
@@ -102,6 +106,14 @@ export class ClienteMesh {
 
   async reescalar(req: ReescalarRequisicao): Promise<MalhaMeta> {
     return this.chamar("POST", "/reescalar", reescalarRequisicaoSchema.parse(req), malhaMetaSchema);
+  }
+
+  /**
+   * Morph targets (contratos §10.4; ADR 0014). Permitido em A e B: a simulação é ilustração,
+   * não medição (ADR 0005). O serviço grava os .glb em <malha_dir>/morphs/.
+   */
+  async morphs(req: MorphsRequisicao): Promise<ManifestMorphs> {
+    return this.chamar("POST", "/morphs", morphsRequisicaoSchema.parse(req), manifestMorphsSchema);
   }
 
   /**
