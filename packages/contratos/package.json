@@ -1,0 +1,25 @@
+{
+  "name": "@simulador/contratos",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Tipos TS e esquemas zod espelhando config/schemas/*.schema.json e docs/contratos.md (contrato 1.0).",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

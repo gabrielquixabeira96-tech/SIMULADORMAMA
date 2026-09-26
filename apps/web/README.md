@@ -1,37 +1,36 @@
-# apps/web — placeholder (Marco 0)
+# apps/web — consulta (Marcos 0 e 1)
 
-App Next.js (App Router) + TypeScript + react-three-fiber. **Ainda não implementado**; este README fixa o que o agente web deve construir e onde.
+Next.js 16 (App Router) + TypeScript + react-three-fiber/three.js. Contratos: `docs/contratos.md`, `config/schemas/*`, ADRs 0002, 0003, 0005, 0006, 0007, 0010, 0011. Tipos/zod compartilhados em `packages/contratos` (`@simulador/contratos`).
 
-Leia antes de codar: `docs/contratos.md` (inteiro), `docs/adr/0001`, `0002`, `0003`, `0005`, `0006`, `0007`, `0010`, `0011`, e `config/schemas/`.
+## Comandos
 
-## Escopo (Marcos 1, 2 e 2b)
-
-- Upload OBJ/PLY/ZIP → `POST /api/malhas` → `services/mesh` `/processar` (contratos §7.2) → viewer GLB (mm, Y-up, sem escala no loader; rejeitar GLB sem `asset.extras.unidade == "mm"`).
-- Calibração por régua (2 cliques + comprimento) → `/reescalar`; ordem obrigatória processar → calibrar → landmarks.
-- Landmarks por clique com os **IDs canônicos** (§2), raycast three.js; euclidianas no cliente; geodésicas/volume via `/medir` (ADR 0011).
-- Formulário TEPID gerado de `config/tepid.json` (`campos`); `regras`/`tabelas` só em `DESENHO=B`.
-- Catálogo: zod em `packages/contratos` espelhando `config/schemas/catalogo.schema.json`; seed idempotente em `implantes`.
-- Simulação: carregar `morphs/manifest.json` + `.glb` por (plano, imf); slider antes/depois; comparação lado a lado; envelope ±`envelope_rms_mm` ao longo das normais; aviso fixo.
-- LLM: `ProvedorLLM` com `ProvedorAnthropic` e `ProvedorMock`; tool use com os schemas de `config/schemas/`; `verificarNumeros` travado (ADR 0006).
-- PDF do atendimento (versão, parâmetros, simulações mostradas, aviso, placeholder de assinatura ICP-Brasil).
-- Postgres: migrations SQL em `apps/web/db/migrations/` a partir do DDL de `contratos.md` §17; auditoria em toda leitura/escrita.
-- Flag `DESENHO` em `src/config/desenho.ts` (`getDesenho`, `recursoAtivo`), testes A/B (ADR 0005).
-
-## Estrutura sugerida
-
-```
-apps/web/
-  package.json            # name: "web"; scripts: dev, build, lint, typecheck, test, test:e2e, db:migrate, db:seed
-  next.config.ts          # injeta APP_VERSION a partir de ../../VERSION
-  src/app/                # rotas (App Router) e route handlers /api/*
-  src/config/desenho.ts   # flag A/B
-  src/viewer/             # R3F: carregamento GLB, landmarks, régua, morphs, envelope
-  src/medidas/            # euclidianas, chamada /medir, quadro anatômico (fórmula §1.1)
-  src/tepid/              # formulário e avaliação de regras (só B)
-  src/llm/                # provedor, higienizar.ts, verificarNumeros.ts, mocks/*.json
-  src/pdf/                # template travado
-  db/migrations/          # SQL numerado
-  tests/                  # vitest (unit + contrato) ; e2e/ (playwright, projetos desenho-A e desenho-B)
+```bash
+pnpm install                                   # na raiz
+bash scripts/db.sh start criar                 # Postgres 16 local (bancos simulador e simulador_test)
+pnpm --filter web db:migrate                   # migrations em db/migrations (idempotente)
+DESENHO=B pnpm --filter web dev                # http://localhost:3000 (DESENHO=A para o desenho A)
+pnpm --filter web lint | typecheck | test      # ESLint, tsc, Vitest (unit + API + banco + UI)
+pnpm --filter web test:e2e                     # next build + Playwright (projetos desenho-A :3101 e desenho-B :3102)
+pnpm --filter web build
 ```
 
-Nunca coloque malhas, texturas ou PDFs em `public/`; sirva por rota autenticada e auditada (ADR 0003).
+O serviço de malha (`services/mesh`, `MESH_SERVICE_URL`, padrão `http://127.0.0.1:8765`) é necessário para upload, calibração e geodésicas/volume; sem ele a UI mostra "aguardando serviço de malha" e nada é gravado. Os testes Vitest usam um mock MSW do contrato HTTP (`tests/helpers/meshMock.ts`), nunca o serviço real. Testes de banco usam `DATABASE_URL_TEST` e se auto-pulam sem Postgres.
+
+## Fluxo da tela de consulta (`/`)
+
+1. Paciente: gera pseudônimo `P-XXXXXX` (sem nome/CPF; o vínculo fica no prontuário).
+2. Malha: upload OBJ(+MTL+PNG/JPG)/PLY/ZIP → `POST /api/malhas` → `/processar` (recorte abaixo do pescoço + decimação 30–50 mil vértices) → viewer carrega `processada.glb` (rejeita GLB sem `asset.extras.unidade == "mm"`; nunca escala). Também: pré-visualização local de OBJ/PLY e torsos sintéticos de `DATA_DIR/sinteticos/`.
+3. Calibração: 2 cliques na régua + comprimento → `POST /api/malhas/<id>/reescalar` → `/reescalar`; landmarks anteriores são invalidados.
+4. Landmarks: sequência guiada dos 10 IDs canônicos (6 obrigatórios + 4 da base), raycast com `posicao` exata e `vertice` mais próximo.
+5. Medidas (só B): euclidianas no cliente; geodésicas e volume ± incerteza via `/medir`. Gravação (`POST /api/medidas`) recalcula no servidor.
+6. TEPID digitado: campos/faixas de `config/tepid.json`, nota "conferir no texto original"; alertas e tabelas só em B.
+
+Aviso fixo "Ilustração, não previsão de resultado" no layout raiz; não existe botão de compartilhar/exportar.
+
+## Flag DESENHO (ADR 0005)
+
+`src/config/desenho.ts` (`getDesenho`, `recursoAtivo`, `exigirRecurso`) lê `DESENHO` só no servidor; inválido → o servidor não sobe (`src/instrumentation.ts`). Mapa em `src/config/recursos.ts`. Em A: UI não renderiza `distancias-painel`, `volume-painel`, `tepid-alertas`; API responde `403 desligado_no_desenho_a` (`/api/medidas/medir`, `/api/catalogo?sugerir=1`, `/api/medidas` com distâncias/volumes); `ClienteMesh.medir` recusa sem tocar a rede; registro grava `distancias`/`volumes` `null`; guardas prontas para sugestão de implante (`src/catalogo/catalogo.ts`) e números do relatório do LLM (`src/llm/numeros.ts`).
+
+## LGPD
+
+Banco só com IDs/pseudônimos; auditoria append-only (gatilho bloqueia UPDATE/DELETE/TRUNCATE) gravada em toda rota que lê/escreve malha, arquivo, medida e TEPID; `src/log/` higieniza logs e `detalhes` da auditoria (CPF, e-mail, telefone, datas, caminhos absolutos, chaves sensíveis). Arquivos só por rota com lista fixa, `Cache-Control: private, no-store`; `data/` nunca entra no bundle (`outputFileTracingExcludes`).
