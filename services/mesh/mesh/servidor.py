@@ -211,8 +211,10 @@ def criar_app() -> FastAPI:
         return r
 
     @app.post("/morphs")
-    async def morphs(req: ReqMorphs):
-        r = await run_in_threadpool(servico.morphs, req.model_dump())
+    async def morphs(req: ReqMorphs, request: Request):
+        # Em X-Desenho: A o manifest sai (e e gravado) com `previsto` null: numeros calculados
+        # desligados (ADR 0005).
+        r = await run_in_threadpool(servico.morphs, req.model_dump(), request.headers.get("x-desenho") or "B")
         log.registrar("morphs", malha_id=r["malha_id"], n=sum(len(a["targets"]) for a in r["arquivos"]))
         return r
 

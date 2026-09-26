@@ -4,10 +4,13 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { GET as getCatalogo } from "@/app/api/catalogo/route";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { GET as getArquivo } from "@/app/api/malhas/[id]/arquivo/route";
 import { POST as postMorphs } from "@/app/api/malhas/[id]/morphs/route";
 import { GET as getSimulacoes, POST as postSimulacao } from "@/app/api/malhas/[id]/simulacoes/route";
 import { POST as postMalha } from "@/app/api/malhas/route";
 import { POST as postPaciente } from "@/app/api/pacientes/route";
+import { caminhoEmDataDir } from "@/config/ambiente";
 import { consultar, fecharPools } from "@/db/pool";
 import { contarAuditoria, dbDisponivel } from "../helpers/banco";
 import { chamadas, iniciarMockMesh, pararMockMesh, resetarMockMesh } from "../helpers/meshMock";
@@ -124,5 +127,70 @@ describe.skipIf(!dbDisponivel())("morphs e simulações mostradas", () => {
     expect(a.simulacoes[0].previsto).toBeNull();
     const ruim = await postSimulacao(new Request("http://x", json({ implante_id: IMPLANTE, plano: "submuscular", imf: "manter", lado: "ambos", versao_config_simulacao: "1.1", nao_calibrado: true })), params(id));
     expect(ruim.status).toBe(400);
+  });
+});
+
+/**
+ * Revisão v0.1.1, item 2: em DESENHO=A o `previsto` (números calculados pelo modelo) não sai por
+ * nenhuma rota nem é gravado. Os testes conferem o CORPO das respostas.
+ */
+describe.skipIf(!dbDisponivel())("DESENHO=A: `previsto` nunca sai nem é gravado", () => {
+  const PREVISTO = { delta_projecao_mamilo_mm: { dir: 29.1, esq: 29.1 }, delta_y_sulco_mm: { dir: 0, esq: 0 }, delta_y_mamilo_mm: { dir: 3.4, esq: 3.4 } };
+  const previstos = (man: any): unknown[] => man.arquivos.flatMap((a: any) => a.targets.map((t: any) => t.previsto));
+
+  it("POST /morphs: em A todo target volta com previsto null (o mock do serviço devolve números); em B volta o previsto", async () => {
+    for (const desenho of ["A", "B"] as const) {
+      vi.stubEnv("DESENHO", desenho);
+      const id = await novaMalha();
+      const r = await postMorphs(new Request("http://x", json({ landmarks: LANDMARKS, implantes: [IMPLANTE] })), params(id));
+      expect(r.status).toBe(200);
+      const texto = await r.text();
+      const lista = previstos(JSON.parse(texto));
+      expect(lista.length).toBeGreaterThan(0);
+      if (desenho === "A") {
+        expect(lista.every((p) => p === null)).toBe(true);
+        expect(texto).not.toContain("delta_projecao_mamilo_mm");
+        expect(texto).not.toContain("29.1");
+      } else expect(lista.every((p) => p !== null)).toBe(true);
+    }
+  });
+
+  it("GET …/arquivo?nome=morphs/manifest.json: em A o manifest gerado em B sai sem previsto; em B sai inteiro", async () => {
+    vi.stubEnv("DESENHO", "B");
+    const id = await novaMalha();
+    const dir = (await consultar<{ malha_dir: string }>("select malha_dir from malhas where id = $1", [id])).rows[0]!.malha_dir;
+    const manifest = {
+      esquema: "morphs/1.0",
+      malha_id: id,
+      arquivos: [{ arquivo: "subglandular__manter.glb", plano: "subglandular", imf: "manter", sha256: "c".repeat(64), targets: [{ nome: `mt__${IMPLANTE}__subglandular__manter`, implante_id: IMPLANTE, lado: "ambos", indice: 0, previsto: PREVISTO }] }],
+    };
+    mkdirSync(caminhoEmDataDir(`${dir}/morphs`), { recursive: true });
+    writeFileSync(caminhoEmDataDir(`${dir}/morphs/manifest.json`), JSON.stringify(manifest));
+    const url = "http://x/api/malhas/x/arquivo?nome=morphs/manifest.json";
+    const b = await getArquivo(new Request(url), params(id));
+    expect(b.status).toBe(200);
+    expect(previstos(await b.json())).toEqual([PREVISTO]);
+    vi.stubEnv("DESENHO", "A");
+    const a = await getArquivo(new Request(url), params(id));
+    expect(a.status).toBe(200);
+    expect(a.headers.get("content-type")).toBe("application/json");
+    const texto = await a.text();
+    expect(previstos(JSON.parse(texto))).toEqual([null]);
+    expect(texto).not.toContain("29.1");
+    expect(texto).not.toContain("delta_y_mamilo_mm");
+  });
+
+  it("POST /simulacoes em A: previsto não nulo → 403 e nada gravado; previsto null → 201 com coluna null", async () => {
+    vi.stubEnv("DESENHO", "A");
+    const id = await novaMalha();
+    const corpo = { implante_id: IMPLANTE, plano: "subglandular", imf: "manter", lado: "ambos", versao_config_simulacao: "1.1", nao_calibrado: true };
+    const r = await postSimulacao(new Request("http://x", json({ ...corpo, previsto: PREVISTO })), params(id));
+    expect(r.status).toBe(403);
+    expect(await r.json()).toMatchObject({ erro: { codigo: "desligado_no_desenho_a", detalhes: { recurso: "numeros_calculados_no_relatorio" } } });
+    expect((await consultar("select 1 from simulacoes where malha_id = $1", [id])).rowCount).toBe(0);
+    const ok = await postSimulacao(new Request("http://x", json({ ...corpo, previsto: null })), params(id));
+    expect(ok.status).toBe(201);
+    const linha = await consultar<{ previsto: unknown }>("select previsto from simulacoes where malha_id = $1", [id]);
+    expect(linha.rows).toEqual([{ previsto: null }]);
   });
 });

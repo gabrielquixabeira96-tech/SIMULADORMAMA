@@ -36,6 +36,22 @@ def cmd(*a: str) -> str:
         return ""
 
 
+def commit_descrito(raiz: Path = RAIZ) -> str | None:
+    """`git describe --always --dirty` (RDC 657 art. 5: o registro cita o commit EXATO validado e
+    marca `-dirty` se a arvore tinha alteracao nao commitada). `VALIDACAO_COMMIT` (gravado pelo
+    scripts/validacao.sh ANTES de gerar qualquer artefato) tem precedencia."""
+    import os
+
+    env = os.environ.get("VALIDACAO_COMMIT", "").strip()
+    if env:
+        return env
+    try:
+        return subprocess.run(["git", "describe", "--always", "--dirty", "--abbrev=12"], cwd=raiz, capture_output=True,
+                              text=True, check=True).stdout.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def contagem_vitest(p: Path) -> dict | None:
     j = ler(p)
     if not j:
@@ -114,6 +130,9 @@ def main() -> int:
         "M2b E2E upload→PDF (A e B)": all(s == "expected" for s in e2e_ab.values()),
         "testes sem falha": all(t is not None and t["falharam"] == 0 for t in (t_py, t_web, t_con, t_e2e)),
     }
+    commit = commit_descrito()
+    arvore_suja = commit is None or commit.endswith("-dirty")
+    criterios["árvore limpa no commit validado (git describe sem -dirty)"] = not arvore_suja
     status = "aprovado" if all(criterios.values()) else "reprovado"
     node = cmd("node", "--version").lstrip("v")
     py = cmd(str(RAIZ / "services/mesh/.venv/bin/python"), "--version").replace("Python ", "")
@@ -121,7 +140,8 @@ def main() -> int:
         "esquema": "validacao/1.0",
         "versao_software": v,
         "data": date.today().isoformat(),
-        "commit": cmd("git", "rev-parse", "--short", "HEAD") or None,
+        "commit": commit,
+        "arvore_suja": arvore_suja,
         "desenho_testado": ["A", "B"],
         "ambiente": {
             "os": platform.system().lower(),
@@ -167,6 +187,12 @@ def main() -> int:
     (DOCS / f"v{v}.json").write_text(json.dumps(registro, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     R = registro["resultados"]
+    notas = DOCS / f"mudancas-v{v}.md"
+    mudancas = notas.read_text(encoding="utf-8").strip() if notas.is_file() else (
+        "## O que mudou (desde v0.0.1)\n\nMarcos 0, 1, 2 e 2b implementados: gerador de torso sintético e antropometria (services/mesh), "
+        "viewer/upload/calibração/landmarks/medidas/TEPID/flag A-B/banco com auditoria (apps/web), catálogo real de 186 implantes "
+        "(não verificado), modelo geométrico e morph targets, simulação com envelope de incerteza, camada de LLM (mock/Anthropic) "
+        "com números travados, relatório e PDF do atendimento.")
     tst = lambda t: "—" if not t else f"{t['passaram']} passaram, {t['falharam']} falharam, {t['pulados']} pulados"  # noqa: E731
     bam = lambda x: f"n = {x['n']}; viés = {x['vies_mm']:+.3f} mm; DP = {x['dp_mm']:.3f} mm; LoA 95 % = [{x['loa_mm'][0]:+.3f}; {x['loa_mm'][1]:+.3f}] mm; dentro de ±2 mm: {'sim' if x['criterio_2mm'] else 'NÃO'}" if x and x["n"] else "—"  # noqa: E731
     lat_l = "\n".join(f"| {k} | {x['n']} | {x['p50_ms']:.1f} | {x['p95_ms']:.1f} | {x['max_ms']:.1f} |" for k, x in R["marco2_latencia"].items())
@@ -178,6 +204,7 @@ esquema: validacao/1.0
 versao_software: {v}
 data: {registro['data']}
 commit: {registro['commit']}
+arvore_suja: {str(arvore_suja).lower()}
 desenho_testado: [A, B]
 ambiente: {{ os: {registro['ambiente']['os']}, node: "{node}", python: "{py}", navegador: "{registro['ambiente']['navegador']}", webgl: "SwiftShader (software)" }}
 parametros: {{ torsos: [t01_simetrico_300, t02_assimetrico, t03_pequeno_ptose], decimacao_alvo_vertices: 40000, geodesica: mmp, config_tepid: "{registro['parametros']['config_tepid']}", config_simulacao: "{registro['parametros']['config_simulacao']}" }}
@@ -193,7 +220,7 @@ status: {status}
 
 # Registro de validação — v{v} (consolidado)
 
-Gerado por `bash scripts/validacao.sh` → `scripts/registro_validacao.py` a partir das saídas dos testes (nenhum número digitado à mão). Sidecar de máquina: `v{v}.json` (`validacao/1.0`). Só torsos sintéticos paramétricos; nenhum dado de paciente. Registros de componente com o detalhe: [`v{v}-services-mesh.md`](v{v}-services-mesh.md), [`v{v}-web-marcos-0-1.md`](v{v}-web-marcos-0-1.md), [`v{v}-web-marco2-latencia.md`](v{v}-web-marco2-latencia.md).
+Gerado por `bash scripts/validacao.sh` → `scripts/registro_validacao.py` a partir das saídas dos testes (nenhum número digitado à mão). Commit validado: `{registro['commit']}` (`git describe --always --dirty`; árvore {'SUJA — não vale como registro' if arvore_suja else 'limpa'}). Sidecar de máquina: `v{v}.json` (`validacao/1.0`). Só torsos sintéticos paramétricos; nenhum dado de paciente. Registros de componente com o detalhe: [`v{v}-services-mesh.md`](v{v}-services-mesh.md), [`v{v}-web-marcos-0-1.md`](v{v}-web-marcos-0-1.md), [`v{v}-web-marco2-latencia.md`](v{v}-web-marco2-latencia.md).
 
 ## Critérios dos marcos
 
@@ -253,9 +280,7 @@ Playwright contra o stack real (services/mesh + Next.js + Postgres; LLM em mock)
 | Vitest packages/contratos | {tst(t_con)} |
 | Playwright apps/web (desenhos A e B; pulados = spec de outro desenho) | {tst(t_e2e)} |
 
-## O que mudou (desde v0.0.1)
-
-Marcos 0, 1, 2 e 2b implementados: gerador de torso sintético e antropometria (services/mesh), viewer/upload/calibração/landmarks/medidas/TEPID/flag A-B/banco com auditoria (apps/web), catálogo real de 186 implantes (não verificado), modelo geométrico e morph targets, simulação com envelope de incerteza, camada de LLM (mock/Anthropic) com números travados, relatório e PDF do atendimento.
+{mudancas}
 
 ## Como reproduzir
 

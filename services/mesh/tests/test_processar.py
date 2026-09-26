@@ -118,3 +118,21 @@ def test_link_simbolico_para_fora_recusado(data_dir, tmp_path):
     with pytest.raises(caminhos.CaminhoInvalido):
         caminhos.resolver("atalho/x.obj")
     assert caminhos.resolver("pacientes/x") == data_dir.resolve() / "pacientes/x"
+
+
+def test_data_dir_relativo_resolve_pela_raiz_do_repo_nao_pelo_cwd(monkeypatch, tmp_path):
+    """Revisao v0.1.1, item 18: DATA_DIR=./data (do .env) aponta para <raiz>/data no web E no Python,
+    mesmo com o servico rodando de services/mesh (cwd)."""
+    from mesh.versao import RAIZ_REPO
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATA_DIR", "./data")
+    assert caminhos.data_dir() == (RAIZ_REPO / "data").resolve()
+    monkeypatch.setenv("DATA_DIR", "outra/pasta")
+    assert caminhos.data_dir() == (RAIZ_REPO / "outra/pasta").resolve()
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "abs"))
+    assert caminhos.data_dir() == (tmp_path / "abs").resolve()
+    monkeypatch.delenv("DATA_DIR")
+    assert caminhos.data_dir() == (RAIZ_REPO / "data").resolve()
+    monkeypatch.setenv("CONFIG_DIR", "config")
+    assert caminhos.config_dir() == (RAIZ_REPO / "config").resolve()

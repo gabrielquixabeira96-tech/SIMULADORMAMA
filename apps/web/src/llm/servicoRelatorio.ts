@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Desenho, Medidas, MedidasDigitadas } from "@simulador/contratos";
+import type pg from "pg";
 import { buscarImplante } from "@/catalogo/catalogo";
 import { isoComFuso, raizRepo, usuarioAtual, versaoSoftware } from "@/config/ambiente";
 import { AVISO_FIXO } from "@/config/aviso";
@@ -31,17 +32,26 @@ export class PedidoInvalidoError extends Error {
  * Atendimento existente (conferindo paciente e desenho) ou novo. Um atendimento gravado em um
  * desenho não é continuado no outro (a coluna `desenho` é o registro regulatório).
  */
-export async function obterOuCriarAtendimento(pacienteId: string, atendimentoId: string | null | undefined, desenho: Desenho): Promise<{ atendimento: AtendimentoLinha; criado: boolean }> {
+export async function obterOuCriarAtendimento(
+  pacienteId: string,
+  atendimentoId: string | null | undefined,
+  desenho: Desenho,
+  cliente?: pg.ClientBase,
+): Promise<{ atendimento: AtendimentoLinha; criado: boolean }> {
   if (atendimentoId) {
-    const a = await atendimentoPorId(atendimentoId);
+    const a = await atendimentoPorId(atendimentoId, cliente);
     if (!a) throw new PedidoInvalidoError(404, "atendimento_nao_encontrado", "atendimento não encontrado");
     if (a.paciente_id !== pacienteId) throw new PedidoInvalidoError(422, "atendimento_de_outro_paciente", "atendimento não pertence ao paciente");
     if (a.desenho !== desenho) throw new PedidoInvalidoError(409, "desenho_divergente", "atendimento registrado em outro desenho");
     return { atendimento: a, criado: false };
   }
-  const id = await criarAtendimento({ pacienteId, desenho, versaoSoftware: versaoSoftware() });
-  await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "atendimentos", entidadeId: id, desenho, detalhes: { paciente_id: pacienteId } });
-  return { atendimento: (await atendimentoPorId(id))!, criado: true };
+  // criação + auditoria na MESMA transação (a do chamador, se houver)
+  const criar = async (c: pg.ClientBase): Promise<AtendimentoLinha> => {
+    const id = await criarAtendimento({ pacienteId, desenho, versaoSoftware: versaoSoftware() }, c);
+    await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "atendimentos", entidadeId: id, desenho, detalhes: { paciente_id: pacienteId } }, c);
+    return (await atendimentoPorId(id, c))!;
+  };
+  return { atendimento: cliente ? await criar(cliente) : await transacao(criar), criado: true };
 }
 
 function simulacaoNaoCalibrada(): boolean {

@@ -181,14 +181,14 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
       void fetch(`/api/malhas/${malhaId}/simulacoes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ implante_id: p.implanteId, plano, imf, lado: "ambos", versao_config_simulacao: manifest.versao_config_simulacao, nao_calibrado: naoCalibrado, previsto: alvo?.previsto ?? null }),
+        body: JSON.stringify({ implante_id: p.implanteId, plano, imf, lado: "ambos", versao_config_simulacao: manifest.versao_config_simulacao, nao_calibrado: naoCalibrado, previsto: recursos.numeros_calculados_no_relatorio ? (alvo?.previsto ?? null) : null }),
       })
         .then((r) => {
           if (!r.ok) registradas.current.delete(chave);
         })
         .catch(() => registradas.current.delete(chave));
     }
-  }, [manifest, malhaId, peso, paineis, plano, imf, naoCalibrado]);
+  }, [manifest, malhaId, peso, paineis, plano, imf, naoCalibrado, recursos.numeros_calculados_no_relatorio]);
 
   const selecionado = escolhidos[slot];
   const aoEscolher = useCallback(

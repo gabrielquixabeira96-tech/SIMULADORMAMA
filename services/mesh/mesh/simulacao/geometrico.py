@@ -46,13 +46,13 @@ from mesh.simulacao.interfaces import Implante, ResultadoSimulacao
 
 MODELO = "geometrico_parametrico_v1"
 PASSO_GRADE_MM = 1.0
-PADROES_MODELO = {
-    "borda_implante_expoente": 0.5, "imf_transicao_mm": 12.0, "mamilo_sigma_fator": 0.30,
-    "rebaixar_sigma_lateral_fator": 0.30, "rebaixar_decaimento_cranial_fator": 0.45,
-    "rebaixar_decaimento_caudal_fator": 0.90,
-}
-PROF_SIGMA_MM = 40.0  # escala em profundidade dos termos locais (evita mexer nas costas)
-FRENTE_PROF_MM = (-60.0, 30.0)  # pele "da frente": altura sobre o plano da base > -60 mm (rampa de 30 mm)
+# Chaves obrigatorias de `modelo_geometrico` em config/simulacao.json (sem valor padrao no codigo:
+# todo coeficiente e `nao_calibrado` e vive na config; chave ausente -> ErroSimulacao).
+CHAVES_MODELO = (
+    "borda_implante_expoente", "imf_transicao_mm", "mamilo_sigma_fator", "rebaixar_sigma_lateral_fator",
+    "rebaixar_decaimento_cranial_fator", "rebaixar_decaimento_caudal_fator", "profundidade_sigma_mm",
+    "frente_profundidade_min_mm", "frente_profundidade_rampa_mm", "frente_normal_rampa",
+)
 
 
 def _nucleo(r2: np.ndarray, sigma: float) -> np.ndarray:
@@ -66,8 +66,16 @@ class ErroSimulacao(ValueError):
     pass
 
 
-def _v(no: dict | float) -> float:
-    return float(no["valor"]) if isinstance(no, dict) else float(no)
+def _coef(config: dict, *caminho: str) -> float:
+    """Coeficiente `{valor, nao_calibrado}` da config; ausente -> ErroSimulacao (sem fallback)."""
+    no: object = config
+    for k in caminho:
+        if not isinstance(no, dict) or k not in no:
+            raise ErroSimulacao("config_simulacao_incompleta:" + ".".join(caminho))
+        no = no[k]
+    if not (isinstance(no, dict) and "valor" in no):
+        raise ErroSimulacao("config_simulacao_incompleta:" + ".".join(caminho) + ".valor")
+    return float(no["valor"])
 
 
 @dataclass(frozen=True)
@@ -89,29 +97,37 @@ class Coefs:
     rebaixar_sigma_lateral: float
     rebaixar_cranial: float
     rebaixar_caudal: float
+    prof_sigma_mm: float
+    frente_prof_min_mm: float
+    frente_prof_rampa_mm: float
+    frente_normal_rampa: float
     versao: str
 
 
 def coeficientes(config: dict, plano: str) -> Coefs:
-    if plano not in config["planos"]:
+    """Todos os coeficientes vem de config/simulacao.json; qualquer chave ausente -> ErroSimulacao."""
+    if plano not in config.get("planos", {}):
         raise ErroSimulacao(f"plano desconhecido: {plano}")
-    p = config["planos"][plano]
-    mg = {**PADROES_MODELO, **{k: _v(v) for k, v in config.get("modelo_geometrico", {}).items()
-                               if isinstance(v, dict) and "valor" in v}}
+    mg = {k: _coef(config, "modelo_geometrico", k) for k in CHAVES_MODELO}
     return Coefs(
-        transmissao=_v(p["transmissao_projecao_fator"]), alargamento=_v(p["alargamento_base_fator"]),
-        polo_superior=_v(p["preenchimento_polo_superior_fator"]),
-        mamilo_anterior=_v(p["deslocamento_mamilo_anterior_fator"]),
-        mamilo_cranial=_v(p["deslocamento_mamilo_cranial_fator"]), sigma_mm=_v(p["suavizacao_sigma_mm"]),
-        rebaixar_mm_por_100ml=_v(config["imf"]["rebaixar"]["mm_por_100ml"]),
-        rebaixar_max_mm=_v(config["imf"]["rebaixar"]["maximo_mm"]),
-        espessura_ref_mm=_v(config["tecido_mole"]["espessura_referencia_mm"]),
-        atenuacao_por_mm=_v(config["tecido_mole"]["atenuacao_por_mm_pinca_fator"]),
-        ponto_max_anatomico=_v(config["implante"]["forma_anatomica"]["ponto_max_projecao_fator"]),
+        transmissao=_coef(config, "planos", plano, "transmissao_projecao_fator"),
+        alargamento=_coef(config, "planos", plano, "alargamento_base_fator"),
+        polo_superior=_coef(config, "planos", plano, "preenchimento_polo_superior_fator"),
+        mamilo_anterior=_coef(config, "planos", plano, "deslocamento_mamilo_anterior_fator"),
+        mamilo_cranial=_coef(config, "planos", plano, "deslocamento_mamilo_cranial_fator"),
+        sigma_mm=_coef(config, "planos", plano, "suavizacao_sigma_mm"),
+        rebaixar_mm_por_100ml=_coef(config, "imf", "rebaixar", "mm_por_100ml"),
+        rebaixar_max_mm=_coef(config, "imf", "rebaixar", "maximo_mm"),
+        espessura_ref_mm=_coef(config, "tecido_mole", "espessura_referencia_mm"),
+        atenuacao_por_mm=_coef(config, "tecido_mole", "atenuacao_por_mm_pinca_fator"),
+        ponto_max_anatomico=_coef(config, "implante", "forma_anatomica", "ponto_max_projecao_fator"),
         gama=mg["borda_implante_expoente"], imf_transicao_mm=mg["imf_transicao_mm"],
         mamilo_sigma_fator=mg["mamilo_sigma_fator"], rebaixar_sigma_lateral=mg["rebaixar_sigma_lateral_fator"],
         rebaixar_cranial=mg["rebaixar_decaimento_cranial_fator"],
-        rebaixar_caudal=mg["rebaixar_decaimento_caudal_fator"], versao=str(config.get("versao", "?")),
+        rebaixar_caudal=mg["rebaixar_decaimento_caudal_fator"],
+        prof_sigma_mm=mg["profundidade_sigma_mm"], frente_prof_min_mm=mg["frente_profundidade_min_mm"],
+        frente_prof_rampa_mm=mg["frente_profundidade_rampa_mm"], frente_normal_rampa=mg["frente_normal_rampa"],
+        versao=str(config.get("versao", "?")),
     )
 
 
@@ -184,6 +200,10 @@ class CampoLado:
     sy_cran: float
     sy_caud: float
     transicao: float
+    prof_sigma_mm: float
+    frente_prof_min_mm: float
+    frente_prof_rampa_mm: float
+    frente_normal_rampa: float
     aviso: str | None = None
 
     def _mascara_imf(self, P: np.ndarray) -> np.ndarray:
@@ -193,7 +213,8 @@ class CampoLado:
     def _frente(self, N: np.ndarray, h: np.ndarray) -> np.ndarray:
         """Peso da pele anterior: normal voltada para frente E nao muito atras do plano da base
         (exclui flanco e costas, cujas normais podem ter componente em n)."""
-        return _smooth((N @ self.q.n) / 0.3) * _smooth((h - FRENTE_PROF_MM[0]) / FRENTE_PROF_MM[1])
+        return (_smooth((N @ self.q.n) / self.frente_normal_rampa)
+                * _smooth((h - self.frente_prof_min_mm) / self.frente_prof_rampa_mm))
 
     def deslocamento(self, P: np.ndarray, N: np.ndarray) -> np.ndarray:
         x, y, h = self.q.coords(P)
@@ -203,7 +224,7 @@ class CampoLado:
         # ajuste do mamilo (nucleo compacto no plano da base, com decaimento em profundidade)
         xm, ym, hm = self.q.coords(self.mamilo[None, :])
         r2 = (x - xm[0]) ** 2 + (y - ym[0]) ** 2
-        g = _nucleo(r2, self.sigma_mamilo) * _nucleo((h - hm[0]) ** 2, PROF_SIGMA_MM)
+        g = _nucleo(r2, self.sigma_mamilo) * _nucleo((h - hm[0]) ** 2, self.prof_sigma_mm)
         # o termo cranial usa a mascara do sulco ORIGINAL: o sulco so se move pelo rebaixamento
         m_orig = _smooth(((P - self.sulco) @ self.cranial) / self.transicao) * fr
         D = (((A + self.beta_mm * g) * m)[:, None] * self.d_ant
@@ -214,7 +235,7 @@ class CampoLado:
             ys = rel @ self.cranial
             hs = rel @ self.q.n
             sy = np.where(ys >= 0, self.sy_cran, self.sy_caud)
-            gi = _nucleo(xs**2, self.sx_imf) * _nucleo(ys**2, sy) * _nucleo(hs**2, PROF_SIGMA_MM)
+            gi = _nucleo(xs**2, self.sx_imf) * _nucleo(ys**2, sy) * _nucleo(hs**2, self.prof_sigma_mm)
             D = D - (self.delta_imf_mm * gi)[:, None] * self.cranial
         return D
 
@@ -258,7 +279,9 @@ def montar_campo(lm: dict, lado: str, implante: dict, plano: str, imf: str, conf
     cl = CampoLado(lado=lado, q=q, d_ant=d_ant, cranial=cranial, sulco=sulco, mamilo=mamilo, delta_imf_mm=delta,
                    interp=interp, beta_mm=0.0, cranial_mm=0.0, sigma_mamilo=c.mamilo_sigma_fator * B,
                    sx_imf=c.rebaixar_sigma_lateral * B, sy_cran=c.rebaixar_cranial * n_imf,
-                   sy_caud=c.rebaixar_caudal * n_imf, transicao=c.imf_transicao_mm)
+                   sy_caud=c.rebaixar_caudal * n_imf, transicao=c.imf_transicao_mm, prof_sigma_mm=c.prof_sigma_mm,
+                   frente_prof_min_mm=c.frente_prof_min_mm, frente_prof_rampa_mm=c.frente_prof_rampa_mm,
+                   frente_normal_rampa=c.frente_normal_rampa)
     # ajuste do mamilo: alvo anterior e cranial (a normal no mamilo e tomada como d_ant: frente = 1)
     xm, ym, _ = q.coords(mamilo[None, :])
     a_n = float(interp(np.array([[xm[0], ym[0]]]))[0])

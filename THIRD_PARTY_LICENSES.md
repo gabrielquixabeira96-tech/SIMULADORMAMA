@@ -1,6 +1,6 @@
 # Licenças de terceiros
 
-Gerado por `scripts/licencas.sh` em 2026-09-26T19:24:14Z para a versão 0.1.0. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
+Gerado por `scripts/licencas.sh` em 2026-09-26T20:37:19Z para a versão 0.1.0. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
 
 ## Permitidas
 
@@ -560,6 +560,8 @@ _Gerado de `pnpm licenses list`: 536 pacotes (MIT 458 · Apache-2.0 28 · ISC 24
 Runtime: numpy, scipy, trimesh, rtree, fast-simplification, pygeodesic, fastapi, starlette, uvicorn, pydantic, Pillow, jsonschema e suas transitivas. Dev: pytest, httpx, ruff, pip-licenses. Open3D **não** foi instalado (decimação feita por `fast-simplification`, MIT); `pymeshlab`/`gdist` ausentes.
 
 Código nativo embutido: `pygeodesic` inclui a biblioteca de geodésica exata de Danil Kirsanov (MIT, 2008); `fast-simplification` inclui Fast-Quadric-Mesh-Simplification (MIT, Sven Forstmann); `rtree` inclui libspatialindex (MIT). `certifi` (MPL-2.0) é transitiva de `httpx` (só dev/testes), sem modificação. A textura do torso sintético é procedural (gerada por código, sem imagem de terceiros).
+
+Bibliotecas nativas embutidas nas wheels (revisão v0.1.1; ADR 0009, "Bibliotecas de runtime do compilador"): `numpy.libs/` e `scipy.libs/` trazem **libgfortran** (GPL-3.0-or-later **com GCC Runtime Library Exception 3.1**) e **libquadmath** (LGPL-2.1-or-later), além do OpenBLAS (BSD-3-Clause); `fast_simplification.libs/` traz **libgomp** (GPL-3.0-or-later com GCC Runtime Library Exception 3.1). A exceção de runtime do GCC permite distribuir programas ligados a elas sob qualquer licença; libquadmath é LGPL e é carregada **dinamicamente** como `.so` separado, sem modificação (a LGPL fica satisfeita mantendo o arquivo substituível e este aviso). Nenhuma é ligada estaticamente ao nosso código nem modificada. `pillow.libs/` traz libjpeg-turbo (IJG/BSD-3), libpng (libpng), zlib/zstd/brotli/xz (Zlib/BSD/MIT/0BSD), libtiff (libtiff), FreeType (FTL, escolhida entre FTL/GPL-2.0), HarfBuzz (MIT), lcms2 (MIT), libwebp/sharpyuv (BSD-3), libavif (BSD-2), OpenJPEG (BSD-2), libxcb/libXau (MIT); `rtree.libs/` traz libspatialindex (MIT). O `pip-licenses` lista só o pacote Python, por isso este parágrafo registra as nativas à mão.
 
 _Gerado de `pip-licenses` em `services/mesh/.venv`: 34 pacotes._
 

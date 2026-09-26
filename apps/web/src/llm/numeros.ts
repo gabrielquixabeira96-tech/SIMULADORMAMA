@@ -1,6 +1,6 @@
 import type { Desenho, Distancias, MedidasDigitadas, Volumes } from "@simulador/contratos";
 import { recursoAtivoEm } from "@/config/recursos";
-import { extrairNumeros, valorDeDigitos } from "./extrairNumeros";
+import { extrairNumeros, valorDeDigitos, type FormaNumero } from "./extrairNumeros";
 
 /**
  * Guarda dos "números calculados no texto do LLM" (ADR 0005/0006; contratos §14.3).
@@ -71,14 +71,15 @@ export function numerosPermitidos(dados: DadosTravados, extras: number[] = []): 
   return [...new Set(nums.flatMap(representacoes))].sort();
 }
 
-export const REGEX_NUMERO = /\d+([.,]\d+)?/g;
+/** Qualquer numeral Unicode (use sobre texto normalizado com NFKC). */
+export const REGEX_NUMERO = /\p{N}+([.,]\p{N}+)?/gu;
 
 export interface Intruso {
   /** Parágrafo/seção onde apareceu. */
   secao: string;
   texto: string;
   valor: number;
-  forma: "digitos" | "extenso";
+  forma: FormaNumero;
 }
 
 export interface VerificacaoNumeros {
@@ -111,6 +112,11 @@ export function verificarNumeros(paragrafos: Record<string, string>, permitidos:
   const detalhes: Intruso[] = [];
   for (const [secao, texto] of Object.entries(paragrafos)) {
     for (const n of extrairNumeros(texto)) {
+      // numeral não ASCII, romano e palavra de quantidade: sempre intrusos (valor NaN ou forma proibida)
+      if (n.forma === "nao_ascii" || n.forma === "romano" || n.forma === "quantidade") {
+        detalhes.push({ secao, ...n });
+        continue;
+      }
       if (n.forma === "digitos" && exatos.has(n.texto)) continue;
       if (valores.some((v) => Math.abs(v - n.valor) <= TOLERANCIA)) continue;
       detalhes.push({ secao, ...n });

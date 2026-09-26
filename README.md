@@ -1,8 +1,8 @@
 # Simulador 3D de mamoplastia de aumento
 
-Simulador em tempo real do resultado de mamoplastia de aumento com prótese, para uso na consulta. Versão **`0.1.0`**: MVP técnico dos Marcos 0, 1, 2 e 2b (fases 0–2 da estratégia), com dados **sintéticos** apenas — sem pacientes reais, sem deploy.
+Simulador em tempo real do resultado de mamoplastia de aumento com prótese, para uso na consulta. Versão **`0.1.1`**: MVP técnico dos Marcos 0, 1, 2 e 2b (fases 0–2 da estratégia), com dados **sintéticos** apenas — sem pacientes reais, sem deploy.
 
-Fonte da verdade do produto: [`ESTRATEGIA.md`](ESTRATEGIA.md). Escopo desta execução: [`docs/PROMPT.md`](docs/PROMPT.md). Contratos entre os componentes: [`docs/contratos.md`](docs/contratos.md). Decisões: [`docs/adr/`](docs/adr/README.md). Registro de validação desta versão: [`docs/validacao/v0.1.0.md`](docs/validacao/v0.1.0.md).
+Fonte da verdade do produto: [`ESTRATEGIA.md`](ESTRATEGIA.md). Escopo desta execução: [`docs/PROMPT.md`](docs/PROMPT.md). Contratos entre os componentes: [`docs/contratos.md`](docs/contratos.md). Decisões: [`docs/adr/`](docs/adr/README.md). Registro de validação desta versão: [`docs/validacao/v0.1.1.md`](docs/validacao/v0.1.1.md) (v0.1.1 = correções da revisão de código da v0.1.0: autenticação local, flag A/B, LGPD, CI e rastreabilidade).
 
 > Aviso fixo do produto: **"Ilustração, não previsão de resultado"**. Toda superfície simulada é exibida com envelope de incerteza (±4,5 mm RMS, configurável em `config/simulacao.json`). Não há compartilhamento nem exportação para redes sociais (Res. CFM 2.336/2023). Coeficientes da simulação **não calibrados**; limiares TEPID a **conferir no texto original**; catálogo **não verificado** com os fabricantes.
 
@@ -23,6 +23,8 @@ git clone <repo> simulador-mamario && cd simulador-mamario
 
 # 1. ambiente (DESENHO=B por padrão; LLM em modo mock sem ANTHROPIC_API_KEY)
 cp .env.example .env
+# token local (ADR 0003): obrigatório em `next start`, recomendado em `next dev`
+sed -i "s/^APP_TOKEN_LOCAL=.*/APP_TOKEN_LOCAL=$(openssl rand -hex 24)/" .env
 
 # 2. dependências
 pnpm install --frozen-lockfile          # apps/web + packages/contratos
@@ -37,8 +39,12 @@ bash scripts/mesh.sh torsos
 
 # 5. rodar (dois terminais)
 bash scripts/mesh.sh dev                # services/mesh em http://127.0.0.1:8765
-pnpm --filter web dev                   # consulta em http://localhost:3000   (DESENHO=A pnpm --filter web dev para o desenho A)
+pnpm --filter web dev                   # só em 127.0.0.1:3000   (DESENHO=A pnpm --filter web dev para o desenho A)
+# 6. abra UMA vez com o token (vira cookie HttpOnly; o token some da URL):
+#    http://127.0.0.1:3000/?token=<valor de APP_TOKEN_LOCAL no .env>
 ```
+
+**Segurança local (ADR 0003, revisão v0.1.1).** O app escuta só em `127.0.0.1` e o proxy (`apps/web/src/proxy.ts`) exige o token `APP_TOKEN_LOCAL` em toda rota — pelo cookie gravado no passo 6 ou por `Authorization: Bearer <token>` (scripts, `curl`). Nas rotas `/api/*` que gravam, só aceita `Content-Type: application/json` (o upload aceita multipart) vindo da própria origem. Sem o token, `next start` não sobe; em `next dev` ele é opcional (aviso no log), mas as checagens de origem continuam.
 
 Na tela: "Novo atendimento" (pseudônimo) → envie um OBJ/PLY (ou "processar" um torso sintético) → régua → landmarks → medidas/TEPID → implantes e "Gerar simulação" → anamnese → relatório → PDF.
 
@@ -47,20 +53,26 @@ Parar tudo: `Ctrl+C` nos dois terminais e `bash scripts/db.sh stop`.
 ## Testes e qualidade
 
 ```bash
-bash scripts/ci.sh                          # CI completa: contratos/configs, licenças, lint, typecheck, Vitest (com banco),
-                                            # Playwright A e B contra o stack real, ruff + pytest
+bash scripts/ci.sh                          # CI completa: venv, contratos/configs, pacotes proibidos, licenças, lint, typecheck,
+                                            # Vitest de contratos e do web (banco OBRIGATÓRIO), Playwright A e B contra o
+                                            # stack real, ruff + pytest; resumo em test-results/ci-resumo.json
 bash scripts/ci.sh --sem-e2e                # idem, sem Playwright (mais rápido)
+bash scripts/ci.sh --sem-db                 # só se não houver Postgres: testes de banco pulados e a execução
+                                            # marcada "sem banco" (não vale como validação)
 
 pnpm --filter web lint                      # ESLint
 pnpm --filter web typecheck                 # next typegen + tsc
 pnpm --filter web test                      # Vitest: unit, API A/B, banco real, UI, integração com o services/mesh real
+                                            # (falha sem Postgres; SEM_DB=1 pula os testes de banco)
 pnpm --filter @simulador/contratos test     # paridade zod × config/schemas
 pnpm --filter web test:e2e                  # build de teste + Playwright (sobe services/mesh :8799, Next A :3101 e B :3102, Postgres)
 bash scripts/mesh.sh test                   # ruff + pytest do services/mesh
 pnpm --filter web build                     # build de produção
 
-bash scripts/validacao.sh                   # regenera docs/validacao/v<VERSION>*.{md,json} a partir dos testes (RDC 657 art. 5)
-bash scripts/licencas.sh                    # regenera THIRD_PARTY_LICENSES.md (falha se houver GPL/LGPL/...)
+bash scripts/validacao.sh                   # regenera docs/validacao/v<VERSION>*.{md,json} a partir dos testes (RDC 657 art. 5);
+                                            # rode com a árvore LIMPA: o registro cita `git describe --always --dirty`
+bash scripts/licencas.sh                    # regenera THIRD_PARTY_LICENSES.md (falha se houver GPL/LGPL/... ou inventário vazio)
+python3 scripts/checar_proibidos.py         # nomes de pacote proibidos (ADR 0009) em manifestos, lockfiles e venv
 python3 scripts/validar_config.py           # configs e registros contra config/schemas
 ```
 
@@ -80,8 +92,8 @@ python3 scripts/validar_config.py           # configs e registros contra config/
 | `apps/web/e2e/` | Playwright: smoke, viewer, fluxo A/B, validação M0/M1, simulação, latência, fluxo completo até o PDF |
 | `packages/contratos/` | Tipos TS + zod espelhando `config/schemas` (`@simulador/contratos`) |
 | `services/mesh/` | Python/FastAPI: torso sintético + gabarito, recorte, decimação, reescala, geodésica MMP, volume, modelo geométrico e morph targets glTF |
-| `scripts/` | `ci.sh`, `db.sh`, `mesh.sh`, `licencas.sh`, `validacao.sh`, `registro_validacao.py`, `validar_config.py` |
-| `data/` | `DATA_DIR` local (malhas, medidas, PDFs, sintéticos) — **ignorado pelo git** |
+| `scripts/` | `ci.sh`, `db.sh`, `mesh.sh`, `licencas.sh`, `checar_proibidos.py`, `validacao.sh`, `registro_validacao.py`, `validar_config.py` |
+| `data/` | `DATA_DIR` local (malhas, medidas, PDFs, sintéticos) — **ignorado pelo git** (qualquer `data/` em qualquer nível, e malhas/texturas fora de `tests/fixtures/`). `DATA_DIR` relativo é resolvido pela raiz do repo no web e no Python |
 | `VERSION`, `vercel.json`, `THIRD_PARTY_LICENSES.md` | Versão SemVer; região `gru1` (sem deploy); inventário de licenças |
 
 ## Regras que valem para todo código (restrições inegociáveis)
@@ -95,9 +107,9 @@ python3 scripts/validar_config.py           # configs e registros contra config/
 7. Só licenças MIT/BSD/Apache-2.0 ou equivalentes; a CI roda `scripts/licencas.sh --checar` (ADR 0009).
 8. Cada versão tem registro em `docs/validacao/` (a CI falha sem ele).
 
-## Estado dos marcos (v0.1.0)
+## Estado dos marcos (v0.1.1)
 
-Números e critérios em [`docs/validacao/v0.1.0.md`](docs/validacao/v0.1.0.md) (gerado por `bash scripts/validacao.sh`).
+Números e critérios em [`docs/validacao/v0.1.1.md`](docs/validacao/v0.1.1.md) (gerado por `bash scripts/validacao.sh`).
 
 | Marco | Critério | Situação |
 |---|---|---|

@@ -11,16 +11,40 @@
  *  - "meio"/"meia" só contam depois de "e" dentro de um número ("trezentos e meio").
  *  - Ordinais ("primeira", "segundo") não são números.
  *  - "d{1,3}.ddd" (grupos de 3 depois do ponto) é milhar pt-BR; demais "." e "," são decimal.
+ *  - O texto é normalizado com NFKC antes da extração: dígitos de largura total ("３２０"),
+ *    sobrescritos e frações Unicode viram dígitos ASCII e são verificados normalmente.
+ *  - Numeral NÃO ASCII que sobrar depois do NFKC (`\p{N}`: "٣٢٠", "३२०", "〇"…) é sempre recusado
+ *    (forma "nao_ascii"): o relatório só escreve dígitos ASCII.
+ *  - Numeral romano (≥ 2 letras maiúsculas válidas: "CCCXX", "XIV") é sempre recusado (forma "romano").
+ *  - Palavras de quantidade ("dezena(s)", "centena(s)", "milhar(es)", "dúzia", "dobro", "triplo",
+ *    "metade", "um terço"…) são sempre recusadas (forma "quantidade"): exprimem número sem dígito.
  */
 
 export interface NumeroEncontrado {
   /** Trecho do texto original (dígitos) ou das palavras normalizadas (extenso). */
   texto: string;
   valor: number;
-  forma: "digitos" | "extenso";
+  forma: FormaNumero;
 }
 
-export const REGEX_DIGITOS = /\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d+(?:[.,]\d+)?/g;
+export type FormaNumero = "digitos" | "extenso" | "nao_ascii" | "romano" | "quantidade";
+
+export const REGEX_DIGITOS = /[0-9]{1,3}(?:\.[0-9]{3})+(?:,[0-9]+)?|[0-9]+(?:[.,][0-9]+)?/g;
+
+/** Qualquer numeral Unicode que não seja dígito ASCII (depois do NFKC). */
+const REGEX_NAO_ASCII = /(?:(?![0-9])\p{N})+/gu;
+/** Romano válido com ≥ 2 letras (evita "D"/"E" de direita/esquerda e o "I" isolado). */
+const REGEX_ROMANO = /(?<![\p{L}\p{N}])(?=[MDCLXVI]{2,}(?![\p{L}\p{N}]))M{0,4}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})(?![\p{L}\p{N}])/gu;
+const ROMANOS: Record<string, number> = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+
+/** Palavras que exprimem quantidade sem ser numeral (normalizadas sem acento, minúsculas). */
+export const PALAVRAS_QUANTIDADE: Record<string, number> = {
+  dezena: 10, dezenas: 10, centena: 100, centenas: 100, milhar: 1000, milhares: 1000, milheiro: 1000,
+  duzia: 12, duzias: 12, dobro: 2, triplo: 3, quadruplo: 4, quintuplo: 5, sextuplo: 6, decuplo: 10, centuplo: 100,
+  metade: 0.5, metades: 0.5, terco: 1 / 3, tercos: 1 / 3, quarto: 0.25, quartos: 0.25,
+};
+/** Frações que também são termo anatômico/comum ("terço inferior", "quarto"): só contam depois de numeral ("um terço"). */
+const SO_APOS_NUMERAL = new Set(["terco", "tercos", "quarto", "quartos"]);
 
 /** Converte a representação em dígitos (pt-BR ou com ponto decimal) em número. */
 export function valorDeDigitos(s: string): number {
@@ -190,7 +214,42 @@ export function extrairNumerosEmDigitos(texto: string): NumeroEncontrado[] {
   return [...texto.matchAll(REGEX_DIGITOS)].map((m) => ({ texto: m[0], valor: valorDeDigitos(m[0]), forma: "digitos" as const }));
 }
 
-/** Todos os números do texto: dígitos + extenso. */
+function valorRomano(s: string): number {
+  let t = 0;
+  for (let i = 0; i < s.length; i++) {
+    const v = ROMANOS[s[i]!]!;
+    const prox = ROMANOS[s[i + 1] ?? ""] ?? 0;
+    t += v < prox ? -v : v;
+  }
+  return t;
+}
+
+/** Numerais não ASCII (depois do NFKC) e romanos: sempre recusados pelo verificador. */
+export function extrairNumeraisProibidos(texto: string): NumeroEncontrado[] {
+  const t = texto.normalize("NFKC");
+  const out: NumeroEncontrado[] = [];
+  for (const m of t.matchAll(REGEX_NAO_ASCII)) out.push({ texto: m[0], valor: Number.NaN, forma: "nao_ascii" });
+  for (const m of t.matchAll(REGEX_ROMANO)) if (m[0]) out.push({ texto: m[0], valor: valorRomano(m[0]), forma: "romano" });
+  return out;
+}
+
+/**
+ * Palavras de quantidade ("dezenas", "dobro", "metade", "dúzia"…): sempre recusadas. "terço" e
+ * "quarto" só contam depois de numeral ("um terço", "três quartos"), para não pegar "terço inferior".
+ */
+export function extrairPalavrasDeQuantidade(texto: string): NumeroEncontrado[] {
+  const p = normalizarPalavras(texto.normalize("NFKC"));
+  const out: NumeroEncontrado[] = [];
+  p.forEach((w, i) => {
+    if (!(w in PALAVRAS_QUANTIDADE)) return;
+    if (SO_APOS_NUMERAL.has(w) && !ehNumeral(p[i - 1])) return;
+    out.push({ texto: w, valor: Number.NaN, forma: "quantidade" });
+  });
+  return out;
+}
+
+/** Todos os números do texto (NFKC): dígitos + extenso + numerais proibidos + palavras de quantidade. */
 export function extrairNumeros(texto: string): NumeroEncontrado[] {
-  return [...extrairNumerosEmDigitos(texto), ...extrairNumerosPorExtenso(texto)];
+  const t = texto.normalize("NFKC");
+  return [...extrairNumerosEmDigitos(t), ...extrairNumerosPorExtenso(t), ...extrairNumeraisProibidos(t), ...extrairPalavrasDeQuantidade(t)];
 }

@@ -4,8 +4,10 @@ import { erro, json, lerJson, tratarErro } from "@/api/respostas";
 import { buscarImplante } from "@/catalogo/catalogo";
 import { usuarioAtual } from "@/config/ambiente";
 import { getDesenho } from "@/config/desenho";
+import { recursoAtivoEm } from "@/config/recursos";
 import { registrarAuditoria } from "@/db/auditoria";
 import { malhaPorId } from "@/db/repositorio";
+import { redigirPrevistoManifest } from "@/malhas/arquivos";
 import { ClienteMesh } from "@/mesh/cliente";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +23,7 @@ const corpoSchema = z.strictObject({
 /**
  * POST /api/malhas/<id>/morphs — pede ao services/mesh os morph targets dos implantes
  * ESCOLHIDOS (contratos §10.4), nos 2 planos × 2 IMF, lados separados. Vale em A e B
- * (simulação é ilustração; ADR 0005). Exige os 10 landmarks (a base define a pegada).
+ * (simulação é ilustração; ADR 0005), mas em A o `previsto` de cada target volta null. Exige os 10 landmarks (a base define a pegada).
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -44,7 +46,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       ...(corpo.pinca_polo_superior_mm ? { pinca_polo_superior_mm: corpo.pinca_polo_superior_mm } : {}),
     });
     await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "arquivo", entidadeId: m.id, desenho, detalhes: { operacao: "morphs", implantes } });
-    return json(manifest);
+    // Em A o `previsto` (números calculados) nunca sai para o cliente (ADR 0005).
+    return json(redigirPrevistoManifest(manifest, recursoAtivoEm(desenho, "numeros_calculados_no_relatorio")));
   } catch (e) {
     return tratarErro(e, "malhas.morphs");
   }

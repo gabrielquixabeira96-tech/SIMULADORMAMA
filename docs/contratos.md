@@ -551,7 +551,7 @@ Esquema `simulacao_config/1.0`. **Todo coeficiente numérico está dentro de um 
 }
 ```
 
-A partir da versão **1.1** da config existe o bloco opcional `modelo_geometrico` (ADR 0014), com os coeficientes de forma do modelo (todos `{valor, nao_calibrado: true}`): `borda_implante_expoente` (0,5), `imf_transicao_mm` (12), `mamilo_sigma_fator` (0,30), `rebaixar_sigma_lateral_fator` (0,30), `rebaixar_decaimento_cranial_fator` (0,45), `rebaixar_decaimento_caudal_fator` (0,90). Ausente → padrões do `services/mesh`. O web continua lendo só `versao`, `incerteza` e `imf.opcoes`. Algoritmo do modelo: docstring de `services/mesh/mesh/simulacao/geometrico.py` e ADR 0014.
+O bloco `modelo_geometrico` (ADR 0014) traz os coeficientes de forma do modelo (todos `{valor, nao_calibrado: true}`): `borda_implante_expoente` (0,5), `imf_transicao_mm` (12), `mamilo_sigma_fator` (0,30), `rebaixar_sigma_lateral_fator` (0,30), `rebaixar_decaimento_cranial_fator` (0,45), `rebaixar_decaimento_caudal_fator` (0,90) e, desde a versão **1.2**, `profundidade_sigma_mm` (40), `frente_profundidade_min_mm` (−60), `frente_profundidade_rampa_mm` (30) e `frente_normal_rampa` (0,3). Desde a 1.2 o bloco é **obrigatório** e o `services/mesh` não tem valor padrão no código: chave ausente → erro `config_simulacao_incompleta`. O web continua lendo só `versao`, `incerteza` e `imf.opcoes`. Algoritmo do modelo: docstring de `services/mesh/mesh/simulacao/geometrico.py` e ADR 0014.
 
 Propriedades que os testes de regressão geométrica (Marco 2) DEVEM garantir para qualquer valor desses coeficientes: (a) **monotonicidade** — volume maior do mesmo modelo/plano/IMF → projeção anterior do mamilo maior; (b) **simetria** — torso simétrico + mesmo implante bilateral → malha resultante simétrica em X dentro de 0,1 mm; (c) `imf=manter` não move `sulco_*` mais que 1 mm; `imf=rebaixar` move para −Y em `min(mm_por_100ml × volume/100, maximo_mm)`.
 
@@ -614,7 +614,7 @@ mt__<implante_id>__<plano>__<imf>
 }
 ```
 
-`previsto` é o que os testes de monotonicidade/simetria leem, sem abrir o `.glb`.
+`previsto` é o que os testes de monotonicidade/simetria leem, sem abrir o `.glb`. É **anulável**: com `X-Desenho: A` o serviço grava e devolve `previsto: null` em todo target (números calculados desligados; ADR 0005, revisão v0.1.1), e o web também anula o campo nas rotas em A.
 
 Requisição `POST /morphs`:
 

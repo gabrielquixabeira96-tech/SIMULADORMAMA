@@ -185,6 +185,12 @@ def test_morphs_endpoint(cliente, malha_processada, data_dir, cab):
     assert man["sha256_malha_base"] == sha256_arquivo(data_dir / MALHA_DIR / "processada.glb")
     for a in man["arquivos"]:
         assert sha256_arquivo(pasta / a["arquivo"]) == a["sha256"]
+    # ADR 0005: em A nenhum numero calculado sai do servico (resposta e manifest.json em disco)
+    previstos = [t["previsto"] for a in man["arquivos"] for t in a["targets"]]
+    if cab is A:
+        assert previstos and all(p is None for p in previstos)
+    else:
+        assert all(isinstance(p, dict) and "delta_projecao_mamilo_mm" in p for p in previstos)
 
 
 def test_morphs_so_ambos_e_subconjunto(cliente, malha_processada):

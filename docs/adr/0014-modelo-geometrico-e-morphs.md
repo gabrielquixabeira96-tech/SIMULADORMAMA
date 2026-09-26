@@ -30,3 +30,7 @@ Monotonicidade (volume maior no mesmo perfil/plano/IMF → mamilo mais projetado
 ## Consequências
 
 Tudo é ilustração não calibrada; a fase 4 calibra os coeficientes com pares pré/pós. O web deve tratar `asset.extras.nao_calibrado` como informativo (sem mudança de campo obrigatório).
+
+## Revisão v0.1.1 (2026-09-26) — nenhum coeficiente no código
+
+Três constantes do modelo estavam fixas em `geometrico.py` (`PROF_SIGMA_MM = 40`, `FRENTE_PROF_MM = (-60, 30)` e o divisor `0,3` da rampa da normal) e `PADROES_MODELO` servia de fallback silencioso quando a config não trazia `modelo_geometrico`. Agora `config/simulacao.json` (versão **1.2**) traz `modelo_geometrico.profundidade_sigma_mm`, `frente_profundidade_min_mm`, `frente_profundidade_rampa_mm` e `frente_normal_rampa`, todos `nao_calibrado`, com os mesmos valores (o snapshot de regressão não muda); `modelo_geometrico` passou a ser obrigatório no schema e o `services/mesh` não tem mais valor padrão: qualquer chave ausente → `ErroSimulacao("config_simulacao_incompleta:<caminho>")`. Os limites do solver numérico do expoente do perfil (`k ∈ [0,3; 200]`) não são coeficientes do modelo e ficam no código.

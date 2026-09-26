@@ -33,7 +33,12 @@
         "string",
         "null"
       ],
-      "pattern": "^[a-f0-9]{7,40}$"
+      "description": "git describe --always --dirty do commit validado (hash curto, ou <tag>-<n>-g<hash>; sufixo -dirty = arvore com alteracao nao commitada)",
+      "pattern": "^(?:[0-9A-Za-z._-]+-[0-9]+-g)?[a-f0-9]{7,40}(?:-dirty)?$"
+    },
+    "arvore_suja": {
+      "type": "boolean",
+      "description": "true se o commit tinha alteracao nao commitada (registro nao vale como validacao)"
     },
     "desenho_testado": {
       "type": "array",

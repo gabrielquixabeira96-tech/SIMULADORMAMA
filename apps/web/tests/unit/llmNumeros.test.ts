@@ -207,3 +207,43 @@ describe("guardas do DESENHO=A no relatório", () => {
     expect(r.prosa_origem).toBe("mock_substituto");
   });
 });
+
+/** Revisão v0.1.1, item 4: numerais Unicode, romanos e palavras de quantidade não escapam do verificador. */
+describe("verificarNumeros — numerais não ASCII, romanos e palavras de quantidade", () => {
+  const permitidos = ["300", "320"];
+  const recusa = (texto: string) => {
+    const v = verificarNumeros({ p: texto }, permitidos);
+    expect(v.ok, texto).toBe(false);
+    return v;
+  };
+
+  it("dígitos de largura total são normalizados (NFKC) e conferidos pelo valor: ３２０ passa se 320 é permitido, ３３０ não", () => {
+    expect(verificarNumeros({ p: "prótese de ３２０ mL" }, permitidos).ok).toBe(true);
+    expect(recusa("prótese de ３３０ mL").intrusos).toEqual(["330"]);
+  });
+
+  it("numeral não ASCII (árabe-índico, devanágari) é sempre recusado, mesmo com valor permitido", () => {
+    expect(recusa("prótese de ٣٢٠ mL").detalhes[0]).toMatchObject({ forma: "nao_ascii" });
+    expect(recusa("prótese de ३२० mL").detalhes[0]).toMatchObject({ forma: "nao_ascii" });
+  });
+
+  it("numeral romano (≥ 2 letras) é recusado; D/E isolados (direita/esquerda) não", () => {
+    expect(recusa("volume de CCCXX mL").detalhes[0]).toMatchObject({ forma: "romano", valor: 320 });
+    expect(recusa("grau XIV").detalhes[0]).toMatchObject({ forma: "romano", valor: 14 });
+    expect(recusa("prótese Ⅻ").detalhes[0]).toMatchObject({ forma: "romano" }); // Ⅻ → XII pelo NFKC
+    expect(verificarNumeros({ p: "mamas D e E simétricas; DM ausente" }, permitidos).ok).toBe(true);
+  });
+
+  it("palavras de quantidade são recusadas: dezenas, dobro, metade, dúzia, centenas, milhares, um terço", () => {
+    for (const t of ["algumas dezenas de mililitros", "o dobro do volume", "metade da projeção", "uma dúzia de pontos", "centenas de casos", "milhares de pacientes", "um terço da base", "três quartos"]) {
+      expect(recusa(t).detalhes.some((d) => d.forma === "quantidade"), t).toBe(true);
+    }
+    // termos anatômicos/comuns sem numeral antes não contam
+    expect(verificarNumeros({ p: "no terço inferior do polo, com curativo no quarto dia" }, permitidos).ok).toBe(true);
+  });
+
+  it("extrairNumeros expõe a forma de cada achado", () => {
+    const f = extrairNumeros("٣ CCCXX dobro 320").map((n) => n.forma).sort();
+    expect(f).toEqual(["digitos", "nao_ascii", "quantidade", "romano"]);
+  });
+});

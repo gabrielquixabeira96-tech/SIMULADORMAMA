@@ -39,7 +39,8 @@ export const targetManifestSchema = z.strictObject({
   implante_id: idImplante,
   lado: z.enum(LADOS),
   indice: z.number().int().min(0),
-  previsto: previstoSchema,
+  /** null no DESENHO=A: números calculados desligados (ADR 0005) — o services/mesh e o web anulam. */
+  previsto: previstoSchema.nullable(),
 });
 
 export const manifestMorphsSchema = z.strictObject({

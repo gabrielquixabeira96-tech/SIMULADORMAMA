@@ -78,7 +78,7 @@ export function PainelAnamnese({ pacienteId, atendimentoId, onRegistrada }: Prop
   return (
     <section className="painel" data-testid="painel-anamnese" aria-labelledby="titulo-anamnese">
       <h3 id="titulo-anamnese">Anamnese</h3>
-      <p className="nota">Não digite nome, CPF, telefone, e-mail ou datas de nascimento. Esses padrões são removidos antes do processamento e o texto livre não é gravado.</p>
+      <p className="nota">Não digite nome, CPF, telefone, e-mail ou datas de nascimento. CPF, RG, telefone, e-mail, URLs e datas são removidos antes do processamento; texto que pareça conter nome de pessoa é recusado (remova o nome e envie de novo). O texto livre não é gravado.</p>
       <label htmlFor="anamnese-texto">Texto livre da consulta</label>
       <textarea
         id="anamnese-texto"

@@ -1,6 +1,6 @@
 import { IMFS, LADOS, PLANOS, previstoSchema, uuidSchema } from "@simulador/contratos";
 import { z } from "zod";
-import { erro, json, lerJson, tratarErro } from "@/api/respostas";
+import { desligadoNoDesenhoA, erro, json, lerJson, tratarErro } from "@/api/respostas";
 import { buscarImplante } from "@/catalogo/catalogo";
 import { usuarioAtual } from "@/config/ambiente";
 import { getDesenho } from "@/config/desenho";
@@ -31,6 +31,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const { id } = await ctx.params;
     if (!uuidSchema.safeParse(id).success) return erro(400, "id_invalido", "id deve ser uuid");
     const corpo = corpoSchema.parse(await lerJson(req));
+    // Em A nenhum número calculado é gravado (ADR 0005): `previsto` não nulo é recusado.
+    if (corpo.previsto != null && !recursoAtivoEm(desenho, "numeros_calculados_no_relatorio")) return desligadoNoDesenhoA("numeros_calculados_no_relatorio");
     const implante = buscarImplante(corpo.implante_id);
     if (!implante) return erro(422, "implante_desconhecido", "implante fora do catálogo");
     const m = await malhaPorId(id);

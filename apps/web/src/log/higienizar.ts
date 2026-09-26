@@ -68,8 +68,8 @@ const PADROES: Array<[RegExp, string]> = [
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, REMOVIDO],
   // URL com credencial (postgres://user:senha@host)
   [/\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:[^\s@/]+@[^\s]+/gi, REMOVIDO],
-  // CPF com ou sem máscara
-  [new RegExp(`${B}\\d{3}\\.?\\d{3}\\.?\\d{3}-?\\d{2}${E}`, "g"), REMOVIDO],
+  // CPF com ou sem máscara, com ponto, espaço ou hífen entre os grupos ("123 456 789 09", "123.456.789.09")
+  [new RegExp(`${B}\\d{3}[.\\s]?\\d{3}[.\\s]?\\d{3}[-.\\s]?\\d{2}${E}`, "g"), REMOVIDO],
   // telefone BR: (65) 99999-9999, +55 65 999999999, 6533334444
   [new RegExp(`${B}(?:\\+?55[\\s-]?)?\\(?\\d{2}\\)?[\\s-]?9?\\d{4}[\\s-]?\\d{4}${E}`, "g"), REMOVIDO],
   // data completa dd/mm/aaaa ou dd-mm-aaaa

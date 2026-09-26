@@ -260,3 +260,29 @@ describe.skipIf(!dbDisponivel())("rotas com banco + mock do services/mesh", () =
 function readdirVazio(rel: string): boolean {
   return readdirSync(caminhoEmDataDir(rel)).length === 0;
 }
+
+/** Revisão v0.1.1, item 8: o flag `sintetica` não vem do cliente; scan real nunca pula a régua. */
+describe.skipIf(!dbDisponivel())("sintetica é decidido no servidor", () => {
+  it("upload com sintetica=true do cliente → gravado false; GET da malha e escala do registro tratam como scan real", async () => {
+    const p = await novoPaciente();
+    const fd = new FormData();
+    fd.set("paciente_id", p.id);
+    fd.set("unidade_origem", "mm");
+    fd.set("sintetica", "true");
+    fd.append("arquivos", new File([OBJ], "scan.obj"));
+    const r = await postMalha(new Request("http://x/api/malhas", { method: "POST", body: fd }));
+    const j = await r.json();
+    expect(r.status, JSON.stringify(j)).toBe(201);
+    const linha = await consultar<{ sintetica: boolean }>("select sintetica from malhas where id = $1", [j.malha_id]);
+    expect(linha.rows[0]!.sintetica).toBe(false);
+    const aud = await consultar<{ detalhes: { sintetica: boolean; origem: string } }>("select detalhes from auditoria where entidade = 'malhas' and entidade_id = $1", [j.malha_id]);
+    expect(aud.rows[0]!.detalhes).toMatchObject({ sintetica: false, origem: "upload" });
+    const g = await (await getMalha(new Request("http://x"), params({ id: j.malha_id }))).json();
+    expect(g.sintetica).toBe(false);
+    // sem régua, o registro de medidas marca escala "nenhuma" (não "gabarito", que só vale para sintético)
+    const m = await postMedidas(new Request("http://x", json({ malha_id: j.malha_id, landmarks: LANDMARKS })));
+    const jm = await m.json();
+    expect(m.status, JSON.stringify(jm)).toBe(201);
+    expect(jm.escala.metodo).toBe("nenhuma");
+  });
+});

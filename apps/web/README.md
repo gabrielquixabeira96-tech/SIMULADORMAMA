@@ -8,7 +8,7 @@ Next.js 16 (App Router) + TypeScript + react-three-fiber/three.js. Contratos: `d
 pnpm install                                   # na raiz
 bash scripts/db.sh start criar                 # Postgres 16 local (bancos simulador e simulador_test)
 pnpm --filter web db:migrate                   # migrations em db/migrations (idempotente)
-DESENHO=B pnpm --filter web dev                # http://localhost:3000 (DESENHO=A para o desenho A)
+DESENHO=B pnpm --filter web dev                # só em 127.0.0.1:3000; abra http://127.0.0.1:3000/?token=<APP_TOKEN_LOCAL> (DESENHO=A para o desenho A)
 pnpm --filter web lint | typecheck | test      # ESLint, tsc, Vitest (unit + API + banco + UI)
 pnpm --filter web test:e2e                     # build de teste + Playwright contra o stack REAL (ver abaixo)
 pnpm --filter web validacao:marcos             # provas dos Marcos 0 e 1 → docs/validacao/v<versao>-web-marcos-0-1.{md,json}

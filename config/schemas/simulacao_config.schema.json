@@ -5,7 +5,7 @@
   "description": "Esquema de config/simulacao.json (docs/contratos.md secao 9). Todo coeficiente numerico vive num objeto {valor, nao_calibrado}.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["esquema", "versao", "nao_calibrado", "nota", "modelo", "implante", "planos", "imf", "tecido_mole", "incerteza"],
+  "required": ["esquema", "versao", "nao_calibrado", "nota", "modelo", "implante", "planos", "imf", "tecido_mole", "modelo_geometrico", "incerteza"],
   "properties": {
     "esquema": { "const": "simulacao_config/1.0" },
     "versao": { "type": "string" },
@@ -57,7 +57,7 @@
       "required": ["espessura_referencia_mm", "atenuacao_por_mm_pinca_fator"],
       "properties": { "espessura_referencia_mm": { "$ref": "#/$defs/coef" }, "atenuacao_por_mm_pinca_fator": { "$ref": "#/$defs/coef" } }
     },
-    "modelo_geometrico": {"type": "object", "additionalProperties": false, "description": "Opcional (versao >= 1.1): coeficientes de forma do modelo geometrico (ADR 0014). Ausente -> padroes do services/mesh.", "required": ["nao_calibrado", "borda_implante_expoente", "imf_transicao_mm", "mamilo_sigma_fator", "rebaixar_sigma_lateral_fator", "rebaixar_decaimento_cranial_fator", "rebaixar_decaimento_caudal_fator"], "properties": {"nao_calibrado": {"type": "boolean"}, "descricao": {"type": "string"}, "borda_implante_expoente": {"$ref": "#/$defs/coef"}, "imf_transicao_mm": {"$ref": "#/$defs/coef"}, "mamilo_sigma_fator": {"$ref": "#/$defs/coef"}, "rebaixar_sigma_lateral_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_cranial_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_caudal_fator": {"$ref": "#/$defs/coef"}}},
+    "modelo_geometrico": {"type": "object", "additionalProperties": false, "description": "Obrigatorio (versao >= 1.2): TODOS os coeficientes de forma do modelo geometrico (ADR 0014). O services/mesh nao tem valor padrao no codigo: chave ausente -> erro.", "required": ["nao_calibrado", "borda_implante_expoente", "imf_transicao_mm", "mamilo_sigma_fator", "rebaixar_sigma_lateral_fator", "rebaixar_decaimento_cranial_fator", "rebaixar_decaimento_caudal_fator", "profundidade_sigma_mm", "frente_profundidade_min_mm", "frente_profundidade_rampa_mm", "frente_normal_rampa"], "properties": {"nao_calibrado": {"type": "boolean"}, "descricao": {"type": "string"}, "borda_implante_expoente": {"$ref": "#/$defs/coef"}, "imf_transicao_mm": {"$ref": "#/$defs/coef"}, "mamilo_sigma_fator": {"$ref": "#/$defs/coef"}, "rebaixar_sigma_lateral_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_cranial_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_caudal_fator": {"$ref": "#/$defs/coef"}, "profundidade_sigma_mm": {"$ref": "#/$defs/coef"}, "frente_profundidade_min_mm": {"$ref": "#/$defs/coef"}, "frente_profundidade_rampa_mm": {"$ref": "#/$defs/coef"}, "frente_normal_rampa": {"$ref": "#/$defs/coef"}}},
     "incerteza": {
       "type": "object",
       "additionalProperties": false,

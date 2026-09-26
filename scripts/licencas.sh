@@ -2,7 +2,9 @@
 # Regenera THIRD_PARTY_LICENSES.md a partir das dependencias instaladas (ADR 0009) e FALHA se
 # alguma licenca estiver fora da lista permitida (qualquer GPL/LGPL/AGPL e afins).
 # - Node: `pnpm licenses list --json` (workspace inteiro, prod + dev).
-# - Python: `pip-licenses` do services/mesh/.venv. Sem venv, a secao Python existente e PRESERVADA.
+# - Python: `pip-licenses` do services/mesh/.venv. Sem venv, a secao Python existente e PRESERVADA
+#   (so ao regenerar; com --checar, sem venv FALHA).
+# - Falha tambem se `pnpm licenses list` falhar ou vier vazio.
 # - Paragrafos escritos a mao (linhas fora das tabelas) de cada secao gerada sao preservados.
 # Uso: bash scripts/licencas.sh [--checar]   (--checar: so verifica, nao reescreve o arquivo)
 set -euo pipefail
@@ -12,15 +14,22 @@ SAIDA="THIRD_PARTY_LICENSES.md"
 CHECAR=0
 [[ "${1:-}" == "--checar" ]] && CHECAR=1
 
-NODE_JSON="$(mktemp)"; PY_JSON="$(mktemp)"
-trap 'rm -f "$NODE_JSON" "$PY_JSON"' EXIT
-if [[ -f pnpm-lock.yaml ]] && command -v pnpm >/dev/null; then
-  pnpm licenses list --json > "$NODE_JSON" 2>/dev/null || echo '{}' > "$NODE_JSON"
-else
-  echo '{}' > "$NODE_JSON"
-fi
+NODE_JSON="$(mktemp)"; PY_JSON="$(mktemp)"; NODE_ERR="$(mktemp)"
+trap 'rm -f "$NODE_JSON" "$PY_JSON" "$NODE_ERR"' EXIT
+erro() { echo "ERRO (licencas.sh): $*" >&2; exit 1; }
+# Inventario Node: falha se o comando falhar ou vier vazio (nunca "verde" sem inventario; revisao v0.1.1).
+[[ -f pnpm-lock.yaml ]] || erro "pnpm-lock.yaml ausente"
+command -v pnpm >/dev/null || erro "pnpm ausente"
+pnpm licenses list --json > "$NODE_JSON" 2> "$NODE_ERR" || { cat "$NODE_ERR" >&2; erro "'pnpm licenses list' falhou"; }
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d,dict) and sum(len(v) for v in d.values())>0 else 1)' "$NODE_JSON" \
+  || erro "'pnpm licenses list' devolveu inventario vazio ou invalido"
+# Inventario Python: obrigatorio no modo --checar (a CI cria o venv ANTES desta etapa).
 if [[ -x services/mesh/.venv/bin/pip-licenses ]]; then
-  services/mesh/.venv/bin/pip-licenses --format=json --with-urls --order=name > "$PY_JSON"
+  services/mesh/.venv/bin/pip-licenses --format=json --with-urls --order=name > "$PY_JSON" || erro "pip-licenses falhou"
+  python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if isinstance(d,list) and d else 1)' "$PY_JSON" \
+    || erro "pip-licenses devolveu inventario vazio"
+elif [[ $CHECAR -eq 1 ]]; then
+  erro "services/mesh/.venv sem pip-licenses: rode 'bash scripts/mesh.sh venv' antes de checar"
 else
   echo 'null' > "$PY_JSON"
 fi

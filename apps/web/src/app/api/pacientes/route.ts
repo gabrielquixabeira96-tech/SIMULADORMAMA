@@ -2,6 +2,7 @@ import { json, tratarErro } from "@/api/respostas";
 import { usuarioAtual } from "@/config/ambiente";
 import { getDesenho } from "@/config/desenho";
 import { registrarAuditoria } from "@/db/auditoria";
+import { transacao } from "@/db/pool";
 import { criarPaciente, listarPacientes } from "@/db/repositorio";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +14,12 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   try {
     const desenho = getDesenho();
-    const p = await criarPaciente();
-    await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "pacientes", entidadeId: p.id, desenho });
+    // escrita + auditoria na MESMA transação: sem auditoria, sem paciente
+    const p = await transacao(async (c) => {
+      const novo = await criarPaciente(c);
+      await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "pacientes", entidadeId: novo.id, desenho }, c);
+      return novo;
+    });
     return json({ id: p.id, pseudonimo: p.pseudonimo, criado_em: p.criado_em }, 201);
   } catch (e) {
     return tratarErro(e, "pacientes.criar");

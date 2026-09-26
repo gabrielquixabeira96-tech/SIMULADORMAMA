@@ -15,6 +15,8 @@ from mesh.malha.geometria import normais_vertices, soldar
 from mesh.malha.io import ler_malha
 from mesh.simulacao import interfaces
 from mesh.simulacao.geometrico import (
+    CHAVES_MODELO,
+    ErroSimulacao,
     SimuladorGeometrico,
     coeficientes,
     expoente_perfil,
@@ -41,6 +43,52 @@ def _malha(dir_sinteticos, nome):
     gab = json.loads((dir_sinteticos / nome / "gabarito.json").read_text(encoding="utf-8"))
     Vw, Fw, mapa = soldar(m.V, m.F)
     return m, gab, Vw, Fw, normais_vertices(Vw, Fw)
+
+
+# ----------------------------------------------------------------------------- config sem fallback
+
+def test_todos_os_coeficientes_do_modelo_vem_da_config_nao_calibrados():
+    """Revisao v0.1.1, item 9: profundidade, 'pele da frente' e rampa da normal estao na config
+    (nao_calibrado) com os valores que eram fixos no codigo (40, -60, 30, 0,3)."""
+    cfg = _cfg()
+    mg = cfg["modelo_geometrico"]
+    assert set(CHAVES_MODELO) <= set(mg)
+    assert all(mg[k]["nao_calibrado"] is True for k in CHAVES_MODELO)
+    c = coeficientes(cfg, "dual_plane")
+    fixos = (c.prof_sigma_mm, c.frente_prof_min_mm, c.frente_prof_rampa_mm, c.frente_normal_rampa)
+    assert fixos == (40.0, -60.0, 30.0, 0.3)
+    esquemas.validar("simulacao_config", cfg)
+
+
+@pytest.mark.parametrize("caminho", [("modelo_geometrico", k) for k in CHAVES_MODELO]
+                         + [("planos", "dual_plane", "suavizacao_sigma_mm"), ("imf", "rebaixar", "maximo_mm"),
+                            ("tecido_mole", "espessura_referencia_mm"), ("modelo_geometrico",)])
+def test_chave_ausente_na_config_falha_sem_fallback(caminho):
+    import copy
+
+    cfg = copy.deepcopy(_cfg())
+    no = cfg
+    for k in caminho[:-1]:
+        no = no[k]
+    del no[caminho[-1]]
+    with pytest.raises(ErroSimulacao, match="config_simulacao_incompleta"):
+        coeficientes(cfg, "dual_plane")
+    # o schema tambem recusa a config incompleta
+    with pytest.raises(esquemas.ErroContrato):
+        esquemas.validar("simulacao_config", cfg)
+
+
+def test_coeficiente_da_config_realmente_muda_o_campo(dir_sinteticos, implantes_teste):
+    """Trocar `frente_normal_rampa` na config muda o deslocamento: o valor nao esta fixo no codigo."""
+    import copy
+
+    _, gab, Vw, _, Nw = _malha(dir_sinteticos, "t01_simetrico_300")
+    imp = implantes_teste["teste-redondo-moderado-300"]
+    base = montar_campo(gab["landmarks"], "dir", imp, "dual_plane", "manter", _cfg()).deslocamento(Vw, Nw)
+    cfg = copy.deepcopy(_cfg())
+    cfg["modelo_geometrico"]["frente_normal_rampa"]["valor"] = 0.9
+    outro = montar_campo(gab["landmarks"], "dir", imp, "dual_plane", "manter", cfg).deslocamento(Vw, Nw)
+    assert np.abs(outro - base).max() > 0.1
 
 
 # ----------------------------------------------------------------------------- forma do implante

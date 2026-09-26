@@ -42,7 +42,8 @@ def exigir_landmarks(lm: dict) -> None:
 def gerar_morphs(pasta: Path, landmarks: dict, implantes: list[dict], planos=PLANOS, imfs=IMFS,
                  lados: str = "separados", malha_id: str = "", arquivo_obj: str = "processada.obj",
                  arquivo_glb: str = "processada.glb", quadro: str = "scan", pinca: dict | None = None,
-                 config: dict | None = None) -> dict:
+                 config: dict | None = None, numeros_calculados: bool = True) -> dict:
+    """`numeros_calculados=False` (X-Desenho: A) grava `previsto: null` em cada target (ADR 0005)."""
     t0 = time.perf_counter()
     exigir_landmarks(landmarks)
     if not implantes:
@@ -83,7 +84,8 @@ def gerar_morphs(pasta: Path, landmarks: dict, implantes: list[dict], planos=PLA
                     nome = nome_target(imp["id"], plano, imf, lado)
                     alvos.append({"nome": nome, "indices": ind, "dpos": Dr[ind], "dnorm": dN[ind]})
                     meta_targets.append({"nome": nome, "implante_id": imp["id"], "lado": lado,
-                                         "indice": len(meta_targets), "previsto": previsto(campos, landmarks)})
+                                         "indice": len(meta_targets),
+                                         "previsto": previsto(campos, landmarks) if numeros_calculados else None})
             arq = f"{plano}__{imf}.glb"
             escrever_glb(saida / arq, base, quadro=quadro, alvos=alvos,
                          extras_asset={"esquema": "morphs/1.0",

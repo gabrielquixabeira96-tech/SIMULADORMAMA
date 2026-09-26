@@ -1,6 +1,6 @@
 {
   "esquema": "simulacao_config/1.0",
-  "versao": "1.1",
+  "versao": "1.2",
   "nao_calibrado": true,
   "nota": "Todos os coeficientes sao chutes iniciais marcados nao_calibrado: true. So o pipeline de calibracao com pares pre/pos (fase 4) pode mudar isso. Nenhum valor aqui e verdade clinica.",
   "modelo": "geometrico_parametrico_v1",
@@ -48,7 +48,11 @@
     "mamilo_sigma_fator": {"valor": 0.3, "nao_calibrado": true, "descricao": "sigma (fracao da base do implante) do ajuste gaussiano que leva o mamilo ao deslocamento anterior/cranial alvo"},
     "rebaixar_sigma_lateral_fator": {"valor": 0.3, "nao_calibrado": true, "descricao": "sigma medial-lateral (fracao da base do implante) do rebaixamento do sulco"},
     "rebaixar_decaimento_cranial_fator": {"valor": 0.45, "nao_calibrado": true, "descricao": "sigma acima do sulco (fracao da distancia mamilo-sulco) do rebaixamento"},
-    "rebaixar_decaimento_caudal_fator": {"valor": 0.9, "nao_calibrado": true, "descricao": "sigma abaixo do sulco (fracao da distancia mamilo-sulco) do rebaixamento"}
+    "rebaixar_decaimento_caudal_fator": {"valor": 0.9, "nao_calibrado": true, "descricao": "sigma abaixo do sulco (fracao da distancia mamilo-sulco) do rebaixamento"},
+    "profundidade_sigma_mm": {"valor": 40.0, "nao_calibrado": true, "descricao": "sigma em profundidade (mm, ao longo da normal do plano da base) dos termos locais do mamilo e do sulco; limita o efeito a pele anterior e nao mexe nas costas"},
+    "frente_profundidade_min_mm": {"valor": -60.0, "nao_calibrado": true, "descricao": "altura minima (mm) sobre o plano da base a partir da qual a pele conta como 'da frente' (abaixo disso: flanco/costas, nao e empurrada)"},
+    "frente_profundidade_rampa_mm": {"valor": 30.0, "nao_calibrado": true, "descricao": "largura (mm) da rampa suave que leva o peso da pele 'da frente' de 0 a 1 a partir de frente_profundidade_min_mm"},
+    "frente_normal_rampa": {"valor": 0.3, "nao_calibrado": true, "descricao": "divisor da componente anterior da normal (n . normal / valor) na rampa suave do peso da pele anterior; 0,3 = pleno quando a normal aponta >= ~17 graus para frente"}
   },
   "incerteza": {
     "envelope_rms_mm": { "valor": 4.5, "fonte": "Assaaeed 2024 (doi:10.1007/s00266-024-04007-z); Roostaeian 2014 (doi:10.1177/1090820X14538805)", "configuravel": true },

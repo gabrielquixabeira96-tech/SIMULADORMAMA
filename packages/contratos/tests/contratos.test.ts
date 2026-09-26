@@ -119,6 +119,16 @@ describe("morphs/1.0", () => {
     const json = lerJson("config/schemas/morphs_manifest.schema.json");
     expect(Object.keys(manifestMorphsSchema.shape).sort()).toEqual(Object.keys(json.properties).sort());
   });
+  it("previsto é anulável no zod E no JSON Schema (null no DESENHO=A; revisão v0.1.1)", async () => {
+    const { targetManifestSchema } = await import("../src/morphs");
+    const alvo = { nome: "mt__a__dual_plane__manter", implante_id: "a", lado: "ambos", indice: 0 };
+    expect(targetManifestSchema.safeParse({ ...alvo, previsto: null }).success).toBe(true);
+    expect(targetManifestSchema.safeParse(alvo).success).toBe(false); // continua obrigatório (null explícito)
+    const json = lerJson("config/schemas/morphs_manifest.schema.json");
+    const prev = json.properties.arquivos.items.properties.targets.items.properties.previsto;
+    expect(prev.anyOf).toEqual([{ $ref: "#/$defs/previsto" }, { type: "null" }]);
+    expect(json.properties.arquivos.items.properties.targets.items.required).toContain("previsto");
+  });
   it("nome canônico do target", async () => {
     const { nomeTarget, NOME_TARGET_REGEX } = await import("../src/morphs");
     expect(nomeTarget("motiva-ergonomix-round-300", "dual_plane", "rebaixar")).toBe("mt__motiva-ergonomix-round-300__dual_plane__rebaixar");

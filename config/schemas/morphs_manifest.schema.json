@@ -39,7 +39,7 @@
                 "implante_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
                 "lado": { "enum": ["ambos", "dir", "esq"] },
                 "indice": { "type": "integer", "minimum": 0 },
-                "previsto": { "$ref": "#/$defs/previsto" }
+                "previsto": { "anyOf": [{ "$ref": "#/$defs/previsto" }, { "type": "null" }], "description": "null no DESENHO=A (numeros calculados desligados; ADR 0005)" }
               }
             }
           }

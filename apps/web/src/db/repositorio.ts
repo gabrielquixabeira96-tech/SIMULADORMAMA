@@ -10,12 +10,10 @@ export interface Paciente {
 }
 
 /** Cria paciente pseudonimizado (só id + pseudônimo). Tenta de novo em colisão rara. */
-export async function criarPaciente(): Promise<Paciente> {
+export async function criarPaciente(cliente?: pg.ClientBase): Promise<Paciente> {
   for (let tentativa = 0; tentativa < 5; tentativa++) {
-    const r = await consultar<Paciente>(
-      "insert into pacientes (pseudonimo) values ($1) on conflict (pseudonimo) do nothing returning id, pseudonimo, criado_em",
-      [gerarPseudonimo()],
-    );
+    const sql = "insert into pacientes (pseudonimo) values ($1) on conflict (pseudonimo) do nothing returning id, pseudonimo, criado_em";
+    const r = cliente ? await cliente.query<Paciente>(sql, [gerarPseudonimo()]) : await consultar<Paciente>(sql, [gerarPseudonimo()]);
     if (r.rows[0]) return r.rows[0];
   }
   throw new Error("não foi possível gerar pseudônimo único");
@@ -124,11 +122,10 @@ export async function inserirTepid(t: {
   versaoConfig: string;
   valores: MedidasDigitadas;
   alertas: AlertaTepid[];
-}): Promise<string> {
-  const r = await consultar<{ id: string }>(
-    "insert into tepid (paciente_id, desenho, versao_config, valores, alertas) values ($1,$2,$3,$4,$5) returning id",
-    [t.pacienteId, t.desenho, t.versaoConfig, JSON.stringify(t.valores), JSON.stringify(t.alertas)],
-  );
+}, cliente?: pg.ClientBase): Promise<string> {
+  const sql = "insert into tepid (paciente_id, desenho, versao_config, valores, alertas) values ($1,$2,$3,$4,$5) returning id";
+  const params = [t.pacienteId, t.desenho, t.versaoConfig, JSON.stringify(t.valores), JSON.stringify(t.alertas)];
+  const r = cliente ? await cliente.query<{ id: string }>(sql, params) : await consultar<{ id: string }>(sql, params);
   const id = r.rows[0]?.id;
   if (!id) throw new Error("falha ao inserir tepid");
   return id;

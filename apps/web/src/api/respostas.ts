@@ -36,6 +36,7 @@ function ehErroConexaoBanco(e: unknown): boolean {
 
 export function tratarErro(e: unknown, contexto: string): NextResponse {
   if (e instanceof RecursoDesligadoError) return desligadoNoDesenhoA(e.recurso);
+  if (e instanceof CorpoGrandeDemaisError) return erro(413, "corpo_grande_demais", e.message);
   if (e instanceof NaoImplementadoError) return erro(501, e.codigo, e.message);
   if (e instanceof CaminhoInvalidoError) return erro(400, "caminho_invalido", e.message);
   if (e instanceof EscalaInvalidaError) return erro(400, "escala_invalida", e.message);
@@ -56,9 +57,66 @@ export function tratarErro(e: unknown, contexto: string): NextResponse {
   return erro(500, "erro_interno", "erro interno");
 }
 
-export async function lerJson(req: Request): Promise<unknown> {
+/** Limite do corpo das rotas JSON (revisão v0.1.1). O maior corpo legítimo (landmarks) tem poucos KB. */
+export const LIMITE_JSON_BYTES = 1024 * 1024;
+
+export class CorpoGrandeDemaisError extends Error {
+  constructor(readonly limite: number) {
+    super(`corpo acima do limite de ${Math.round(limite / 1024)} KB`);
+    this.name = "CorpoGrandeDemaisError";
+  }
+}
+
+/**
+ * Envolve o corpo num stream que CONTA os bytes e aborta ao passar do limite. Vale também para
+ * `Transfer-Encoding: chunked` (sem Content-Length), que antes contornava o limite.
+ */
+export function limitarCorpo(corpo: ReadableStream<Uint8Array>, limite: number, aoExceder?: () => void): ReadableStream<Uint8Array> {
+  let total = 0;
+  return corpo.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(pedaco, ctl) {
+        total += pedaco.byteLength;
+        if (total > limite) {
+          aoExceder?.();
+          ctl.error(new CorpoGrandeDemaisError(limite));
+        } else ctl.enqueue(pedaco);
+      },
+    }),
+  );
+}
+
+/** Lê o corpo inteiro com limite (lança CorpoGrandeDemaisError → 413). */
+export async function lerCorpoLimitado(req: Request, limite: number): Promise<Uint8Array> {
+  const declarado = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declarado) && declarado > limite) throw new CorpoGrandeDemaisError(limite);
+  if (!req.body) return new Uint8Array(0);
+  const leitor = req.body.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > limite) {
+      await leitor.cancel().catch(() => undefined);
+      throw new CorpoGrandeDemaisError(limite);
+    }
+    partes.push(value);
+  }
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of partes) {
+    out.set(p, o);
+    o += p.byteLength;
+  }
+  return out;
+}
+
+export async function lerJson(req: Request, limite = LIMITE_JSON_BYTES): Promise<unknown> {
+  const bytes = await lerCorpoLimitado(req, limite);
   try {
-    return await req.json();
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
     throw new ZodError([{ code: "custom", path: [], message: "corpo JSON inválido", input: undefined }]);
   }

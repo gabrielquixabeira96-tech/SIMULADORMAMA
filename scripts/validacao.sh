@@ -11,6 +11,10 @@ set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 V="$(tr -d '[:space:]' < VERSION)"
+# Commit validado, capturado ANTES de gerar qualquer artefato (RDC 657 art. 5): o registro cita
+# exatamente este commit e marca "-dirty" se a arvore tinha alteracao nao commitada.
+export VALIDACAO_COMMIT="$(git describe --always --dirty --abbrev=12)"
+echo "== commit validado: $VALIDACAO_COMMIT"
 ART="$RAIZ/test-results/validacao-v$V"
 mkdir -p "$ART"
 SEM_E2E=0

@@ -16,17 +16,21 @@ class CaminhoInvalido(ValueError):
     """Caminho fora de DATA_DIR, absoluto ou com `..`."""
 
 
-def data_dir() -> Path:
-    bruto = os.environ.get("DATA_DIR")
-    base = Path(bruto) if bruto else RAIZ_REPO / "data"
+def _relativo_a_raiz(bruto: str | None, padrao: str) -> Path:
+    """Caminho do env; RELATIVO e resolvido pela RAIZ DO REPO (como no web, `apps/web/src/config/
+    ambiente.ts`), nunca pelo cwd — `DATA_DIR=./data` aponta para a mesma pasta nos dois servicos."""
+    base = Path(bruto) if bruto else Path(padrao)
     if not base.is_absolute():
-        base = (Path.cwd() / base)
+        base = RAIZ_REPO / base
     return base.resolve()
 
 
+def data_dir() -> Path:
+    return _relativo_a_raiz(os.environ.get("DATA_DIR"), "data")
+
+
 def config_dir() -> Path:
-    bruto = os.environ.get("CONFIG_DIR")
-    return Path(bruto).resolve() if bruto else RAIZ_REPO / "config"
+    return _relativo_a_raiz(os.environ.get("CONFIG_DIR"), "config")
 
 
 def validar_relativo(rel: str) -> PurePosixPath:

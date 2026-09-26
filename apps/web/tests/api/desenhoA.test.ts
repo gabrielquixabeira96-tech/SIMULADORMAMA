@@ -107,3 +107,41 @@ describe("DESENHO=B mantém os recursos", () => {
     expect((await r.json()).erro.detalhes.erros.length).toBeGreaterThan(0);
   });
 });
+
+/** Revisão v0.1.1, item 11: o gabarito do torso sintético não entrega distâncias nem volumes em A. */
+describe("GET /api/sinteticos/<nome>/gabarito.json conforme o desenho", () => {
+  const GAB = {
+    esquema: "gabarito/1.0",
+    parametros: { largura_toracica_mm: 300, volume_ml: { dir: 300, esq: 300 }, n_imf_mm: { dir: 70, esq: 70 } },
+    landmarks: { furcula: { posicao: [0, 0, 0], vertice: 0 } },
+    distancias: { intermamilar: { euclidiana_mm: 190.47, geodesica_mm: 205.31 } },
+    volumes: { dir: { adicionado_ml: 300, estimado_plano_base_elipse_ml: 286.4 } },
+  };
+  const pedir = async () => {
+    const { mkdirSync, writeFileSync } = await import("node:fs");
+    const { caminhoEmDataDir } = await import("@/config/ambiente");
+    const { GET } = await import("@/app/api/sinteticos/[nome]/[arquivo]/route");
+    mkdirSync(caminhoEmDataDir("sinteticos/tx_gab"), { recursive: true });
+    writeFileSync(caminhoEmDataDir("sinteticos/tx_gab/gabarito.json"), JSON.stringify(GAB));
+    return GET(new Request("http://x"), { params: Promise.resolve({ nome: "tx_gab", arquivo: "gabarito.json" }) });
+  };
+
+  it("A: distancias e volumes null, sem volume_ml/n_imf_mm nos parâmetros; landmarks mantidos", async () => {
+    vi.stubEnv("DESENHO", "A");
+    const r = await pedir();
+    expect(r.status).toBe(200);
+    const texto = await r.text();
+    const j = JSON.parse(texto);
+    expect(j.distancias).toBeNull();
+    expect(j.volumes).toBeNull();
+    expect(j.parametros).toEqual({ largura_toracica_mm: 300 });
+    expect(j.landmarks.furcula.posicao).toEqual([0, 0, 0]);
+    for (const n of ["190.47", "205.31", "286.4", "adicionado_ml"]) expect(texto).not.toContain(n);
+  });
+
+  it("B: gabarito inteiro", async () => {
+    vi.stubEnv("DESENHO", "B");
+    const j = await (await pedir()).json();
+    expect(j).toEqual(GAB);
+  });
+});

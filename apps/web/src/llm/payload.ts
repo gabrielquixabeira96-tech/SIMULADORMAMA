@@ -4,8 +4,10 @@
  *  - bloco de conteúdo que não seja texto (imagem, documento, arquivo);
  *  - chave que indique imagem, malha, textura, arquivo ou identificação pessoal;
  *  - base64 longo / data URI (imagem embutida);
- *  - CPF, e-mail, telefone, data completa, caminho absoluto no texto.
+ *  - CPF, e-mail, telefone, data completa, caminho absoluto no texto;
+ *  - nome de pessoa (pronome de tratamento + nome, ou prenome comum; `nomes.ts`).
  */
+import { detectarNomes } from "./nomes";
 
 export class PayloadProibidoError extends Error {
   readonly codigo = "payload_llm_proibido" as const;
@@ -65,7 +67,7 @@ const TIPOS_BLOCO_PERMITIDOS = new Set(["text", "tool_use", "tool_result"]);
 const PADROES_TEXTO: Array<[RegExp, string]> = [
   [/data:[a-z]+\/[a-z0-9.+-]+;base64,/i, "data URI"],
   [/[A-Za-z0-9+/]{200,}={0,2}/, "base64 longo"],
-  [/(?<![\w-])\d{3}\.?\d{3}\.?\d{3}-?\d{2}(?![\w-])/, "CPF"],
+  [/(?<![\w-])\d{3}[.\s]?\d{3}[.\s]?\d{3}[-.\s]?\d{2}(?![\w-])/, "CPF"],
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, "e-mail"],
   [/(?<![\w-])\(?\d{2}\)?[\s-]?9\d{4}[\s-]?\d{4}(?![\w-])/, "telefone"],
   [/(?<![\w-])\d{1,2}\/\d{1,2}\/\d{4}(?![\w-])/, "data completa"],
@@ -90,6 +92,9 @@ function varrer(v: unknown, caminho: string, dentroDeConteudo: boolean): void {
   }
   if (typeof v === "string") {
     for (const [re, nome] of PADROES_TEXTO) if (re.test(v)) throw new PayloadProibidoError(`${nome} em ${caminho}`);
+    // Nome de pessoa: só os sinais fortes (o de "palavras capitalizadas" daria falso positivo nos
+    // rótulos do catálogo, que entram no payload do relatório).
+    if (detectarNomes(v).some((n) => n.sinal !== "palavras_capitalizadas")) throw new PayloadProibidoError(`nome de pessoa em ${caminho}`);
     // Texto que é JSON (entrada estruturada da ferramenta): as chaves internas também são checadas.
     const t = v.trim();
     if (t.startsWith("{") || t.startsWith("[")) {

@@ -75,7 +75,6 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   const [gabarito, setGabarito] = useState<Partial<Record<DistanciaId, { euclidiana_mm: number; geodesica_mm: number | null }>> | null>(null);
 
   const [unidade, setUnidade] = useState("desconhecida");
-  const [marcarSintetica, setMarcarSintetica] = useState(false);
   const arquivosUpload = useRef<HTMLInputElement>(null);
   const arquivosLocais = useRef<HTMLInputElement>(null);
   const urlsLocais = useRef<string[]>([]);
@@ -151,7 +150,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
 
   // ---------------------------------------------------------------- ações
   async function criarPaciente() {
-    const r = await fetch("/api/pacientes", { method: "POST" });
+    const r = await fetch("/api/pacientes", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     if (!r.ok) return setMensagem({ tipo: "erro", texto: `Não foi possível criar paciente: ${await lerErro(r)}` });
     const j = await r.json();
     setPaciente({ id: j.id, pseudonimo: j.pseudonimo });
@@ -165,7 +164,6 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     fd.set("paciente_id", paciente.id);
     fd.set("unidade_origem", unidade);
     fd.set("recorte_modo", "abaixo_do_pescoco");
-    if (marcarSintetica) fd.set("sintetica", "true");
     for (const f of Array.from(files)) fd.append("arquivos", f, f.name);
     setCarregando(true);
     setMensagem({ tipo: "info", texto: "Enviando e processando (recorte + decimação)…" });
@@ -177,7 +175,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     setLandmarksGabarito(null);
     setGabarito(null);
     const { carregarGlb } = await import("@/viewer/carregar");
-    await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: marcarSintetica, versao: 1 }, () =>
+    await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: false, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
     );
     setMensagem({ tipo: "info", texto: `Malha processada: ${j.meta?.processada?.n_vertices ?? "?"} vértices.` });
@@ -461,9 +459,6 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 <option value="cm">centímetros</option>
                 <option value="mm">milímetros</option>
               </select>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={marcarSintetica} onChange={(e) => setMarcarSintetica(e.target.checked)} /> torso sintético
             </label>
             <button type="submit" disabled={!paciente || carregando}>
               Enviar e processar

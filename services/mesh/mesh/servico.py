@@ -283,7 +283,9 @@ def _implantes_pedidos(ids: list[str], catalogo_arquivo: str | None) -> list[dic
     return [todos[i] for i in ids]
 
 
-def morphs(req: dict) -> dict:
+def morphs(req: dict, desenho: str = "B") -> dict:
+    """Morph targets (contratos §10.4). Em `desenho == "A"` o `previsto` de cada target e null
+    (numeros calculados desligados; ADR 0005), na resposta e no manifest.json gravado."""
     from mesh.simulacao.geometrico import ErroSimulacao
     from mesh.simulacao.morphs import gerar_morphs
 
@@ -300,7 +302,7 @@ def morphs(req: dict) -> dict:
         m = gerar_morphs(pasta, lm, implantes, planos=tuple(req.get("planos") or ("subglandular", "dual_plane")),
                          imfs=tuple(req.get("imfs") or ("manter", "rebaixar")), lados=req.get("lados", "separados"),
                          malha_id=malha_id, quadro=meta.get("quadro", "scan"),
-                         pinca=req.get("pinca_polo_superior_mm"))
+                         pinca=req.get("pinca_polo_superior_mm"), numeros_calculados=desenho != "A")
     except ErroSimulacao as e:
         codigo = str(e).split(":")[0]
         raise ErroServico(422, codigo, str(e)) from e

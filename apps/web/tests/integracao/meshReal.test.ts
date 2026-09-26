@@ -56,7 +56,6 @@ describe.skipIf(!pronto)("integração com o services/mesh real", () => {
     const fd = new FormData();
     fd.set("paciente_id", pacienteId);
     fd.set("unidade_origem", "mm");
-    fd.set("sintetica", "true");
     for (const a of ["torso.obj", "torso.mtl", "textura.png"]) fd.append("arquivos", new File([readFileSync(resolve(SINTETICOS, TORSO, a))], a));
     const r = await postMalha(new Request("http://x/api/malhas", { method: "POST", body: fd }));
     const j = await r.json();

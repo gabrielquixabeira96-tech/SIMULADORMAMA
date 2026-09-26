@@ -5,6 +5,7 @@ import { usuarioAtual } from "@/config/ambiente";
 import { carregarTepidConfig } from "@/config/arquivosConfig";
 import { getDesenho } from "@/config/desenho";
 import { registrarAuditoria } from "@/db/auditoria";
+import { transacao } from "@/db/pool";
 import { inserirTepid, pacientePorId } from "@/db/repositorio";
 import { avaliarTepid, validarValoresTepid } from "@/tepid/avaliar";
 
@@ -23,8 +24,11 @@ export async function POST(req: Request) {
     const paciente = await pacientePorId(corpo.paciente_id);
     if (!paciente) return erro(404, "paciente_nao_encontrado", "paciente não encontrado");
     const r = avaliarTepid(v.valores, config, desenho);
-    const id = await inserirTepid({ pacienteId: paciente.id, desenho, versaoConfig: config.versao, valores: v.valores, alertas: r.alertas });
-    await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "tepid", entidadeId: id, desenho, detalhes: { paciente_id: paciente.id, n_alertas: r.alertas.length } });
+    const id = await transacao(async (c) => {
+      const novo = await inserirTepid({ pacienteId: paciente.id, desenho, versaoConfig: config.versao, valores: v.valores, alertas: r.alertas }, c);
+      await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "tepid", entidadeId: novo, desenho, detalhes: { paciente_id: paciente.id, n_alertas: r.alertas.length } }, c);
+      return novo;
+    });
     return json({ id, ...r, valores: v.valores, versao_config: config.versao }, 201);
   } catch (e) {
     return tratarErro(e, "tepid.gravar");

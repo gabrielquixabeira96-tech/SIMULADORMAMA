@@ -39,3 +39,11 @@ O que **não muda** entre A e B: upload, calibração, viewer, simulação com m
 
 - Todo recurso novo que calcule algo a partir do 3D ou sugira conduta precisa entrar no mapa e nos testes A/B antes do merge (revisão de código exige).
 - O modo A é mais pobre por desenho; isso é intencional e documentado no README.
+
+## Revisão v0.1.1 (2026-09-26) — `previsto`, gabarito e lista de permitidos
+
+A revisão da v0.1.0 achou números calculados saindo em A por três caminhos. Correções (todas com teste que confere o **corpo** da resposta):
+
+1. **`previsto` dos morph targets** (deslocamentos previstos pelo modelo): em A o `services/mesh` grava e devolve `previsto: null` quando recebe `X-Desenho: A`; o web anula o campo em `POST /api/malhas/<id>/morphs` e em `GET /api/malhas/<id>/arquivo?nome=morphs/manifest.json` (mesmo que o manifest em disco tenha sido gerado em B); `POST /api/malhas/<id>/simulacoes` com `previsto` não nulo em A → `403 desligado_no_desenho_a`; o cliente só manda `previsto` quando `numeros_calculados_no_relatorio` está ligado. Contrato: `previsto` passa a ser anulável (zod e `morphs_manifest.schema.json`), continua obrigatório.
+2. **Gabarito do torso sintético** (`GET /api/sinteticos/<nome>/gabarito.json`): em A saem `distancias: null`, `volumes: null` e sem `parametros.volume_ml`/`n_imf_mm`; os landmarks (âncora) ficam.
+3. **Teste do PDF/relatório em A** (item 4 "PDF" acima): o e2e troca a lista de proibidos filtrada por uma **lista de permitidos** — todo número do relatório e do PDF tem de ser um valor digitado, um dado do catálogo dos implantes escolhidos ou uma constante declarada (versão do software, versões das configs, envelope, datas/horas, identificadores UUID/pseudônimo/SHA-256, número de página).

@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -37,9 +38,13 @@ if (!process.env.E2E_DATA_DIR) {
 const DATA_DIR_E2E = process.env.E2E_DATA_DIR;
 process.env.E2E_MESH_URL = MESH_URL;
 
+// Token local (ADR 0003 item 7): um por execução; os servidores exigem, o navegador manda em todo pedido.
+process.env.E2E_APP_TOKEN ??= randomBytes(24).toString("hex");
+const TOKEN = process.env.E2E_APP_TOKEN;
+
 const PORTAS = { A: 3101, B: 3102 } as const;
 const next = (desenho: "A" | "B") => ({
-  command: `pnpm exec next start -p ${PORTAS[desenho]}`,
+  command: `pnpm exec next start -H 127.0.0.1 -p ${PORTAS[desenho]}`,
   url: `http://127.0.0.1:${PORTAS[desenho]}/api/config`,
   reuseExistingServer: false,
   timeout: 120_000,
@@ -51,11 +56,14 @@ const next = (desenho: "A" | "B") => ({
     DATA_DIR: DATA_DIR_E2E,
     USUARIO_LOCAL_ID: "e2e",
     LOG_LEVEL: "warn",
+    APP_TOKEN_LOCAL: TOKEN,
   },
 });
 
 export default defineConfig({
   testDir: "./e2e",
+  // apaga o DATA_DIR temporário (/tmp/simulador-e2e-*) no fim da execução
+  globalTeardown: "./e2e/teardown.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,
@@ -63,6 +71,7 @@ export default defineConfig({
   timeout: 120_000,
   use: {
     trace: "retain-on-failure",
+    extraHTTPHeaders: { Authorization: `Bearer ${TOKEN}` },
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   projects: [
