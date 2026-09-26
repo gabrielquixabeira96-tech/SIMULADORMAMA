@@ -26,9 +26,12 @@ def _alinhar(b: bytes, multiplo: int = 4, preenchimento: bytes = b"\x00") -> byt
     return b + preenchimento * resto
 
 
-def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None) -> bytes:
+def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None,
+               alvos: list[dict] | None = None, normais: np.ndarray | None = None) -> bytes:
+    """`alvos` (morph targets, contratos §10.3): itens {nome, indices (k,) crescente, dpos (k,3), dnorm (k,3)|None},
+    gravados como acessores **esparsos** (so os vertices com delta)."""
     V = malha.V.astype(np.float32)
-    N = malha.normais().astype(np.float32)
+    N = (normais if normais is not None else malha.normais()).astype(np.float32)
     idx = malha.F.astype(np.uint32).reshape(-1)
 
     binario = bytearray()
@@ -73,6 +76,30 @@ def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | No
         atributos["COLOR_0"] = acessor(rgba, "VEC4", _UBYTE, _ARRAY_BUFFER, normalizado=True)
     i_idx = acessor(idx, "SCALAR", _UINT, _ELEMENT_ARRAY_BUFFER)
 
+    def esparso(indices: np.ndarray, valores: np.ndarray, com_minmax: bool) -> int:
+        bv_i = adicionar(np.ascontiguousarray(indices, dtype=np.uint32).tobytes(), None)
+        bv_v = adicionar(np.ascontiguousarray(valores, dtype=np.float32).tobytes(), None)
+        a = {"componentType": _FLOAT, "count": int(len(V)), "type": "VEC3",
+             "sparse": {"count": int(len(indices)), "indices": {"bufferView": bv_i, "componentType": _UINT},
+                        "values": {"bufferView": bv_v}}}
+        if com_minmax:  # obrigatorio para POSITION de morph target; inclui os zeros implicitos
+            a["min"] = np.minimum(valores.min(0), 0).astype(float).tolist()
+            a["max"] = np.maximum(valores.max(0), 0).astype(float).tolist()
+        accessors.append(a)
+        return len(accessors) - 1
+
+    targets, nomes = [], []
+    for alvo in alvos or []:
+        ind = np.asarray(alvo["indices"], dtype=np.int64)
+        dpos = np.asarray(alvo["dpos"], dtype=np.float32)
+        if len(ind) == 0:  # sparse.count >= 1 pela especificacao
+            ind, dpos = np.zeros(1, dtype=np.int64), np.zeros((1, 3), dtype=np.float32)
+        t = {"POSITION": esparso(ind, dpos, True)}
+        if alvo.get("dnorm") is not None and len(alvo["dnorm"]) == len(ind):
+            t["NORMAL"] = esparso(ind, np.asarray(alvo["dnorm"], dtype=np.float32), False)
+        targets.append(t)
+        nomes.append(alvo["nome"])
+
     pbr: dict = {"metallicFactor": 0.0, "roughnessFactor": 0.8}
     gltf: dict = {
         "asset": {
@@ -89,6 +116,10 @@ def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | No
         "bufferViews": buffer_views,
         "accessors": accessors,
     }
+    if targets:
+        gltf["meshes"][0]["primitives"][0]["targets"] = targets
+        gltf["meshes"][0]["weights"] = [0.0] * len(targets)
+        gltf["meshes"][0]["extras"] = {"targetNames": nomes}
     if tem_textura:
         bv_img = adicionar(png_bytes(malha.textura), None)
         gltf["images"] = [{"bufferView": bv_img, "mimeType": "image/png"}]
@@ -109,8 +140,9 @@ def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | No
     ])
 
 
-def escrever_glb(caminho: Path, malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None) -> None:
-    Path(caminho).write_bytes(montar_glb(malha, quadro, extras_asset))
+def escrever_glb(caminho: Path, malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None,
+                 alvos: list[dict] | None = None, normais: np.ndarray | None = None) -> None:
+    Path(caminho).write_bytes(montar_glb(malha, quadro, extras_asset, alvos, normais))
 
 
 def ler_json_glb(caminho: Path) -> dict:

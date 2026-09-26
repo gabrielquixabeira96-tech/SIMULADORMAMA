@@ -1,6 +1,6 @@
 {
   "esquema": "simulacao_config/1.0",
-  "versao": "1.0",
+  "versao": "1.1",
   "nao_calibrado": true,
   "nota": "Todos os coeficientes sao chutes iniciais marcados nao_calibrado: true. So o pipeline de calibracao com pares pre/pos (fase 4) pode mudar isso. Nenhum valor aqui e verdade clinica.",
   "modelo": "geometrico_parametrico_v1",
@@ -39,6 +39,16 @@
   "tecido_mole": {
     "espessura_referencia_mm": { "valor": 20.0, "nao_calibrado": true, "descricao": "pincamento de referencia para o fator de transmissao" },
     "atenuacao_por_mm_pinca_fator": { "valor": 0.005, "nao_calibrado": true }
+  },
+  "modelo_geometrico": {
+    "nao_calibrado": true,
+    "descricao": "Coeficientes de forma do modelo geometrico_parametrico_v1 (ADR 0014). Nucleos locais tem suporte compacto (raio = 3 sigma). Nenhum valor e verdade clinica.",
+    "borda_implante_expoente": {"valor": 0.5, "nao_calibrado": true, "descricao": "gama do perfil (1 - rho^k)^gama do implante; 0,5 = borda elipsoidal. k e resolvido para bater o volume do catalogo"},
+    "imf_transicao_mm": {"valor": 12.0, "nao_calibrado": true, "descricao": "altura acima do sulco (novo) em que o deslocamento da pele vai de 0 a pleno; abaixo do sulco a pele nao e empurrada"},
+    "mamilo_sigma_fator": {"valor": 0.3, "nao_calibrado": true, "descricao": "sigma (fracao da base do implante) do ajuste gaussiano que leva o mamilo ao deslocamento anterior/cranial alvo"},
+    "rebaixar_sigma_lateral_fator": {"valor": 0.3, "nao_calibrado": true, "descricao": "sigma medial-lateral (fracao da base do implante) do rebaixamento do sulco"},
+    "rebaixar_decaimento_cranial_fator": {"valor": 0.45, "nao_calibrado": true, "descricao": "sigma acima do sulco (fracao da distancia mamilo-sulco) do rebaixamento"},
+    "rebaixar_decaimento_caudal_fator": {"valor": 0.9, "nao_calibrado": true, "descricao": "sigma abaixo do sulco (fracao da distancia mamilo-sulco) do rebaixamento"}
   },
   "incerteza": {
     "envelope_rms_mm": { "valor": 4.5, "fonte": "Assaaeed 2024 (doi:10.1007/s00266-024-04007-z); Roostaeian 2014 (doi:10.1177/1090820X14538805)", "configuravel": true },

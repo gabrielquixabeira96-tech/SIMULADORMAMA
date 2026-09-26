@@ -19,14 +19,25 @@ FATORES_UNIDADE = {"m": 1000.0, "cm": 10.0, "mm": 1.0}
 
 # ----------------------------------------------------------------------------- unidade
 
+TAMANHO_TIPICO_MM = 500.0            # maior dimensao tipica de um torso recortado (ADR 0013)
+FAIXA_PLAUSIVEL_MM = (150.0, 2500.0)  # fora disso a unidade inferida e marcada como duvidosa
+
+
 def inferir_unidade(V: np.ndarray) -> str:
-    """Heuristica do contrato §7.2: maior dimensao da caixa < 5 -> m; < 500 -> cm; senao mm."""
+    """Unidade cuja conversao deixa a maior dimensao da caixa mais perto (em escala log) de 500 mm.
+
+    Equivale a limiares em media geometrica: ext < 5 -> m; 5 <= ext < 158,1 -> cm; senao mm (ADR 0013).
+    O criterio antigo (< 500 -> cm) chamava de cm um torso em mm com menos de 500 mm de altura.
+    """
     ext = float((V.max(0) - V.min(0)).max())
-    if ext < 5:
-        return "m"
-    if ext < 500:
-        return "cm"
-    return "mm"
+    if ext <= 0:
+        return "mm"
+    return min(FATORES_UNIDADE, key=lambda u: abs(np.log(ext * FATORES_UNIDADE[u] / TAMANHO_TIPICO_MM)))
+
+
+def unidade_duvidosa(V: np.ndarray, unidade: str) -> bool:
+    ext_mm = float((V.max(0) - V.min(0)).max()) * FATORES_UNIDADE[unidade]
+    return not (FAIXA_PLAUSIVEL_MM[0] <= ext_mm <= FAIXA_PLAUSIVEL_MM[1])
 
 
 # ----------------------------------------------------------------------------- limpeza
@@ -241,6 +252,8 @@ def processar_malha(original: MalhaRender, unidade_origem: str = "mm", recorte: 
         unidade_inferida = inferir_unidade(original.V)
         fator = FATORES_UNIDADE[unidade_inferida]
         avisos.append(f"unidade_inferida:{unidade_inferida}")
+        if unidade_duvidosa(original.V, unidade_inferida):
+            avisos.append("unidade_inferida_duvidosa:calibrar_pela_regua")
     elif unidade_origem in FATORES_UNIDADE:
         fator = FATORES_UNIDADE[unidade_origem]
     else:

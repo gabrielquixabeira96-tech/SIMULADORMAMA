@@ -129,12 +129,15 @@ Cada distância tem **dois valores**:
 | `volume_dir` | Volume mamário direito estimado, em mL, com incerteza. |
 | `volume_esq` | Idem, esquerdo. |
 
-Estimador de referência (`metodo: "plano_base_elipse"`), calculado apenas pelo `services/mesh`:
+Estimador de referência (`metodo: "plano_base_elipse"`, **v2 — parede reconstruída**, ADR 0012), calculado apenas pelo `services/mesh`. O id `plano_base_elipse` foi mantido por compatibilidade (o web o valida como literal); o algoritmo mudou:
 
-1. Plano de referência da parede torácica: plano por `base_medial_X`, `base_lateral_X` e `sulco_X` (lado X). Exige os 4 landmarks da base; sem eles, `volume_X` é `null` com `motivo: "landmarks_da_base_ausentes"`.
-2. Região: vértices cuja projeção no plano cai dentro da elipse de centro no ponto médio medial–lateral, semieixo `a = base_X/2` na direção medial–lateral e semieixo `b = |projeção(sulco_X − centro)|` na direção perpendicular dentro do plano.
-3. Volume = soma, sobre as faces cujos 3 vértices estão na região, do volume do prisma entre a face e o plano (altura positiva = anterior ao plano; alturas negativas contam zero).
-4. `incerteza_ml = valor_ml × config.simulacao.incerteza.volume_relativa_fator` (0,15 até calibração) — sempre reportada; a UI NUNCA mostra volume sem a faixa.
+1. Quadro da base (lado X): plano por `base_medial_X`, `base_lateral_X` e `sulco_X`; `e1` = medial→lateral, `n` = normal orientada para o mamilo, `e2` = `n × e1` orientado para cranial. Exige os 4 landmarks da base; sem eles, `volume_X` é `null` e a resposta traz o aviso `volume_X:landmarks_da_base_ausentes` (o esquema não permite `motivo` num `null`).
+2. Elipse da base: centro no ponto médio medial–lateral, semieixo `a = base_X/2` em `e1` e `b = |(sulco_X − centro)·e2|` em `e2`. Coordenadas normalizadas `r = √((x/a)² + (y/b)²)`.
+3. **Parede reconstruída** (novo no v2): polinômio cúbico `h_parede(x/a, y/b)` ajustado por mínimos quadrados às alturas (em `n`) dos vértices de pele frontal (normal·n > 0,2) no anel `1,05 ≤ r ≤ 1,30`, com rejeição robusta iterativa (resíduo > +2,5 DP ou < −4 DP, DP pela MAD). Com menos de 30 pontos no anel, cai para o plano (v1) e avisa `volume_X:anel_insuficiente_parede_plana`.
+4. Volume = soma, sobre as faces frontais com os 3 vértices em `r ≤ 1,05`, de área projetada × média de `max(h − h_parede, 0)`.
+5. `incerteza_ml = valor_ml × config.simulacao.incerteza.volume_relativa_fator` (0,15 até calibração) — sempre reportada; a UI NUNCA mostra volume sem a faixa.
+
+O v1 (altura sobre o próprio plano) contava a "lente" de parede torácica curva anterior ao plano como mama e superestimava 35–45 % nos sintéticos; o v2 erra −3 a −5 % neles (registro em `docs/validacao/v0.0.1-services-mesh.md`).
 
 O gabarito do torso sintético informa o **volume adicionado real** (seção 4), que é a verdade contra a qual o estimador é validado.
 
@@ -146,7 +149,7 @@ O gabarito do torso sintético informa o **volume adicionado real** (seção 4),
 | Euclidiana medida vs gabarito, landmarks do gabarito, torso sintético | ≤ 1,0 mm (Marco 0). |
 | Geodésica medida vs gabarito (malha decimada vs densa) | ≤ 1,0 mm ou 1 % (o maior). |
 | Bland-Altman clique humano vs gabarito, ≥30 pares | LoA dentro de ±2 mm (Marco 1). |
-| Volume estimado vs adicionado (sintético) | relatar; meta ±15 %. |
+| Volume estimado vs adicionado (sintético) | ≤ ±10 % nos 3 presets e faixa (±15 %) contendo o real (ADR 0012). |
 
 ---
 
@@ -395,7 +398,7 @@ Recorte, limpeza, decimação e exportação. Entrada:
 
 Comportamento:
 
-- `unidade_origem = "desconhecida"`: heurística — se a maior dimensão da caixa envolvente < 5 → metros; < 500 → cm; senão mm. Registrar em `unidade_inferida`.
+- `unidade_origem = "desconhecida"`: heurística (ADR 0013) — escolhe a unidade cuja conversão deixa a maior dimensão da caixa envolvente mais perto, em escala logarítmica, de 500 mm (tamanho típico de tórax recortado). Equivale a: maior dimensão < 5 → metros; < 158,1 (= 500/√10) → cm; senão mm. Se a dimensão convertida cair fora de [150, 2500] mm, avisa `unidade_inferida_duvidosa:calibrar_pela_regua`. Registrar em `unidade_inferida`. (O critério antigo "< 500 → cm" chamava de cm um torso em mm com menos de 500 mm.)
 - `abaixo_do_pescoco`: remover tudo acima do plano horizontal situado 3 cm abaixo do ponto mais estreito do pescoço (mínimo local da largura em X varrendo Y de cima para baixo); se não houver mínimo, não recortar e avisar.
 - Limpeza: manter o maior componente conexo; remover faces degeneradas e vértices não referenciados; recomputar normais.
 - Decimação: quádricas (`open3d.simplify_quadric_decimation` ou `fast-simplification`, ambos MIT); **`pymeshlab` é GPL e está proibido** (ADR 0009). Resultado com `min ≤ n_vertices ≤ max`; se a malha original já tiver menos que `min`, não decimar e avisar.
@@ -548,6 +551,8 @@ Esquema `simulacao_config/1.0`. **Todo coeficiente numérico está dentro de um 
 }
 ```
 
+A partir da versão **1.1** da config existe o bloco opcional `modelo_geometrico` (ADR 0014), com os coeficientes de forma do modelo (todos `{valor, nao_calibrado: true}`): `borda_implante_expoente` (0,5), `imf_transicao_mm` (12), `mamilo_sigma_fator` (0,30), `rebaixar_sigma_lateral_fator` (0,30), `rebaixar_decaimento_cranial_fator` (0,45), `rebaixar_decaimento_caudal_fator` (0,90). Ausente → padrões do `services/mesh`. O web continua lendo só `versao`, `incerteza` e `imf.opcoes`. Algoritmo do modelo: docstring de `services/mesh/mesh/simulacao/geometrico.py` e ADR 0014.
+
 Propriedades que os testes de regressão geométrica (Marco 2) DEVEM garantir para qualquer valor desses coeficientes: (a) **monotonicidade** — volume maior do mesmo modelo/plano/IMF → projeção anterior do mamilo maior; (b) **simetria** — torso simétrico + mesmo implante bilateral → malha resultante simétrica em X dentro de 0,1 mm; (c) `imf=manter` não move `sulco_*` mais que 1 mm; `imf=rebaixar` move para −Y em `min(mm_por_100ml × volume/100, maximo_mm)`.
 
 ---
@@ -614,10 +619,12 @@ mt__<implante_id>__<plano>__<imf>
 Requisição `POST /morphs`:
 
 ```jsonc
-{ "malha_dir": "...", "landmarks": { /* seção 2 — obrigatórios os 6 + os 4 da base */ }, "implantes": ["motiva-ergonomix-round-300", "..."], "planos": ["subglandular","dual_plane"], "imfs": ["manter","rebaixar"], "lados": "separados" }
+{ "malha_dir": "...", "landmarks": { /* seção 2 — obrigatórios os 6 + os 4 da base */ }, "implantes": ["motiva-ergonomix-round-300", "..."], "planos": ["subglandular","dual_plane"], "imfs": ["manter","rebaixar"], "lados": "separados",
+  "catalogo_arquivo": null,                      // opcional (ADR 0014): nome de UM arquivo em config/catalogo/; ausente = todos os config/catalogo/*.json válidos
+  "pinca_polo_superior_mm": null }               // opcional: {"dir": 22, "esq": 22} — ajusta a transmissão pelo tecido_mole; ausente = espessura de referência
 ```
 
-→ o `manifest.json`. Sem os 4 landmarks da base o Python responde 422 `landmarks_da_base_ausentes` (a base define o footprint do implante).
+→ o `manifest.json`. Sem os 4 landmarks da base o Python responde 422 `landmarks_da_base_ausentes` (a base define o footprint do implante); implante fora do catálogo → 422 `implante_desconhecido`; `catalogo_arquivo` fora de `config/catalogo/` → 400/404. `/morphs` funciona em `DESENHO=A` e `B` (simulação é ilustração nos dois). Cada `.glb` declara também `asset.extras.nao_calibrado = true` e `asset.extras.modelo = "geometrico_parametrico_v1"`; os targets trazem `POSITION` (esparso, com `min`/`max`) e `NORMAL` (esparso), `mesh.weights` = zeros. Os `.glb` passam no Khronos glTF-Validator sem erros nem avisos. CLI para torsos sintéticos: `python -m mesh.cli morphs --todos --sinteticos data/sinteticos [--catalogo arq.json] [--implantes a,b]` (grava em `data/sinteticos/<nome>/morphs/`, malha base = `torso.glb`).
 
 ### 10.5 Como o web carrega
 

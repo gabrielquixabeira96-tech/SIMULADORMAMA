@@ -62,3 +62,31 @@ def tubo(perfil, y0: float, y1: float, n_ang: int = 120, n_y: int = 200, prof_fa
 
 
 os.environ.setdefault("PYTHONHASHSEED", "0")
+
+
+CATALOGO_TESTE = Path(__file__).parent / "fixtures" / "catalogo_teste.json"
+
+
+@pytest.fixture(scope="session")
+def implantes_teste() -> dict[str, dict]:
+    from mesh.simulacao import catalogo
+
+    return catalogo.carregar([CATALOGO_TESTE])[0]
+
+
+@pytest.fixture(scope="session")
+def morphs_gerados(torsos, dir_sinteticos, implantes_teste) -> dict[str, dict]:
+    """nome -> manifest (com `_duracao_s`, `_n_targets`, `_bytes`) dos morphs com o catalogo de teste."""
+    import json
+    import uuid
+
+    from mesh.simulacao.morphs import gerar_morphs
+
+    saida = {}
+    for nome in torsos:
+        pasta = dir_sinteticos / nome
+        gab = json.loads((pasta / "gabarito.json").read_text(encoding="utf-8"))
+        saida[nome] = gerar_morphs(pasta, gab["landmarks"], list(implantes_teste.values()),
+                                   malha_id=str(uuid.uuid5(uuid.NAMESPACE_URL, nome)), arquivo_obj="torso.obj",
+                                   arquivo_glb="torso.glb", quadro="anatomico")
+    return saida

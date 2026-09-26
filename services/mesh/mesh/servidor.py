@@ -6,7 +6,8 @@ Flag DESENHO (ADR 0005, contratos §13): cabecalho `X-Desenho: A|B` obrigatorio 
 (exceto GET /saude), gravado no log estruturado e ecoado na resposta. Enforcement em
 profundidade: com `X-Desenho: A`, `POST /medir` (medicao automatica, geodesica e volume
 calculado) responde 403 `desligado_no_desenho_a` — o web nunca deve chamar essa rota em A; se
-chamar, fica registrado no log (com `incluir_volume`) e nada e calculado.
+chamar, fica registrado no log (com `incluir_volume`) e nada e calculado. `/morphs` (simulacao,
+sempre "ilustracao") funciona nos dois desenhos.
 """
 
 from __future__ import annotations
@@ -79,6 +80,22 @@ class ReqMedir(Estrito):
     distancias_euclidianas_web: dict[str, float | None] = {}
     incluir_geodesica: bool = True
     incluir_volume: bool = True
+
+
+class PorLado(Estrito):
+    dir: float = Field(ge=0)
+    esq: float = Field(ge=0)
+
+
+class ReqMorphs(Estrito):
+    malha_dir: str
+    landmarks: dict[str, Landmark]
+    implantes: list[Annotated[str, Field(pattern=r"^[a-z0-9]+(-[a-z0-9]+)*$")]] = Field(min_length=1)
+    planos: list[Literal["subglandular", "dual_plane"]] = ["subglandular", "dual_plane"]
+    imfs: list[Literal["manter", "rebaixar"]] = ["manter", "rebaixar"]
+    lados: Literal["ambos", "separados"] = "separados"
+    catalogo_arquivo: str | None = None
+    pinca_polo_superior_mm: PorLado | None = None
 
 
 class Par(BaseModel):
@@ -194,9 +211,10 @@ def criar_app() -> FastAPI:
         return r
 
     @app.post("/morphs")
-    async def morphs(request: Request):
-        return _erro(501, "nao_implementado", "POST /morphs chega no Marco 2 (contratos §10)",
-                     desenho=request.headers.get("x-desenho"))
+    async def morphs(req: ReqMorphs):
+        r = await run_in_threadpool(servico.morphs, req.model_dump())
+        log.registrar("morphs", malha_id=r["malha_id"], n=sum(len(a["targets"]) for a in r["arquivos"]))
+        return r
 
     @app.post("/validar-bland-altman")
     async def validar_bland_altman(req: ReqBlandAltman):

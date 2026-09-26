@@ -253,3 +253,55 @@ def validar_bland_altman(req: dict) -> dict:
         raise ErroServico(400, "sem_pares", "informe ao menos 1 par")
     return bland_altman(pares, float(req.get("limite_mm", 2.0)))
 
+
+
+# ----------------------------------------------------------------------------- /morphs
+
+def _implantes_pedidos(ids: list[str], catalogo_arquivo: str | None) -> list[dict]:
+    from mesh.simulacao import catalogo
+
+    arquivos = None
+    if catalogo_arquivo:
+        try:
+            caminhos.validar_relativo(catalogo_arquivo)
+        except caminhos.CaminhoInvalido as e:
+            raise ErroServico(400, "caminho_invalido", str(e)) from e
+        arq = (caminhos.config_dir() / "catalogo" / catalogo_arquivo).resolve()
+        if arq.parent != (caminhos.config_dir() / "catalogo").resolve() or not arq.is_file():
+            raise ErroServico(404, "catalogo_nao_encontrado",
+                              "catalogo_arquivo deve ser um arquivo de config/catalogo/")
+        arquivos = [arq]
+    try:
+        todos, _ = catalogo.carregar(arquivos)
+    except catalogo.ErroCatalogo as e:
+        raise ErroServico(422, "catalogo_invalido", str(e)) from e
+    faltando = [i for i in ids if i not in todos]
+    if faltando:
+        raise ErroServico(422, "implante_desconhecido", "implante fora do catalogo", {"implantes": faltando})
+    if len(set(ids)) != len(ids):
+        raise ErroServico(422, "implante_repetido", "ids de implante repetidos")
+    return [todos[i] for i in ids]
+
+
+def morphs(req: dict) -> dict:
+    from mesh.simulacao.geometrico import ErroSimulacao
+    from mesh.simulacao.morphs import gerar_morphs
+
+    pasta = _dir_malha(req["malha_dir"])
+    _arquivo(pasta, "processada.obj")
+    _arquivo(pasta, "processada.glb")
+    malha = ler_malha(pasta / "processada.obj")
+    lm = _landmarks_validados(req.get("landmarks") or {}, malha.n_vertices)
+    implantes = _implantes_pedidos(list(req.get("implantes") or []), req.get("catalogo_arquivo"))
+    meta_p = pasta / "meta.json"
+    meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.is_file() else {}
+    malha_id = meta.get("malha_id") or _malha_id(req["malha_dir"], None)
+    try:
+        m = gerar_morphs(pasta, lm, implantes, planos=tuple(req.get("planos") or ("subglandular", "dual_plane")),
+                         imfs=tuple(req.get("imfs") or ("manter", "rebaixar")), lados=req.get("lados", "separados"),
+                         malha_id=malha_id, quadro=meta.get("quadro", "scan"),
+                         pinca=req.get("pinca_polo_superior_mm"))
+    except ErroSimulacao as e:
+        codigo = str(e).split(":")[0]
+        raise ErroServico(422, codigo, str(e)) from e
+    return {k: v for k, v in m.items() if not k.startswith("_")}

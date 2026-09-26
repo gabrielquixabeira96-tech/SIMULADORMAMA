@@ -57,6 +57,7 @@
       "required": ["espessura_referencia_mm", "atenuacao_por_mm_pinca_fator"],
       "properties": { "espessura_referencia_mm": { "$ref": "#/$defs/coef" }, "atenuacao_por_mm_pinca_fator": { "$ref": "#/$defs/coef" } }
     },
+    "modelo_geometrico": {"type": "object", "additionalProperties": false, "description": "Opcional (versao >= 1.1): coeficientes de forma do modelo geometrico (ADR 0014). Ausente -> padroes do services/mesh.", "required": ["nao_calibrado", "borda_implante_expoente", "imf_transicao_mm", "mamilo_sigma_fator", "rebaixar_sigma_lateral_fator", "rebaixar_decaimento_cranial_fator", "rebaixar_decaimento_caudal_fator"], "properties": {"nao_calibrado": {"type": "boolean"}, "descricao": {"type": "string"}, "borda_implante_expoente": {"$ref": "#/$defs/coef"}, "imf_transicao_mm": {"$ref": "#/$defs/coef"}, "mamilo_sigma_fator": {"$ref": "#/$defs/coef"}, "rebaixar_sigma_lateral_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_cranial_fator": {"$ref": "#/$defs/coef"}, "rebaixar_decaimento_caudal_fator": {"$ref": "#/$defs/coef"}}},
     "incerteza": {
       "type": "object",
       "additionalProperties": false,

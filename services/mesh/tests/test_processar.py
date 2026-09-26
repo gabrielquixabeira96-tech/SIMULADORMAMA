@@ -63,9 +63,10 @@ def test_decimacao_para_faixa_e_minimo():
 
 
 @pytest.mark.parametrize(("escala", "esperada"), [(0.001, "m"), (0.1, "cm"), (1.0, "mm")])
-def test_unidade_inferida(escala, esperada):
-    # heuristica do contrato (maior dimensao < 5 -> m; < 500 -> cm; senao mm): usa escaneamento de 625 mm
-    m = tubo(lambda y: 300.0, -600, 25, n_ang=40, n_y=40)
+@pytest.mark.parametrize("altura", [250.0, 475.0, 625.0, 1400.0])
+def test_unidade_inferida(escala, esperada, altura):
+    # ADR 0013: um torso de 475 mm em mm deixou de ser classificado como cm
+    m = tubo(lambda y: 300.0, -altura, 0.0, n_ang=40, n_y=40)
     assert inferir_unidade(m.V * escala) == esperada
     res = processar_malha(MalhaRender(V=m.V * escala, F=m.F), "desconhecida", {"modo": "nenhum"},
                           {"alvo_vertices": 1000, "min_vertices": 100, "max_vertices": 5000})

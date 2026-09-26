@@ -46,12 +46,25 @@ def test_medir_reporta_incerteza_de_15pct():
 
 
 @pytest.mark.parametrize("nome", PRESETS)
-def test_volume_dos_torsos_relatado(cenarios, torsos, nome):
-    """Volume real (gabarito) = pedido; o estimado e relatado com faixa. Meta ±15 % (contratos §3.3)
-    nao e atingida pelo estimador de referencia numa parede curva (ver README); este teste trava a
-    regressao: vies positivo conhecido, < 60 %, e incerteza sempre presente."""
+@pytest.mark.parametrize("cenario", ["decimada", "processar_denso_m", "reescala_regua"])
+def test_volume_dos_torsos_ate_10pct(cenarios, torsos, nome, cenario):
+    """Estimador v2 (parede reconstruida, ADR 0012): erro <= ±10 % nos 3 presets e faixa de incerteza
+    (±15 %) contendo o volume real. Trava de regressao: o v2 atual erra -3 a -5 %."""
     for lado in ("dir", "esq"):
-        v = cenarios[nome]["cenarios"]["decimada"]["volumes"][lado]
+        v = cenarios[nome]["cenarios"][cenario]["volumes"][lado]
         assert v["adicionado_ml"] == pytest.approx(torsos[nome]["parametros"]["volume_ml"][lado], abs=0.1)
-        assert v["incerteza_ml"] > 0
-        assert 0 < v["erro_relativo_pct"] < 60
+        assert abs(v["erro_relativo_pct"]) <= 10.0, v
+        assert v["estimado_ml"] - v["incerteza_ml"] <= v["adicionado_ml"] <= v["estimado_ml"] + v["incerteza_ml"]
+
+
+def test_estimador_v1_plano_superestima_parede_curva(torsos, dir_sinteticos):
+    """Documenta por que o v1 foi trocado: o plano conta a lente de parede curva como mama."""
+    from mesh.malha.geometria import soldar
+    from mesh.malha.io import ler_malha
+
+    m = ler_malha(dir_sinteticos / "t01_simetrico_300" / "torso.obj")
+    Vw, Fw, _ = soldar(m.V, m.F)
+    lm = torsos["t01_simetrico_300"]["landmarks"]
+    v1 = antro.volume_plano_base_elipse(Vw, Fw, lm, "dir", parede="plano")
+    v2 = antro.volume_plano_base_elipse(Vw, Fw, lm, "dir")
+    assert v1 > 1.25 * 300.0 and abs(v2 / 300.0 - 1) <= 0.10

@@ -15,3 +15,6 @@ Formato: contexto, decisão, alternativas consideradas, consequências. Um ADR �
 | [0009](0009-licencas.md) | Licenças permitidas e proibidas | aceito |
 | [0010](0010-coordenadas-e-unidades.md) | Sistema de coordenadas e unidades (mm, Y-up, glTF em mm) | aceito |
 | [0011](0011-antropometria-referencia-python.md) | Geodésica e volume calculados só no `services/mesh` | aceito |
+| [0012](0012-volume-parede-reconstruida.md) | Estimador de volume v2: parede torácica reconstruída | aceito |
+| [0013](0013-heuristica-de-unidade.md) | Heurística de unidade por escala logarítmica | aceito |
+| [0014](0014-modelo-geometrico-e-morphs.md) | Modelo geométrico-paramétrico v1 e morph targets | aceito |

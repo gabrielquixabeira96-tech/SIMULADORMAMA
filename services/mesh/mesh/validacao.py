@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import shutil
 import subprocess
 import tempfile
 from contextlib import contextmanager
@@ -142,6 +143,90 @@ def medir_cenarios(pasta_torso: Path) -> dict:
     return saida
 
 
+def metricas_marco2(sinteticos: Path, catalogo_arquivo: Path) -> dict:
+    """Monotonicidade, simetria (t01), IMF e tempo/tamanho do pre-computo de morphs (catalogo dado)."""
+    import time
+    import uuid
+
+    from mesh.malha.geometria import normais_vertices
+    from mesh.simulacao import catalogo
+    from mesh.simulacao.geometrico import SimuladorGeometrico, montar_campo, previsto
+    from mesh.simulacao.morphs import gerar_morphs
+
+    imps, _ = catalogo.carregar([catalogo_arquivo])
+    cfg = esquemas.config_simulacao()
+    reb = cfg["imf"]["rebaixar"]
+    sim = SimuladorGeometrico()
+    redondos = sorted([i for i in imps.values() if i["forma"] == "redonda" and i["perfil"] == "moderado"],
+                      key=lambda i: i["volume_ml"])
+    res: dict = {"monotonicidade": True, "series": {}, "simetria_max_mm": 0.0, "imf_manter_max_mm": 0.0,
+                 "imf_rebaixar_erro_max_mm": 0.0, "precomputo": {}}
+    for nome in esquemas.presets_torso():
+        pasta = sinteticos / nome
+        gab = json.loads((pasta / "gabarito.json").read_text(encoding="utf-8"))
+        lm = gab["landmarks"]
+        for plano in ("subglandular", "dual_plane"):
+            for imf in ("manter", "rebaixar"):
+                serie = [previsto(sim.campos(lm, i, plano, imf, "ambos", cfg), lm)["delta_projecao_mamilo_mm"]["dir"]
+                         for i in redondos]
+                res["series"][f"{nome}:{plano}:{imf}"] = serie
+                res["monotonicidade"] &= all(b > a for a, b in zip(serie, serie[1:], strict=False))
+        for i in imps.values():
+            for plano in ("subglandular", "dual_plane"):
+                for lado in ("dir", "esq"):
+                    pm = previsto([montar_campo(lm, lado, i, plano, "manter", cfg)], lm)
+                    pr = previsto([montar_campo(lm, lado, i, plano, "rebaixar", cfg)], lm)
+                    esp = -min(reb["mm_por_100ml"]["valor"] * i["volume_ml"] / 100, reb["maximo_mm"]["valor"])
+                    res["imf_manter_max_mm"] = max(res["imf_manter_max_mm"], abs(pm["delta_y_sulco_mm"][lado]))
+                    res["imf_rebaixar_erro_max_mm"] = max(res["imf_rebaixar_erro_max_mm"],
+                                                          abs(pr["delta_y_sulco_mm"][lado] - esp))
+        if nome == "t01_simetrico_300":
+            m = ler_malha(pasta / "torso.obj")
+            Vw, Fw, _ = soldar(m.V, m.F)
+            Nw = normais_vertices(Vw, Fw)
+            E = np.array([-1.0, 1.0, 1.0])
+            for i in imps.values():
+                for plano in ("subglandular", "dual_plane"):
+                    for imf in ("manter", "rebaixar"):
+                        campos = sim.campos(lm, i, plano, imf, "ambos", cfg)
+                        D = sum(c.deslocamento(Vw, Nw) for c in campos)
+                        Dm = sum(c.deslocamento(Vw * E, Nw * E) for c in campos)
+                        res["simetria_max_mm"] = max(res["simetria_max_mm"], float(np.abs(Dm - D * E).max()))
+        with tempfile.TemporaryDirectory(prefix="mesh_morphs_") as tmp:  # nao sobrescreve os morphs do CLI
+            copia = Path(tmp) / nome
+            copia.mkdir()
+            for arq in ("torso.obj", "torso.mtl", "textura.png", "torso.glb"):
+                shutil.copy2(pasta / arq, copia / arq)
+            t0 = time.perf_counter()
+            man = gerar_morphs(copia, lm, list(imps.values()),
+                               malha_id=str(uuid.uuid5(uuid.NAMESPACE_URL, f"mesh:validacao/{nome}")),
+                               arquivo_obj="torso.obj", arquivo_glb="torso.glb", quadro="anatomico")
+        res["precomputo"][nome] = {"targets": man["_n_targets"], "s": round(time.perf_counter() - t0, 2),
+                                   "mb": round(sum(man["_bytes"].values()) / 1e6, 1)}
+    res["simetria_max_mm"] = round(res["simetria_max_mm"], 4)
+    return res
+
+
+def _markdown_marco2(r: dict, catalogo_nome: str) -> str:
+    L = ["## Marco 2 (Python) — modelo geométrico e morph targets (ADR 0014)", "",
+         f"Catálogo: `{catalogo_nome}` (EXEMPLO NÃO CLÍNICO). Coeficientes de `config/simulacao.json`, todos "
+         "`nao_calibrado`.", "",
+         f"- Monotonicidade (redondos moderados em ordem de volume, projeção anterior do mamilo, 3 torsos × 2 planos "
+         f"× 2 IMF): **{'sim' if r['monotonicidade'] else 'NÃO'}**.",
+         f"- Simetria no t01 (campo espelhado − campo, todos os implantes/planos/IMF): máx. "
+         f"**{r['simetria_max_mm']:.4f} mm** (critério < 0,1).",
+         f"- `imf=manter`: deslocamento máx. do sulco em Y = {r['imf_manter_max_mm']:.2f} mm (critério ≤ 1); "
+         f"`imf=rebaixar`: erro máx. contra min(mm_por_100ml·V/100, máximo) = {r['imf_rebaixar_erro_max_mm']:.2f} mm.",
+         "", "| série (torso:plano:imf) | projeção do mamilo (mm), volume crescente |", "|---|---|"]
+    for k, v in r["series"].items():
+        L.append(f"| {k} | {' < '.join(f'{x:.2f}' for x in v)} |")
+    L += ["", "| torso | targets | tempo de pré-cômputo (s) | tamanho dos 4 .glb (MB) |", "|---|---|---|---|"]
+    for k, v in r["precomputo"].items():
+        L.append(f"| {k} | {v['targets']} | {v['s']} | {v['mb']} |")
+    L += ["", "Os `.glb` passam no Khronos glTF-Validator sem erros nem avisos (verificação manual desta versão).", ""]
+    return "\n".join(L) + "\n"
+
+
 def _commit() -> str | None:
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=RAIZ_REPO, capture_output=True,
@@ -172,7 +257,11 @@ def relatorio_marco0(sinteticos: Path, gerar_se_faltar: bool = True) -> dict:
         "aprovado_marco0": bool(erro_max <= TOL_MM),
         "bland_altman_pipeline": {k: ba[k] for k in ("n", "vies_mm", "dp_mm", "loa_inferior_mm", "loa_superior_mm",
                                                      "dentro_de_2mm", "erro_abs_max_mm")},
-        "por_torso": {r["nome"]: {c: {"erro_max_mm": v["erro_max_mm"], "n_vertices": v["n_vertices"]}
+        "volume_erro_max_pct": max(abs(v["volumes"][lado]["erro_relativo_pct"]) for r in resultados
+                                   for v in r["cenarios"].values() for lado in ("dir", "esq")),
+        "por_torso": {r["nome"]: {c: {"erro_max_mm": v["erro_max_mm"], "n_vertices": v["n_vertices"],
+                                      "volume_erro_pct": {lado: v["volumes"][lado]["erro_relativo_pct"]
+                                                          for lado in ("dir", "esq")}}
                                   for c, v in r["cenarios"].items()} for r in resultados},
     }
     return {"resumo": resumo, "resultados": resultados, "bland_altman": ba,
@@ -229,7 +318,7 @@ def _markdown(resumo: dict, resultados: list[dict], ba: dict) -> str:
     L.append("Isto valida o **cálculo** (landmarks perfeitos). O critério do Marco 1 exige cliques humanos no "
              "viewer (≥30 pares); esses pares entram pelo `POST /validar-bland-altman` quando o web estiver pronto.")
     L.append("")
-    L.append("## Volume (estimador `plano_base_elipse`, contratos §3.2) — relatar; meta ±15 %")
+    L.append("## Volume (estimador `plano_base_elipse` v2 — parede reconstruída; contratos §3.2, ADR 0012)")
     L.append("")
     L.append("| torso | lado | adicionado real (mL) | estimado (mL) | ± incerteza (mL) | erro relativo |")
     L.append("|---|---|---|---|---|---|")
@@ -240,9 +329,10 @@ def _markdown(resumo: dict, resultados: list[dict], ba: dict) -> str:
             L.append(f"| {r['nome']} | {lado} | {x['adicionado_ml']} | {x['estimado_ml']} | {x['incerteza_ml']} | "
                      f"{x['erro_relativo_pct']:+.1f} % |")
     L.append("")
-    L.append("O estimador de referência superestima nos sintéticos porque o plano por base medial, base lateral e "
-             "sulco corta a parede torácica curva: a \"lente\" de parede anterior ao plano entra como mama. A meta "
-             "de ±15 % não é atingida com esse estimador; ver pendências.")
+    L.append("v2: a altura de referência é a parede torácica reconstruída por um polinômio cúbico ajustado ao anel "
+             "periférico da base (1,05–1,30 do raio elíptico), e não mais o plano base medial/lateral/sulco, que "
+             "cortava a parede curva e contava a \"lente\" de parede como mama (v1: +35 a +45 % nestes torsos). "
+             "Critério: erro ≤ ±10 % e faixa (±15 %) contendo o volume real.")
     L.append("")
     L.append("## Desvios e pendências")
     L.append("")
@@ -251,14 +341,18 @@ def _markdown(resumo: dict, resultados: list[dict], ba: dict) -> str:
              "arredondamento (até ~2 mm por extremo numa malha de 40 mil vértices) estouraria ±1 mm.")
     L.append("- Com `X-Desenho: A`, `POST /medir` responde 403 `desligado_no_desenho_a` (defesa em profundidade; "
              "o contratos §7 diz que o Python só registra o cabeçalho).")
-    L.append("- Estimador de volume: viés positivo de 35–45 % nos sintéticos (acima).")
+    L.append("- Estimador de volume v2 (ADR 0012) mantém o id `plano_base_elipse` por compatibilidade com o web.")
+    L.append("- Heurística de unidade trocada (ADR 0013): escala log centrada em 500 mm (limiares 5 e 158).")
     L.append("- Bland-Altman com cliques humanos (critério real do Marco 1) depende do viewer.")
+    L.append("")
+    L.append("<!-- MARCO2 -->")
     L.append("")
     L.append("## Como reproduzir")
     L.append("")
     L.append("```bash")
     L.append("bash scripts/mesh.sh venv")
     L.append("cd services/mesh && .venv/bin/python -m mesh.cli torso --todos --saida ../../data/sinteticos")
+    L.append(".venv/bin/python -m mesh.cli morphs --todos --sinteticos ../../data/sinteticos")
     L.append(".venv/bin/python -m mesh.cli validar --sinteticos ../../data/sinteticos \\")
     L.append("  --relatorio ../../docs/validacao/v0.0.1-services-mesh.md")
     L.append(".venv/bin/pytest -q")

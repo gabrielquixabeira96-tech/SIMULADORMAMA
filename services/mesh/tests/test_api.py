@@ -164,9 +164,48 @@ def test_entrada_fora_do_contrato(cliente):
     assert r.status_code in (400, 422)
 
 
-def test_morphs_501(cliente):
-    r = cliente.post("/morphs", headers=B, json={})
-    assert r.status_code == 501 and r.json()["erro"]["codigo"] == "nao_implementado"
+def _corpo_morphs(lm, **kw):
+    return {"malha_dir": MALHA_DIR, "landmarks": lm,
+            "implantes": ["exemplo-redondo-moderado-300", "exemplo-anatomico-alto-350"],
+            "catalogo_arquivo": "exemplo.json", **kw}
+
+
+@pytest.mark.parametrize("cab", [B, A])  # simulacao e ilustracao: ligada nos dois desenhos (ADR 0005)
+def test_morphs_endpoint(cliente, malha_processada, data_dir, cab):
+    r = cliente.post("/morphs", headers=cab, json=_corpo_morphs(malha_processada["landmarks"]))
+    assert r.status_code == 200, r.text
+    man = r.json()
+    esquemas.validar("morphs_manifest", man)
+    assert man["malha_id"] == MALHA_ID and man["lados"] == "separados" and man["nao_calibrado"] is True
+    assert len(man["arquivos"]) == 4 and all(len(a["targets"]) == 6 for a in man["arquivos"])
+    pasta = data_dir / MALHA_DIR / "morphs"
+    assert json.loads((pasta / "manifest.json").read_text()) == man
+    from mesh.malha.io import sha256_arquivo
+
+    assert man["sha256_malha_base"] == sha256_arquivo(data_dir / MALHA_DIR / "processada.glb")
+    for a in man["arquivos"]:
+        assert sha256_arquivo(pasta / a["arquivo"]) == a["sha256"]
+
+
+def test_morphs_so_ambos_e_subconjunto(cliente, malha_processada):
+    r = cliente.post("/morphs", headers=B, json=_corpo_morphs(malha_processada["landmarks"], lados="ambos",
+                                                             planos=["dual_plane"], imfs=["rebaixar"]))
+    assert r.status_code == 200, r.text
+    (a,) = r.json()["arquivos"]
+    assert a["arquivo"] == "dual_plane__rebaixar.glb" and [t["lado"] for t in a["targets"]] == ["ambos", "ambos"]
+
+
+def test_morphs_erros(cliente, malha_processada):
+    lm = malha_processada["landmarks"]
+    r = cliente.post("/morphs", headers=B, json={**_corpo_morphs(lm), "implantes": ["nao-existe-300"]})
+    assert r.status_code == 422 and r.json()["erro"]["codigo"] == "implante_desconhecido"
+    sem_base = {k: v for k, v in lm.items() if not k.startswith("base_")}
+    r = cliente.post("/morphs", headers=B, json=_corpo_morphs(sem_base))
+    assert r.status_code == 422 and r.json()["erro"]["codigo"] == "landmarks_da_base_ausentes"
+    r = cliente.post("/morphs", headers=B, json={**_corpo_morphs(lm), "catalogo_arquivo": "../simulacao.json"})
+    assert r.status_code == 400
+    r = cliente.post("/morphs", headers=B, json={**_corpo_morphs(lm), "planos": ["submuscular"]})
+    assert r.status_code == 422 and r.json()["erro"]["codigo"] == "contrato_invalido"
 
 
 def test_bland_altman_endpoint(cliente):
