@@ -1,0 +1,179 @@
+{
+  "esquema": "validacao/1.0",
+  "versao_software": "0.1.1",
+  "data": "2026-09-26",
+  "commit": "cc5b327895ae",
+  "arvore_suja": false,
+  "desenho_testado": [
+    "A",
+    "B"
+  ],
+  "ambiente": {
+    "os": "linux",
+    "node": "22.22.2",
+    "python": "3.11.15",
+    "navegador": "chromium 141.0.7390.37",
+    "webgl": "SwiftShader (software, Chromium headless)",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz",
+    "n_cpus": 2
+  },
+  "parametros": {
+    "torsos": [
+      "t01_simetrico_300",
+      "t02_assimetrico",
+      "t03_pequeno_ptose"
+    ],
+    "decimacao_alvo_vertices": 40000,
+    "geodesica": "mmp",
+    "config_tepid": "1.0",
+    "config_simulacao": "1.2",
+    "marco1_operador": "simulado (projeção do gabarito + jitter ±1 px)",
+    "marco1_repeticoes": 2,
+    "llm": "mock determinístico (sem ANTHROPIC_API_KEY)",
+    "catalogo_morphs_validacao": "services/mesh/tests/fixtures/catalogo_teste.json (exemplo não clínico)"
+  },
+  "resultados": {
+    "marco0_erro_max_gabarito_mm": 0.09,
+    "marco0_escala": {
+      "services_mesh_erro_max_mm": 0.09,
+      "web_viewer_erro_max_mm": 0.08,
+      "web_por_torso": [
+        {
+          "torso": "t01_simetrico_300",
+          "caixa_obj_mm": [
+            300,
+            475,
+            250
+          ],
+          "erro_caixa_processada_mm": 0.002,
+          "erro_max_distancias_mm": 0.08
+        },
+        {
+          "torso": "t02_assimetrico",
+          "caixa_obj_mm": [
+            320,
+            475,
+            259.75
+          ],
+          "erro_caixa_processada_mm": 0.047,
+          "erro_max_distancias_mm": 0
+        },
+        {
+          "torso": "t03_pequeno_ptose",
+          "caixa_obj_mm": [
+            280,
+            475,
+            219.95
+          ],
+          "erro_caixa_processada_mm": 0.05,
+          "erro_max_distancias_mm": 0
+        }
+      ]
+    },
+    "marco1_bland_altman": {
+      "n": 84,
+      "vies_mm": 0.0227,
+      "dp_mm": 0.5544,
+      "loa_mm": [
+        -1.0639,
+        1.1094
+      ],
+      "criterio_2mm": true
+    },
+    "marco1_n_imf": {
+      "n": 24,
+      "vies_mm": 0.0558,
+      "dp_mm": 0.6468,
+      "loa_mm": [
+        -1.212,
+        1.3236
+      ],
+      "criterio_2mm": true
+    },
+    "volume": {
+      "erro_max_pct": 4.7,
+      "por_torso": {
+        "t01_simetrico_300": {
+          "dir": -4.7,
+          "esq": -3.7
+        },
+        "t02_assimetrico": {
+          "dir": -4.0,
+          "esq": -3.5
+        },
+        "t03_pequeno_ptose": {
+          "dir": -3.1,
+          "esq": -3.3
+        }
+      },
+      "meta_pct": 10
+    },
+    "marco2_latencia_p95_ms": 85.1,
+    "marco2_latencia": {
+      "slider": {
+        "n": 60,
+        "p50_ms": 65.5,
+        "p95_ms": 79.3,
+        "max_ms": 97.7
+      },
+      "troca_plano_imf": {
+        "n": 24,
+        "p50_ms": 71,
+        "p95_ms": 98.7,
+        "max_ms": 102.2
+      },
+      "troca_implante": {
+        "n": 20,
+        "p50_ms": 69.2,
+        "p95_ms": 85.1,
+        "max_ms": 90.8
+      },
+      "geral_1_painel": {
+        "n": 104,
+        "p50_ms": 67.3,
+        "p95_ms": 85.1,
+        "max_ms": 102.2
+      },
+      "slider_comparacao_2_paineis": {
+        "n": 30,
+        "p50_ms": 124,
+        "p95_ms": 150.7,
+        "max_ms": 164
+      }
+    },
+    "marco2_monotonicidade": true,
+    "marco2_simetria_max_mm": 0.0,
+    "marco2_imf": {
+      "manter_max_mm": 0.0,
+      "rebaixar_erro_max_mm": 0.0
+    },
+    "marco2_regressao": true,
+    "marco2b_e2e": {
+      "A": true,
+      "B": true
+    },
+    "testes": {
+      "web_unit": {
+        "passaram": 251,
+        "falharam": 0,
+        "pulados": 0
+      },
+      "web_e2e": {
+        "passaram": 29,
+        "falharam": 0,
+        "pulados": 9
+      },
+      "python": {
+        "passaram": 144,
+        "falharam": 0,
+        "pulados": 0
+      },
+      "contratos": {
+        "passaram": 53,
+        "falharam": 0,
+        "pulados": 0
+      }
+    }
+  },
+  "status": "aprovado"
+}
