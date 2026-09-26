@@ -1,9 +1,10 @@
 import type { Desenho, Distancias, MedidasDigitadas, Volumes } from "@simulador/contratos";
 import { recursoAtivoEm } from "@/config/recursos";
+import { extrairNumeros, valorDeDigitos } from "./extrairNumeros";
 
 /**
  * Guarda dos "números calculados no texto do LLM" (ADR 0005/0006; contratos §14.3).
- * O relatório ainda não existe (Marco 2b); este módulo já fixa a regra:
+ * Regras (o relatório do Marco 2b usa este módulo):
  * - `montarDadosTravados` zera distâncias e volumes em DESENHO=A;
  * - `numerosPermitidos` só contém o que o template exibirá;
  * - `verificarNumeros` recusa prosa com qualquer número fora da lista.
@@ -62,6 +63,8 @@ function coletarNumeros(v: unknown, acc: number[]): void {
 export function numerosPermitidos(dados: DadosTravados, extras: number[] = []): string[] {
   const nums: number[] = [...extras];
   coletarNumeros(dados.implantes_mostrados.map(({ base_mm, projecao_mm, volume_ml }) => ({ base_mm, projecao_mm, volume_ml })), nums);
+  // Rótulos do catálogo (ex.: referência "RSM-105+") são dados do catálogo, não calculados.
+  for (const it of dados.implantes_mostrados) for (const n of extrairNumeros(it.rotulo)) nums.push(n.valor);
   coletarNumeros(dados.medidas_digitadas, nums);
   coletarNumeros(dados.distancias, nums);
   coletarNumeros(dados.volumes, nums);
@@ -70,17 +73,48 @@ export function numerosPermitidos(dados: DadosTravados, extras: number[] = []): 
 
 export const REGEX_NUMERO = /\d+([.,]\d+)?/g;
 
-export interface VerificacaoNumeros {
-  ok: boolean;
-  intrusos: string[];
+export interface Intruso {
+  /** Parágrafo/seção onde apareceu. */
+  secao: string;
+  texto: string;
+  valor: number;
+  forma: "digitos" | "extenso";
 }
 
-/** Toda sequência numérica da prosa deve pertencer a `permitidos` (teste travado, ADR 0006). */
-export function verificarNumeros(paragrafos: Record<string, string>, permitidos: readonly string[]): VerificacaoNumeros {
-  const set = new Set(permitidos);
-  const intrusos: string[] = [];
-  for (const texto of Object.values(paragrafos)) {
-    for (const m of texto.matchAll(REGEX_NUMERO)) if (!set.has(m[0])) intrusos.push(m[0]);
+export interface VerificacaoNumeros {
+  ok: boolean;
+  /** Trechos recusados, na ordem em que aparecem (compatível com a versão anterior). */
+  intrusos: string[];
+  detalhes: Intruso[];
+}
+
+const TOLERANCIA = 1e-9;
+
+/** Valores numéricos aceitos a partir das representações textuais de `numeros_permitidos`. */
+export function valoresPermitidos(permitidos: readonly string[]): number[] {
+  const out = new Set<number>();
+  for (const s of permitidos) {
+    const v = valorDeDigitos(s);
+    if (Number.isFinite(v)) out.add(v);
   }
-  return { ok: intrusos.length === 0, intrusos };
+  return [...out];
+}
+
+/**
+ * Teste travado (ADR 0006 item 6): TODO número da prosa, em dígitos (vírgula ou ponto decimal,
+ * milhar pt-BR) ou por extenso, deve ter o MESMO valor de algum item de `permitidos`. Valor
+ * arredondado não passa ("212,3" quando o dado é 212,34 é recusado).
+ */
+export function verificarNumeros(paragrafos: Record<string, string>, permitidos: readonly string[]): VerificacaoNumeros {
+  const exatos = new Set(permitidos);
+  const valores = valoresPermitidos(permitidos);
+  const detalhes: Intruso[] = [];
+  for (const [secao, texto] of Object.entries(paragrafos)) {
+    for (const n of extrairNumeros(texto)) {
+      if (n.forma === "digitos" && exatos.has(n.texto)) continue;
+      if (valores.some((v) => Math.abs(v - n.valor) <= TOLERANCIA)) continue;
+      detalhes.push({ secao, ...n });
+    }
+  }
+  return { ok: detalhes.length === 0, intrusos: detalhes.map((d) => d.texto), detalhes };
 }

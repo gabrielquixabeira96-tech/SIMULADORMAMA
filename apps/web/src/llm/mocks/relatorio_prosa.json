@@ -1,0 +1,9 @@
+{
+  "esquema": "relatorio_prosa/1.0",
+  "paragrafos": {
+    "introducao": "Este documento resume a simulação tridimensional apresentada na consulta. Ele serve para apoiar a conversa com a sua cirurgiã ou o seu cirurgião e não substitui essa conversa.",
+    "o_que_foi_simulado": "Na tela, a imagem do seu tronco foi modificada por um modelo geométrico para ilustrar como cada implante escolhido poderia alterar o contorno das mamas. Os implantes, o plano de colocação e a conduta no sulco inframamário aparecem na lista acima, exatamente como registrados.",
+    "limitacoes": "A simulação é uma ilustração e não uma previsão de resultado. O modelo ainda não foi calibrado com resultados reais, por isso a superfície simulada vem sempre acompanhada de uma faixa de incerteza. Cicatrização, qualidade da pele, assimetrias prévias e a técnica cirúrgica podem levar a um resultado diferente do que foi mostrado.",
+    "proximos_passos": "Leve suas dúvidas para a próxima consulta. A indicação do implante e da técnica é uma decisão tomada em conjunto com a equipe cirúrgica, depois do exame físico e da leitura do termo de consentimento."
+  }
+}

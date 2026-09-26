@@ -1,6 +1,6 @@
 # Licenças de terceiros
 
-Gerado por `scripts/licencas.sh` em 2026-09-26T16:17:26Z para a versão 0.0.1. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
+Gerado por `scripts/licencas.sh` em 2026-09-26T18:58:11Z para a versão 0.0.1. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
 
 ## Permitidas
 
@@ -14,11 +14,12 @@ RBSM, iRBSM, liRBSM; SMPL, SMPL-X e topologias derivadas; Depth Anything 2 Base/
 
 Diretas de runtime: next/@next/env, react/react-dom, three, @react-three/fiber, @react-three/drei, zod, pg, fflate (todas MIT). Dev: typescript (Apache-2.0), eslint + eslint-config-next, vitest, msw, jsdom, @testing-library/* (MIT), @playwright/test (Apache-2.0; Chromium 1194 pré-instalado, fora do repositório). `sharp` (dependência opcional do `next`, com `@img/sharp-libvips-*` LGPL-3.0) é removido por `overrides: { sharp: "-" }` no `pnpm-workspace.yaml`; o app não usa `next/image`. Atribuições: `caniuse-lite` (CC-BY-4.0, Alexis Deveria/caniuse.com, dados de navegadores usados no build); `axe-core` (MPL-2.0, dev, sem modificação).
 
-_Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24 · BSD-2-Clause 9 · BSD-3-Clause 4 · BlueOak-1.0.0 2 · CC0-1.0 2 · MIT-0 2 · (MIT OR CC0-1.0) 1 · 0BSD 1 · CC-BY-4.0 1 · MPL-2.0 1 · Python-2.0 1)._
+_Gerado de `pnpm licenses list`: 536 pacotes (MIT 458 · Apache-2.0 28 · ISC 24 · BSD-2-Clause 9 · BSD-3-Clause 4 · BlueOak-1.0.0 2 · CC0-1.0 2 · MIT-0 2 · (MIT AND Zlib) 1 · (MIT OR CC0-1.0) 1 · 0BSD 1 · CC-BY-4.0 1 · MPL-2.0 1 · Python-2.0 1 · Unlicense 1)._
 
 | Pacote | Versão | Licença |
 |---|---|---|
 | @acemir/cssom | 0.9.31 | MIT |
+| @anthropic-ai/sdk | 0.128.0 | MIT |
 | @asamuzakjp/css-color | 4.1.2 | MIT |
 | @asamuzakjp/dom-selector | 6.8.1 | MIT |
 | @asamuzakjp/nwsapi | 2.3.9 | MIT |
@@ -75,6 +76,9 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | @mediapipe/tasks-vision | 0.10.17 | Apache-2.0 |
 | @monogrid/gainmap-js | 3.4.0 | MIT |
 | @mswjs/interceptors | 0.41.9 | MIT |
+| @napi-rs/canvas | 1.0.9 | MIT |
+| @napi-rs/canvas-linux-x64-gnu | 1.0.9 | MIT |
+| @napi-rs/canvas-linux-x64-musl | 1.0.9 | MIT |
 | @napi-rs/lzma-linux-x64-gnu | 1.5.1 | MIT |
 | @next/env | 16.3.6 | MIT |
 | @next/eslint-plugin-next | 16.3.6 | MIT |
@@ -87,12 +91,15 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | @open-draft/deferred-promise | 2.2.0, 3.0.0 | MIT |
 | @open-draft/logger | 0.3.0 | MIT |
 | @open-draft/until | 2.1.0 | MIT |
+| @pdf-lib/standard-fonts | 1.0.0 | MIT |
+| @pdf-lib/upng | 1.0.1 | MIT |
 | @playwright/test | 1.56.1 | Apache-2.0 |
 | @react-three/drei | 10.7.9 | MIT |
 | @react-three/fiber | 9.8.1 | MIT |
 | @rollup/rollup-linux-x64-gnu | 4.63.5 | MIT |
 | @rollup/rollup-linux-x64-musl | 4.63.5 | MIT |
 | @rtsao/scc | 1.1.0 | MIT |
+| @stablelib/base64 | 1.0.1 | MIT |
 | @swc/helpers | 0.5.23 | Apache-2.0 |
 | @testing-library/dom | 10.4.2 | MIT |
 | @testing-library/react | 16.3.3 | MIT |
@@ -244,6 +251,7 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | fast-glob | 3.3.1 | MIT |
 | fast-json-stable-stringify | 2.1.0 | MIT |
 | fast-levenshtein | 2.0.6 | MIT |
+| fast-sha256 | 1.3.0 | Unlicense |
 | fast-string-truncated-width | 3.0.3 | MIT |
 | fast-string-width | 3.0.2 | MIT |
 | fast-wrap-ansi | 0.2.2 | MIT |
@@ -332,6 +340,7 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | jsdom | 27.4.0 | MIT |
 | jsesc | 3.1.0 | MIT |
 | json-buffer | 3.0.1 | MIT |
+| json-schema-to-ts | 3.1.1 | MIT |
 | json-schema-traverse | 0.4.1 | MIT |
 | json-stable-stringify-without-jsonify | 1.0.1 | MIT |
 | json5 | 1.0.2, 2.2.3 | MIT |
@@ -381,6 +390,7 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | own-keys | 1.0.2 | MIT |
 | p-limit | 3.1.0 | MIT |
 | p-locate | 5.0.0 | MIT |
+| pako | 1.0.11 | (MIT AND Zlib) |
 | parent-module | 1.0.1 | MIT |
 | parse5 | 8.0.1 | MIT |
 | path-exists | 4.0.0 | MIT |
@@ -389,6 +399,8 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | path-to-regexp | 6.3.0 | MIT |
 | pathe | 2.0.3 | MIT |
 | pathval | 2.0.1 | MIT |
+| pdf-lib | 1.17.1 | MIT |
+| pdfjs-dist | 6.3.289 | Apache-2.0 |
 | pg | 8.23.0 | MIT |
 | pg-cloudflare | 1.4.0 | MIT |
 | pg-connection-string | 2.14.0 | MIT |
@@ -451,6 +463,7 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | split2 | 4.2.0 | ISC |
 | stable-hash | 0.0.5 | MIT |
 | stackback | 0.0.2 | MIT |
+| standardwebhooks | 1.1.1 | MIT |
 | stats-gl | 2.4.2 | MIT |
 | stats.js | 0.17.0 | MIT |
 | statuses | 2.0.2 | MIT |
@@ -491,9 +504,10 @@ _Gerado de `pnpm licenses list`: 522 pacotes (MIT 447 · Apache-2.0 27 · ISC 24
 | troika-three-text | 0.52.5 | MIT |
 | troika-three-utils | 0.52.5 | MIT |
 | troika-worker-utils | 0.52.0 | MIT |
+| ts-algebra | 2.0.0 | MIT |
 | ts-api-utils | 2.5.0 | MIT |
 | tsconfig-paths | 3.15.0 | MIT |
-| tslib | 2.8.1 | 0BSD |
+| tslib | 1.14.1, 2.8.1 | 0BSD |
 | tunnel-rat | 0.1.2 | MIT |
 | type-check | 0.4.0 | MIT |
 | type-fest | 5.10.0 | (MIT OR CC0-1.0) |
