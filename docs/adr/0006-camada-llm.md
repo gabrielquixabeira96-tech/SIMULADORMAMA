@@ -30,3 +30,7 @@ Restrição inegociável 1: o LLM nunca recebe fotos, malhas nem texturas; só d
 - Qualidade da prosa depende do modelo, mas a exatidão numérica não depende dele nunca.
 - Antes de qualquer paciente real: cláusulas-padrão ANPD, aditivo de zero retenção e TCLE informando o uso de IA (Res. CFM 2.454/2026). Pendência de Gabriel, fora do código.
 - Mock precisa ser mantido em paridade com os esquemas; o teste de contrato do mock é obrigatório.
+
+## Desvio registrado (v0.1.0, 2026-09-26) — temperatura
+
+O item 4 previa `temperature 0`. Na implementação (Marco 2b), o SDK oficial `@anthropic-ai/sdk` marca o parâmetro `temperature` como descontinuado e modelos recentes recusam valor diferente do padrão. Decisão: **a temperatura só é enviada se `LLM_TEMPERATURA` estiver definida no ambiente** (`apps/web/src/llm/anthropic.ts`; `.env.example` a deixa comentada); sem ela, vale o padrão do modelo. O determinismo que importa não depende disso: tool use com `tool_choice` forçado, JSON Schema revalidado por zod e `verificarNumeros` travado (item 6) seguem valendo, e a CI roda sempre em mock determinístico.

@@ -21,6 +21,8 @@ import { NOMES_VISTAS, VISTAS, type NomeVista } from "@/viewer/vistas";
 import { FormularioTepid, valoresTepidVazios, type ErroCampoUI, type ResultadoTepidUI, type ValoresTepidForm } from "./FormularioTepid";
 import { PainelDistancias, PainelVolume, type EstadoMedicao } from "./PainelMedidas";
 import { PainelSimulacao, type EstadoSimulacao } from "@/simulacao/PainelSimulacao";
+import { PainelAnamnese } from "./PainelAnamnese";
+import { PainelRelatorio } from "./PainelRelatorio";
 
 const VisualizadorDinamico = dynamic(() => import("@/viewer/Visualizador"), {
   ssr: false,
@@ -101,6 +103,10 @@ export function Consulta({ config }: { config: ConfigPublica }) {
    * Disponível para o relatório/PDF do Marco 2b (PainelRelatorio) — ver README.
    */
   const [estadoSimulacao, setEstadoSimulacao] = useState<EstadoSimulacao | null>(null);
+  /** Atendimento (Marco 2b): criado pela anamnese ou pelo relatório e repassado entre os painéis. */
+  const [atendimentoId, setAtendimentoId] = useState<string | null>(null);
+  /** Último registro de medidas gravado nesta malha (vai para o relatório/PDF). */
+  const [medidaId, setMedidaId] = useState<string | null>(null);
 
   // ---------------------------------------------------------------- efeitos
   useEffect(() => {
@@ -131,6 +137,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
         const m = await carregar();
         setCarregada(m);
         setFonte(novaFonte);
+        setMedidaId(null);
         setPontosRegua([]);
         limparMedidas();
       } catch (e) {
@@ -353,6 +360,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       setMedicao({ distancias: j.distancias, volumes: j.volumes, quadro_anatomico: j.quadro_anatomico, geodesica: j.geodesica, avisos: [] });
       setEstadoMedicao("ok");
     }
+    setMedidaId(j.medida_id);
     setMensagem({ tipo: "info", texto: `Registro de medidas gravado (${j.medida_id}).` });
   }
 
@@ -600,7 +608,19 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       pincaPoloSuperiorMm={tepidValidado?.pinca_polo_superior_mm ?? null}
       onEstado={setEstadoSimulacao}
     />
-    {/* Marco 2b (outro agente): montar aqui <PainelAnamnese /> e <PainelRelatorio estadoSimulacao={estadoSimulacao} ... /> */}
+    {paciente && (
+      <div className="paineis-atendimento">
+        <PainelAnamnese pacienteId={paciente.id} atendimentoId={atendimentoId} onRegistrada={(r) => setAtendimentoId(r.atendimentoId)} />
+        <PainelRelatorio
+          pacienteId={paciente.id}
+          desenho={config.desenho}
+          malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
+          medidaId={medidaId}
+          atendimentoId={atendimentoId}
+          onAtendimento={setAtendimentoId}
+        />
+      </div>
+    )}
     <span hidden data-testid="estado-simulacao" data-implantes={estadoSimulacao?.implantes.map((i) => i.id).join(",") ?? ""} data-plano={estadoSimulacao?.plano ?? ""} data-imf={estadoSimulacao?.imf ?? ""} />
     </>
   );

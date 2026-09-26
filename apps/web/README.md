@@ -35,7 +35,9 @@ O serviço de malha (`services/mesh`, `MESH_SERVICE_URL`, padrão `http://127.0.
 
 Aviso fixo "Ilustração, não previsão de resultado" no layout raiz; não existe botão de compartilhar/exportar.
 
-**Para o Marco 2b (relatório/PDF):** `Consulta.tsx` guarda `estadoSimulacao: EstadoSimulacao | null` (tipo em `src/simulacao/PainelSimulacao.tsx`): `malha_id`, `implantes` (id, rótulo, volume, base, projeção), `implante_mostrado`, `comparacao`, `plano`, `imf`, `envelope_rms_mm`, `nao_calibrado`, `modelo`, `versao_config_simulacao` e `previsto` (só em B). O histórico persistido está em `GET /api/malhas/<id>/simulacoes`. Montar `PainelAnamnese`/`PainelRelatorio` logo abaixo de `<PainelSimulacao />` (marcado com comentário no JSX).
+**Marco 2b (montado):** `PainelAnamnese` e `PainelRelatorio` ficam logo abaixo da simulação na `Consulta`, com `atendimentoId` compartilhado (criado pela anamnese ou pelo relatório), `malhaId` da malha aberta, `medidaId` do último registro gravado e `desenho` do servidor. E2E do upload ao PDF em A e B: `e2e/completo.spec.ts`.
+
+**Estado da simulação para o relatório/PDF:** `Consulta.tsx` guarda `estadoSimulacao: EstadoSimulacao | null` (tipo em `src/simulacao/PainelSimulacao.tsx`): `malha_id`, `implantes` (id, rótulo, volume, base, projeção), `implante_mostrado`, `comparacao`, `plano`, `imf`, `envelope_rms_mm`, `nao_calibrado`, `modelo`, `versao_config_simulacao` e `previsto` (só em B). O histórico persistido está em `GET /api/malhas/<id>/simulacoes`.
 
 ## Flag DESENHO (ADR 0005)
 

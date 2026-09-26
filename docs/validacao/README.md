@@ -9,6 +9,9 @@ Formato detalhado em `docs/contratos.md` §15. A CI (`scripts/ci.sh`) falha se f
 
 Conteúdo mínimo de cada registro: versão, data, commit, desenhos testados (A/B), ambiente, parâmetros (torsos, decimação, geodésica, versões das configs TEPID e simulação) e resultados dos critérios dos marcos (erro máximo contra o gabarito, Bland-Altman, latência, monotonicidade, simetria, contagem de testes). Registros nunca são apagados; guarda mínima de 10 anos após descarte do software (RDC 657) — o repositório git é o meio de guarda nesta fase.
 
-| Versão | Data | Status |
-|---|---|---|
-| [0.0.1](v0.0.1.md) | 2026-09-26 | sem_testes (fundação: ADRs, contratos, esqueleto) |
+Registros de componente (`v<versao>-<componente>.md/.json`, esquema `validacao_componente/...`) trazem o detalhe de cada parte e são gerados pelos próprios testes; o consolidado `v<versao>.md/.json` (`validacao/1.0`) é gerado por `bash scripts/validacao.sh` → `scripts/registro_validacao.py` a partir das saídas dos testes (nada digitado à mão). `scripts/validar_config.py` valida só os consolidados contra `config/schemas/validacao.schema.json`.
+
+| Versão | Data | Status | Registro consolidado | Registros de componente |
+|---|---|---|---|---|
+| 0.1.0 | 2026-09-26 | aprovado (Marcos 0, 1, 2 e 2b; operador do M1 simulado; latência em SwiftShader) | [v0.1.0.md](v0.1.0.md) · [json](v0.1.0.json) | [services-mesh](v0.1.0-services-mesh.md) ([json](v0.1.0-services-mesh.json)) · [web-marcos-0-1](v0.1.0-web-marcos-0-1.md) ([json](v0.1.0-web-marcos-0-1.json)) · [web-marco2-latencia](v0.1.0-web-marco2-latencia.md) ([json](v0.1.0-web-marco2-latencia.json)) |
+| 0.0.1 | 2026-09-26 | sem_testes (fundação: ADRs, contratos, esqueleto); registros de componente gerados durante o desenvolvimento dos marcos | [v0.0.1.md](v0.0.1.md) · [json](v0.0.1.json) | [services-mesh](v0.0.1-services-mesh.md) · [web-marcos-0-1](v0.0.1-web-marcos-0-1.md) ([json](v0.0.1-web-marcos-0-1.json)) · [web-marco2-latencia](v0.0.1-web-marco2-latencia.md) ([json](v0.0.1-web-marco2-latencia.json)) |

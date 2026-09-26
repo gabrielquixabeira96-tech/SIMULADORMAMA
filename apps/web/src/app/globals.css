@@ -103,3 +103,4 @@ input, select { font: inherit; padding: 0.25rem 0.4rem; border: 1px solid var(--
 .sim-legenda .cor-ext { color: #2f81f7; font-weight: 600; }
 .sim-legenda .cor-int { color: #b86a00; font-weight: 600; }
 .sim-erro { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.95); color: var(--erro); font-weight: 600; }
+.paineis-atendimento { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; margin-top: 1rem; }

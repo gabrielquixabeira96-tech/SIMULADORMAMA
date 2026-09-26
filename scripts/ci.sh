@@ -59,6 +59,14 @@ if [[ -n "$ARQS_DEP" ]]; then
 else
   pular "nenhum manifesto de dependencias ainda"
 fi
+# Inventario completo: toda licenca instalada (Node e Python) na lista permitida; qualquer GPL/LGPL falha.
+if [[ -f pnpm-lock.yaml ]] && command -v pnpm >/dev/null; then
+  [[ -d node_modules ]] || pnpm install --frozen-lockfile
+  bash scripts/licencas.sh --checar && ok "licencas de todas as dependencias instaladas permitidas (scripts/licencas.sh --checar)" \
+    || falha "licenca fora da lista permitida (rode bash scripts/licencas.sh --checar)"
+else
+  pular "inventario de licencas (sem pnpm-lock.yaml)"
+fi
 
 # ------------------------------------------------------------------ 4. web (Next.js)
 titulo "Web (apps/web)"

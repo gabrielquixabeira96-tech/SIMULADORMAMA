@@ -1,6 +1,8 @@
 /**
  * Banco de teste real (simulador_test; ADR 0007). Pulado se o Postgres não estiver no ar.
  */
+import { readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { listarAuditoria, registrarAuditoria } from "@/db/auditoria";
 import { consultar, fecharPools } from "@/db/pool";
@@ -18,7 +20,10 @@ describe.skipIf(!dbDisponivel())("migrations e DDL (contratos §17)", () => {
 
   it("migrations registradas com hash", async () => {
     const r = await consultar<{ nome: string; sha256: string }>("select arquivo as nome, sha256 from schema_migrations order by arquivo");
-    expect(r.rows.map((x) => x.nome)).toEqual(["0001_inicial.sql", "0002_auditoria_append_only.sql"]);
+    // a lista esperada vem da própria pasta de migrations (nenhuma pode faltar nem sobrar)
+    const esperadas = readdirSync(resolve(__dirname, "../../db/migrations")).filter((f) => /^\d{4}_[a-z0-9_]+\.sql$/.test(f)).sort();
+    expect(esperadas.length).toBeGreaterThanOrEqual(3);
+    expect(r.rows.map((x) => x.nome)).toEqual(esperadas);
     for (const x of r.rows) expect(x.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 

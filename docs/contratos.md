@@ -825,7 +825,7 @@ status: sem_testes | reprovado | aprovado
 ---
 ```
 
-Corpo: "O que mudou", "Como reproduzir" (comandos), "Desvios e pendências". A versão é a do arquivo `VERSION`; toda mudança em `VERSION` exige novo registro (checado pela CI).
+Corpo: "O que mudou", "Como reproduzir" (comandos), "Desvios e pendências". Campos opcionais aditivos em `resultados` (v0.1.0, sem mudar a versão do esquema): `marco1_n_imf`, `marco0_escala`, `volume`, `marco2_latencia`, `marco2_imf`, `marco2_regressao`, `marco2b_e2e` e `testes.contratos`. Registros de componente (`v<versao>-<componente>.md/.json`) têm esquema próprio (`validacao_componente/...`) e não são validados contra `validacao/1.0`. A versão é a do arquivo `VERSION`; toda mudança em `VERSION` exige novo registro (checado pela CI).
 
 ---
 

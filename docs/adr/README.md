@@ -18,3 +18,4 @@ Formato: contexto, decisão, alternativas consideradas, consequências. Um ADR �
 | [0012](0012-volume-parede-reconstruida.md) | Estimador de volume v2: parede torácica reconstruída | aceito |
 | [0013](0013-heuristica-de-unidade.md) | Heurística de unidade por escala logarítmica | aceito |
 | [0014](0014-modelo-geometrico-e-morphs.md) | Modelo geométrico-paramétrico v1 e morph targets | aceito |
+| [0015](0015-catalogo-base-oval.md) | Catálogo 1.1: pegada oval (`base_forma`) e catálogo real extraído dos PDFs | aceito |

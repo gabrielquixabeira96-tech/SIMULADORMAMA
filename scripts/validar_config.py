@@ -7,6 +7,7 @@ Sai com 1 se algo falhar. Tambem confere unicidade global de implantes.id no cat
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -49,6 +50,10 @@ def main() -> int:
     for padrao, nome_schema, chave in ALVOS:
         validador = carregar_schema(nome_schema)
         arquivos = sorted(RAIZ.glob(padrao))
+        if nome_schema == "validacao":
+            # so os registros consolidados v<versao>.json; os de componente (v<versao>-<nome>.json)
+            # tem esquema proprio (validacao_componente/...) e sao gerados pelos testes
+            arquivos = [a for a in arquivos if re.fullmatch(r"v\d+\.\d+\.\d+\.json", a.name)]
         if not arquivos:
             print(f"[pulado] nenhum arquivo para {padrao}")
             continue
