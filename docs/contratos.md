@@ -23,7 +23,7 @@ Sumário:
 8. Configuração TEPID (`config/tepid.json`)
 9. Configuração de simulação (`config/simulacao.json`)
 10. Morph targets glTF: nomes, arquivos e manifesto (`morphs/1.0`)
-11. Catálogo de implantes (`catalogo/1.0`)
+11. Catálogo de implantes (`catalogo/1.1`)
 12. Interfaces vazias: FEBio e surrogate
 13. Flag `DESENHO` nos contratos
 14. Camada do LLM (`anamnese/1.0`, `relatorio/1.0`)
@@ -635,36 +635,37 @@ Requisição `POST /morphs`:
 
 ---
 
-## 11. Catálogo de implantes (`catalogo/1.0`)
+## 11. Catálogo de implantes (`catalogo/1.1`)
 
-Arquivos em `config/catalogo/*.json`, um por fabricante (`motiva.json`, `polytech.json`, `gc_aesthetics.json`, `exemplo.json`). Validação: zod no web (`packages/contratos`), `jsonschema` no Python, ambos contra `config/schemas/catalogo.schema.json`. Seed no Postgres (tabela `implantes`) a partir desses arquivos; o JSON é a fonte, o banco é cache.
+Arquivos em `config/catalogo/*.json`, um por fabricante (`motiva.json`, `polytech.json`, `gc_aesthetics.json`, `exemplo.json`). Validação: zod no web (`packages/contratos/src/catalogo.ts`, paridade testada), `jsonschema` no Python, ambos contra `config/schemas/catalogo.schema.json`. `catalogo/1.1` (ADR 0015) acrescenta `base_forma` de forma aditiva: arquivos `catalogo/1.0` continuam válidos. Seed no Postgres (tabela `implantes`) a partir desses arquivos; o JSON é a fonte, o banco é cache.
 
 ```jsonc
 {
-  "esquema": "catalogo/1.0",
+  "esquema": "catalogo/1.1",                        // "catalogo/1.0" | "catalogo/1.1"
   "fabricante": "Motiva",
-  "documento": { "titulo": "Motiva Implants Catalogue", "url": "https://...", "ano": 2020, "data_acesso": "2026-09-26", "sha256": null },
+  "documento": { "titulo": "Motiva Implant Matrix® Catalogue ...", "url": "https://...", "ano": 2015, "data_acesso": "2026-09-26", "sha256": "<sha256 do PDF>" },
   "nota_geral": "conferir versão vigente e registro ANVISA com o fabricante",
   "implantes": [
     {
-      "id": "motiva-ergonomix-round-300",              // único no repositório inteiro
+      "id": "motiva-rsd-300",                          // único no repositório inteiro; slug(fabricante)-slug(referencia_fabricante)
       "fabricante": "Motiva",
-      "linha": "Ergonomix",
-      "modelo": "Ergonomix Round",
-      "referencia_fabricante": "ERSD-300",             // código do fabricante; null se não houver
-      "forma": "redonda",                              // "redonda" | "anatomica"
+      "linha": "Motiva Implant Matrix®",
+      "modelo": "SilkSurface™ PLUS Demi",
+      "referencia_fabricante": "RSD-300+",             // código do fabricante; null se não houver
+      "forma": "redonda",                              // perfil sagital: "redonda" | "anatomica"
+      "base_forma": "circular",                        // pegada: "circular" (altura = base) | "oval" (altura ≠ base). Obrigatório em 1.1; em 1.0 ausente = inferida
       "perfil": "moderado",                            // "baixo" | "baixo_moderado" | "moderado" | "moderado_alto" | "alto" | "extra_alto" | "outro"
       "perfil_fabricante": "Demi",                     // como o fabricante chama
-      "superficie": "lisa",                            // "lisa" | "microtexturizada" | "macrotexturizada" | "nanotexturizada" | "poliuretano" | "outra"
-      "superficie_fabricante": "SmoothSilk",
-      "base_mm": 116.0,                                // redonda: diâmetro. anatômica: largura
-      "altura_mm": 116.0,                              // redonda: = base_mm. anatômica: altura
-      "projecao_mm": 38.0,
+      "superficie": "nanotexturizada",                 // "lisa" | "microtexturizada" | "macrotexturizada" | "nanotexturizada" | "poliuretano" | "outra"
+      "superficie_fabricante": "SilkSurface™ PLUS (NanoSurface™)",
+      "base_mm": 115.0,                                // circular: diâmetro. oval: largura
+      "altura_mm": 115.0,                              // circular: = base_mm. oval: altura (≠ base_mm)
+      "projecao_mm": 39.0,
       "volume_ml": 300.0,
-      "coesividade": { "nivel": 2, "descricao_fabricante": "ProgressiveGel Ultima", "escala": "fabricante" },   // nivel: inteiro 1–3 ou null
+      "coesividade": { "nivel": null, "descricao_fabricante": "ProgressiveGel PLUS™", "escala": "fabricante" },   // nivel: inteiro 1–3 ou null
       "gel": "silicone",
       "registro_anvisa": null,                         // string "80xxxxxxxxxx" ou null
-      "fonte": { "url": "https://...", "pagina": 12, "documento": "Motiva Implants Catalogue 2020" },
+      "fonte": { "url": "https://...", "pagina": 16, "documento": "Motiva Implant Matrix® Catalogue ... ; página do PDF" },   // pagina = página física do PDF (1 = primeira), não o número impresso
       "verificado": false,                             // SEMPRE false até conferência humana
       "nota": "conferir versão vigente e registro ANVISA com o fabricante",
       "exemplo_nao_clinico": false                     // true só na seed de exemplo
@@ -674,6 +675,10 @@ Arquivos em `config/catalogo/*.json`, um por fabricante (`motiva.json`, `polytec
 ```
 
 Regras: `verificado` DEVE ser `false` em todo item gerado por extração; `exemplo_nao_clinico: true` marca seeds inventadas (nunca exibidas sem tarja "EXEMPLO NÃO CLÍNICO"); `id` único global (teste na CI); dimensões em mm e mL mesmo que o PDF use cm/cc.
+
+Regras semânticas (ADR 0015; `problemasDoImplante` em `packages/contratos`, testadas, não expressas no JSON Schema): `forma: "redonda"` ⇒ `base_forma: "circular"`; `circular` ⇒ `altura_mm = base_mm`; `oval` ⇒ `altura_mm ≠ base_mm`. Exemplo oval: Polytech Diagon\Gel® 4Two AO → `forma: "anatomica"`, `base_forma: "oval"`, `base_mm` = A (largura), `altura_mm` = C (altura). `perfil`/`superficie` são normalizações; o nome do fabricante fica em `perfil_fabricante`/`superficie_fabricante`.
+
+Escolha manual (A e B, ADR 0005): `filtrarCatalogo(itens, filtro)` / `filtroDeQuery(URLSearchParams)` em `packages/contratos/src/catalogoFiltro.ts` só filtram (texto, fabricante, forma, base_forma, perfil, superficie, faixas de volume/base/altura/projeção, `exemplo_nao_clinico`) e preservam a ordem neutra por id. Query: `q`, `fabricante`, `forma`, `base_forma`, `perfil`, `superficie` (repetíveis ou separados por vírgula), `volume_min`/`volume_max`, `base_min`/`base_max`, `altura_min`/`altura_max`, `projecao_min`/`projecao_max`, `exemplo=0|1`. A sugestão (`?sugerir=1`) continua atrás da guarda: A → 403, B → 501.
 
 ---
 

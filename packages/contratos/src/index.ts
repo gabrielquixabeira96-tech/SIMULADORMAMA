@@ -5,3 +5,5 @@ export * from "./malhaMeta";
 export * from "./tepid";
 export * from "./meshApi";
 export * from "./simulacao";
+export * from "./catalogo";
+export * from "./catalogoFiltro";
