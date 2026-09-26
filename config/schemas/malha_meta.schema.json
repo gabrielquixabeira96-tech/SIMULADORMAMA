@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/malha_meta.schema.json",
+  "title": "malha_meta/1.0",
+  "description": "Resposta de POST /processar e /reescalar do services/mesh; gravada como meta.json (docs/contratos.md secao 7.2).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "malha_id", "malha_dir", "unidade_origem", "unidade_inferida", "fator_unidade", "fator_escala_acumulado", "quadro", "original", "processada", "recorte", "avisos", "versao_software", "gerado_em"],
+  "properties": {
+    "esquema": { "const": "malha_meta/1.0" },
+    "malha_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "malha_dir": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.).+$", "description": "relativo a DATA_DIR, sem .. e sem barra inicial" },
+    "unidade_origem": { "enum": ["m", "cm", "mm", "desconhecida"] },
+    "unidade_inferida": { "oneOf": [{ "type": "null" }, { "enum": ["m", "cm", "mm"] }] },
+    "fator_unidade": { "type": "number", "exclusiveMinimum": 0 },
+    "fator_escala_acumulado": { "type": "number", "exclusiveMinimum": 0 },
+    "quadro": { "enum": ["scan", "anatomico"] },
+    "original": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arquivo", "n_vertices", "n_faces", "sha256", "tem_textura"],
+      "properties": {
+        "arquivo": { "type": "string" },
+        "n_vertices": { "type": "integer", "minimum": 3 },
+        "n_faces": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "tem_textura": { "type": "boolean" }
+      }
+    },
+    "processada": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obj", "glb", "n_vertices", "n_faces", "sha256_glb", "caixa_mm"],
+      "properties": {
+        "obj": { "type": "string" },
+        "glb": { "type": "string" },
+        "n_vertices": { "type": "integer", "minimum": 3 },
+        "n_faces": { "type": "integer", "minimum": 1 },
+        "sha256_glb": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "caixa_mm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {
+            "min": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+            "max": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 }
+          }
+        }
+      }
+    },
+    "recorte": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modo", "aplicado"],
+      "properties": {
+        "modo": { "enum": ["abaixo_do_pescoco", "caixa", "nenhum"] },
+        "y_corte_mm": { "type": ["number", "null"] },
+        "aplicado": { "type": "boolean" }
+      }
+    },
+    "escala": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "historico": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["fator", "aplicado_em"],
+            "properties": {
+              "fator": { "type": "number", "exclusiveMinimum": 0 },
+              "regua": { "type": ["object", "null"] },
+              "aplicado_em": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    "avisos": { "type": "array", "items": { "type": "string" } },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "gerado_em": { "type": "string", "format": "date-time" }
+  }
+}

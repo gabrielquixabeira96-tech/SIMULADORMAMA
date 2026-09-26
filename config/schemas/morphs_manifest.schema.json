@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/morphs_manifest.schema.json",
+  "title": "morphs/1.0",
+  "description": "manifest.json dos morph targets de uma malha (docs/contratos.md secao 10.4).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "malha_id", "sha256_malha_base", "versao_software", "versao_config_simulacao", "nao_calibrado", "gerado_em", "lados", "arquivos"],
+  "properties": {
+    "esquema": { "const": "morphs/1.0" },
+    "malha_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "sha256_malha_base": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "versao_config_simulacao": { "type": "string" },
+    "nao_calibrado": { "type": "boolean" },
+    "gerado_em": { "type": "string", "format": "date-time" },
+    "lados": { "enum": ["ambos", "separados"] },
+    "arquivos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["arquivo", "plano", "imf", "sha256", "targets"],
+        "properties": {
+          "arquivo": { "type": "string", "pattern": "^(subglandular|dual_plane)__(manter|rebaixar)\\.glb$" },
+          "plano": { "enum": ["subglandular", "dual_plane"] },
+          "imf": { "enum": ["manter", "rebaixar"] },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "targets": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["nome", "implante_id", "lado", "indice", "previsto"],
+              "properties": {
+                "nome": { "type": "string", "pattern": "^mt__[a-z0-9]+(-[a-z0-9]+)*__(subglandular|dual_plane)__(manter|rebaixar)(__(dir|esq))?$" },
+                "implante_id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+                "lado": { "enum": ["ambos", "dir", "esq"] },
+                "indice": { "type": "integer", "minimum": 0 },
+                "previsto": { "$ref": "#/$defs/previsto" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "porLado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "esq"],
+      "properties": { "dir": { "type": "number" }, "esq": { "type": "number" } }
+    },
+    "previsto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delta_projecao_mamilo_mm", "delta_y_sulco_mm", "delta_y_mamilo_mm"],
+      "properties": {
+        "delta_projecao_mamilo_mm": { "$ref": "#/$defs/porLado" },
+        "delta_y_sulco_mm": { "$ref": "#/$defs/porLado" },
+        "delta_y_mamilo_mm": { "$ref": "#/$defs/porLado" }
+      }
+    }
+  }
+}

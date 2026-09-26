@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/simulacao_config.schema.json",
+  "title": "simulacao_config/1.0",
+  "description": "Esquema de config/simulacao.json (docs/contratos.md secao 9). Todo coeficiente numerico vive num objeto {valor, nao_calibrado}.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "versao", "nao_calibrado", "nota", "modelo", "implante", "planos", "imf", "tecido_mole", "incerteza"],
+  "properties": {
+    "esquema": { "const": "simulacao_config/1.0" },
+    "versao": { "type": "string" },
+    "nao_calibrado": { "type": "boolean" },
+    "nota": { "type": "string" },
+    "modelo": { "enum": ["geometrico_parametrico_v1"] },
+    "implante": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forma_redonda", "forma_anatomica"],
+      "properties": {
+        "forma_redonda": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["perfil_altura", "nao_calibrado"],
+          "properties": { "perfil_altura": { "enum": ["elipsoide_truncado"] }, "nao_calibrado": { "type": "boolean" } }
+        },
+        "forma_anatomica": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["perfil_altura", "ponto_max_projecao_fator"],
+          "properties": { "perfil_altura": { "enum": ["elipsoide_assimetrico"] }, "ponto_max_projecao_fator": { "$ref": "#/$defs/coef" } }
+        }
+      }
+    },
+    "planos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subglandular", "dual_plane"],
+      "properties": { "subglandular": { "$ref": "#/$defs/plano" }, "dual_plane": { "$ref": "#/$defs/plano" } }
+    },
+    "imf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["opcoes", "rebaixar"],
+      "properties": {
+        "opcoes": { "type": "array", "items": { "enum": ["manter", "rebaixar"] }, "minItems": 2, "maxItems": 2, "uniqueItems": true },
+        "rebaixar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mm_por_100ml", "maximo_mm"],
+          "properties": { "mm_por_100ml": { "$ref": "#/$defs/coef" }, "maximo_mm": { "$ref": "#/$defs/coef" } }
+        }
+      }
+    },
+    "tecido_mole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["espessura_referencia_mm", "atenuacao_por_mm_pinca_fator"],
+      "properties": { "espessura_referencia_mm": { "$ref": "#/$defs/coef" }, "atenuacao_por_mm_pinca_fator": { "$ref": "#/$defs/coef" } }
+    },
+    "incerteza": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["envelope_rms_mm", "volume_relativa_fator", "aviso_fixo"],
+      "properties": {
+        "envelope_rms_mm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["valor", "fonte", "configuravel"],
+          "properties": { "valor": { "type": "number", "exclusiveMinimum": 0 }, "fonte": { "type": "string" }, "configuravel": { "type": "boolean" } }
+        },
+        "volume_relativa_fator": { "$ref": "#/$defs/coef" },
+        "aviso_fixo": { "const": "Ilustração, não previsão de resultado" }
+      }
+    }
+  },
+  "$defs": {
+    "coef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["valor", "nao_calibrado"],
+      "properties": { "valor": { "type": "number" }, "nao_calibrado": { "type": "boolean" }, "descricao": { "type": "string" } }
+    },
+    "plano": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transmissao_projecao_fator", "alargamento_base_fator", "preenchimento_polo_superior_fator", "deslocamento_mamilo_anterior_fator", "deslocamento_mamilo_cranial_fator", "suavizacao_sigma_mm"],
+      "properties": {
+        "transmissao_projecao_fator": { "$ref": "#/$defs/coef" },
+        "alargamento_base_fator": { "$ref": "#/$defs/coef" },
+        "preenchimento_polo_superior_fator": { "$ref": "#/$defs/coef" },
+        "deslocamento_mamilo_anterior_fator": { "$ref": "#/$defs/coef" },
+        "deslocamento_mamilo_cranial_fator": { "$ref": "#/$defs/coef" },
+        "suavizacao_sigma_mm": { "$ref": "#/$defs/coef" }
+      }
+    }
+  }
+}

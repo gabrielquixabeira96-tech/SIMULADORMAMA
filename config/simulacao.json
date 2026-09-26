@@ -1,0 +1,48 @@
+{
+  "esquema": "simulacao_config/1.0",
+  "versao": "1.0",
+  "nao_calibrado": true,
+  "nota": "Todos os coeficientes sao chutes iniciais marcados nao_calibrado: true. So o pipeline de calibracao com pares pre/pos (fase 4) pode mudar isso. Nenhum valor aqui e verdade clinica.",
+  "modelo": "geometrico_parametrico_v1",
+  "implante": {
+    "forma_redonda": { "perfil_altura": "elipsoide_truncado", "nao_calibrado": true },
+    "forma_anatomica": {
+      "perfil_altura": "elipsoide_assimetrico",
+      "ponto_max_projecao_fator": { "valor": 0.62, "nao_calibrado": true, "descricao": "fracao da altura (de cima para baixo) onde fica a projecao maxima do implante anatomico" }
+    }
+  },
+  "planos": {
+    "subglandular": {
+      "transmissao_projecao_fator": { "valor": 0.90, "nao_calibrado": true, "descricao": "fracao da projecao do implante que aparece na pele" },
+      "alargamento_base_fator": { "valor": 1.05, "nao_calibrado": true },
+      "preenchimento_polo_superior_fator": { "valor": 0.80, "nao_calibrado": true },
+      "deslocamento_mamilo_anterior_fator": { "valor": 0.85, "nao_calibrado": true },
+      "deslocamento_mamilo_cranial_fator": { "valor": 0.10, "nao_calibrado": true },
+      "suavizacao_sigma_mm": { "valor": 18.0, "nao_calibrado": true }
+    },
+    "dual_plane": {
+      "transmissao_projecao_fator": { "valor": 0.80, "nao_calibrado": true },
+      "alargamento_base_fator": { "valor": 1.02, "nao_calibrado": true },
+      "preenchimento_polo_superior_fator": { "valor": 0.60, "nao_calibrado": true },
+      "deslocamento_mamilo_anterior_fator": { "valor": 0.80, "nao_calibrado": true },
+      "deslocamento_mamilo_cranial_fator": { "valor": 0.15, "nao_calibrado": true },
+      "suavizacao_sigma_mm": { "valor": 24.0, "nao_calibrado": true }
+    }
+  },
+  "imf": {
+    "opcoes": ["manter", "rebaixar"],
+    "rebaixar": {
+      "mm_por_100ml": { "valor": 4.0, "nao_calibrado": true },
+      "maximo_mm": { "valor": 20.0, "nao_calibrado": true }
+    }
+  },
+  "tecido_mole": {
+    "espessura_referencia_mm": { "valor": 20.0, "nao_calibrado": true, "descricao": "pincamento de referencia para o fator de transmissao" },
+    "atenuacao_por_mm_pinca_fator": { "valor": 0.005, "nao_calibrado": true }
+  },
+  "incerteza": {
+    "envelope_rms_mm": { "valor": 4.5, "fonte": "Assaaeed 2024 (doi:10.1007/s00266-024-04007-z); Roostaeian 2014 (doi:10.1177/1090820X14538805)", "configuravel": true },
+    "volume_relativa_fator": { "valor": 0.15, "nao_calibrado": true },
+    "aviso_fixo": "Ilustração, não previsão de resultado"
+  }
+}

@@ -1,0 +1,69 @@
+# ---- Dados de paciente e artefatos gerados (LGPD: nunca no repositorio) ----
+data/*
+!data/README.md
+*.obj
+*.ply
+*.glb
+*.gltf
+*.mtl
+# Fixtures sinteticas pequenas (<1 MB) de testes podem ser commitadas apenas nestas pastas:
+!**/tests/fixtures/**
+!**/__fixtures__/**
+# (nao ha imagens reais de nudez em lugar nenhum; texturas sinteticas ficam em data/)
+
+# ---- Segredos e ambiente ----
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+
+# ---- Node / pnpm ----
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+*.tsbuildinfo
+.vercel/
+playwright-report/
+test-results/
+blob-report/
+
+# ---- Python ----
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+services/mesh/out/
+
+# ---- Modelos e pesos (nunca commitados; licencas em ADR 0009) ----
+*.onnx
+*.pt
+*.pth
+*.safetensors
+*.feb
+*.xplt
+
+# ---- Relatorios e PDFs gerados ----
+*.pdf
+!docs/**/*.pdf
+
+# ---- Sistema / editor ----
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

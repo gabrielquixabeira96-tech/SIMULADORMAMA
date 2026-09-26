@@ -1,0 +1,22 @@
+# Alternativa ao Postgres nativo (ADR 0007) para maquinas em que o daemon Docker funciona.
+# Uso: docker compose up -d db   |   DATABASE_URL identica a do .env.example
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: simulador-mamario-db
+    environment:
+      POSTGRES_USER: simulador
+      POSTGRES_PASSWORD: simulador
+      POSTGRES_DB: simulador
+      TZ: America/Cuiaba
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - simulador_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U simulador -d simulador"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  simulador_pgdata:

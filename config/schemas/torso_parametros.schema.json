@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/torso_parametros.schema.json",
+  "title": "torso_parametros/1.0",
+  "description": "Parametros de entrada do gerador de torso sintetico (docs/contratos.md secao 4.1). Unidades: mm e mL.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "nome", "semente", "largura_toracica_mm", "volume_ml", "ptose", "n_imf_mm", "assimetria"],
+  "properties": {
+    "esquema": { "const": "torso_parametros/1.0" },
+    "nome": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "semente": { "type": "integer", "minimum": 0 },
+    "largura_toracica_mm": { "type": "number", "minimum": 220, "maximum": 420 },
+    "altura_torso_mm": { "type": "number", "minimum": 300, "maximum": 600, "default": 450 },
+    "profundidade_toracica_mm": { "type": "number", "minimum": 140, "maximum": 300, "default": 200 },
+    "volume_ml": { "$ref": "#/$defs/porLado", "properties": { "dir": { "type": "number", "minimum": 0, "maximum": 1200 }, "esq": { "type": "number", "minimum": 0, "maximum": 1200 } } },
+    "ptose": { "$ref": "#/$defs/porLado", "properties": { "dir": { "type": "number", "minimum": 0, "maximum": 1 }, "esq": { "type": "number", "minimum": 0, "maximum": 1 } } },
+    "n_imf_mm": { "$ref": "#/$defs/porLado", "properties": { "dir": { "type": "number", "minimum": 40, "maximum": 140 }, "esq": { "type": "number", "minimum": 40, "maximum": 140 } } },
+    "assimetria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delta_altura_mamilo_mm", "delta_lateral_mamilo_mm"],
+      "properties": {
+        "delta_altura_mamilo_mm": { "type": "number", "minimum": -40, "maximum": 40 },
+        "delta_lateral_mamilo_mm": { "type": "number", "minimum": -40, "maximum": 40 }
+      }
+    },
+    "resolucao": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "densa_faces": { "type": "integer", "minimum": 50000, "maximum": 2000000, "default": 300000 },
+        "decimada_vertices": { "type": "integer", "minimum": 30000, "maximum": 50000, "default": 40000 }
+      }
+    }
+  },
+  "$defs": {
+    "porLado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "esq"],
+      "properties": { "dir": { "type": "number" }, "esq": { "type": "number" } }
+    }
+  }
+}
