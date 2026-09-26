@@ -3,7 +3,8 @@
  * um tetraedro de 100 mm em GLB com asset.extras.unidade = "mm" (aceito) e outro com "m"
  * (recusado), no layout de DATA_DIR/sinteticos/<nome>/torso.glb (contratos §4.2).
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export function glbTetraedro(unidade: string, ladoMm = 100): Buffer {
@@ -52,4 +53,23 @@ export function prepararDataDirE2E(dir: string): void {
   mkdirSync(m, { recursive: true });
   writeFileSync(join(mm, "torso.glb"), glbTetraedro("mm"));
   writeFileSync(join(m, "torso.glb"), glbTetraedro("m", 0.1));
+}
+
+export const TORSOS = ["t01_simetrico_300", "t02_assimetrico", "t03_pequeno_ptose"] as const;
+const ARQUIVOS_TORSO = ["torso.obj", "torso.mtl", "textura.png", "torso.glb", "gabarito.json", "parametros.json"];
+
+/**
+ * Coloca os 3 torsos sintéticos do Marco 0 em <dir>/sinteticos: copia de data/sinteticos se já
+ * gerados (`bash scripts/mesh.sh torsos`); senão gera direto no DATA_DIR do e2e.
+ */
+export function copiarTorsosSinteticos(origem: string, dir: string, raizRepo: string): void {
+  const faltam = TORSOS.filter((t) => !ARQUIVOS_TORSO.every((a) => existsSync(join(origem, t, a))));
+  if (faltam.length === 0) {
+    for (const t of TORSOS) {
+      mkdirSync(join(dir, "sinteticos", t), { recursive: true });
+      for (const a of ARQUIVOS_TORSO) copyFileSync(join(origem, t, a), join(dir, "sinteticos", t, a));
+    }
+    return;
+  }
+  execSync("bash scripts/mesh.sh torsos", { cwd: raizRepo, stdio: "ignore", env: { ...process.env, DATA_DIR: dir } });
 }

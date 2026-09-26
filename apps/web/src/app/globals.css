@@ -83,3 +83,4 @@ input, select { font: inherit; padding: 0.25rem 0.4rem; border: 1px solid var(--
 .alertas .alerta { color: var(--alerta); }
 .aviso-servico { color: var(--alerta); }
 .status-mesh { font-size: 0.85rem; color: var(--suave); }
+.par-botoes { display: inline-flex; gap: 0.25rem; }

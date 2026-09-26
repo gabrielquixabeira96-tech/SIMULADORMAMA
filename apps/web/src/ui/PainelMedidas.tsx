@@ -78,7 +78,10 @@ export function PainelVolume({ recursos, medicao, estado }: PropsVolume) {
                   {fmt(v.valor_ml)} ± {fmt(v.incerteza_ml)} <small>(faixa {fmt(v.valor_ml - v.incerteza_ml)}–{fmt(v.valor_ml + v.incerteza_ml)})</small>
                 </span>
               ) : (
-                <span className="num">{estado === "medindo" ? "…" : "—"}</span>
+                <span className="num">
+                  {estado === "medindo" ? "…" : "—"}
+                  {medicao?.avisos.includes(`volume_${lado}:landmarks_da_base_ausentes`) && <small> (faltam os landmarks da base)</small>}
+                </span>
               )}
             </li>
           );

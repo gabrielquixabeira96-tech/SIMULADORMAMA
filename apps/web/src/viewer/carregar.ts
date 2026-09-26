@@ -145,3 +145,21 @@ export function verticeMaisProximo(g: THREE.BufferGeometry, face: { a: number; b
   }
   return melhor;
 }
+
+/** Índice do vértice mais próximo de `p` em toda a malha (landmarks do gabarito). */
+export function verticeMaisProximoGlobal(g: THREE.BufferGeometry, p: readonly [number, number, number]): number {
+  const pos = g.getAttribute("position");
+  let melhor = 0;
+  let dMelhor = Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const dx = pos.getX(i) - p[0];
+    const dy = pos.getY(i) - p[1];
+    const dz = pos.getZ(i) - p[2];
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < dMelhor) {
+      dMelhor = d;
+      melhor = i;
+    }
+  }
+  return melhor;
+}

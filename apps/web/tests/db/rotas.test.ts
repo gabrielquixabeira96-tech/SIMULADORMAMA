@@ -2,7 +2,7 @@
  * Rotas do Next.js contra o banco de teste + mock HTTP do services/mesh (MSW): upload,
  * leitura auditada de malha/arquivo, calibração, gravação de medidas em A e B e TEPID.
  */
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { GET as getMalha } from "@/app/api/malhas/[id]/route";
@@ -13,6 +13,7 @@ import { GET as getMedida } from "@/app/api/medidas/[id]/route";
 import { POST as postMedidas } from "@/app/api/medidas/route";
 import { POST as postPaciente } from "@/app/api/pacientes/route";
 import { POST as postTepid } from "@/app/api/tepid/route";
+import { POST as postImportar } from "@/app/api/sinteticos/[nome]/importar/route";
 import { caminhoEmDataDir } from "@/config/ambiente";
 import { carregarTepidConfig } from "@/config/arquivosConfig";
 import { consultar, fecharPools } from "@/db/pool";
@@ -225,6 +226,34 @@ describe.skipIf(!dbDisponivel())("rotas com banco + mock do services/mesh", () =
       ["A", false],
     ]);
     expect(await contarAuditoria("tepid", ra.id, "criou")).toBe(1);
+  });
+
+  it("importar torso sintético: mesmo caminho do upload (sintetica=true); gabarito sem distâncias em A", async () => {
+    const dir = caminhoEmDataDir("sinteticos/tx_teste");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(`${dir}/torso.obj`, OBJ);
+    writeFileSync(
+      `${dir}/gabarito.json`,
+      JSON.stringify({ esquema: "gabarito/1.0", landmarks: { furcula: { posicao: [0, 0, 0], vertice: 0 } }, distancias: { intermamilar: { euclidiana_mm: 190, geodesica_mm: 205 } } }),
+    );
+    const p = await novoPaciente();
+    const rb = await postImportar(new Request("http://x", json({ paciente_id: p.id })), params({ nome: "tx_teste" }));
+    const jb = await rb.json();
+    expect(rb.status, JSON.stringify(jb)).toBe(201);
+    expect(jb.gabarito.distancias.intermamilar.euclidiana_mm).toBe(190);
+    expect(chamadas.find((c) => c.rota === "/processar")!.corpo.unidade_origem).toBe("mm");
+    const linha = await consultar<{ sintetica: boolean }>("select sintetica from malhas where id = $1", [jb.malha_id]);
+    expect(linha.rows[0]!.sintetica).toBe(true);
+    const aud = await consultar<{ detalhes: { origem: string } }>("select detalhes from auditoria where entidade = 'malhas' and entidade_id = $1", [jb.malha_id]);
+    expect(aud.rows[0]!.detalhes.origem).toBe("sintetico");
+    vi.stubEnv("DESENHO", "A");
+    const ja = await (await postImportar(new Request("http://x", json({ paciente_id: p.id })), params({ nome: "tx_teste" }))).json();
+    expect(ja.gabarito.distancias).toBeNull();
+    expect(ja.gabarito.landmarks.furcula.posicao).toEqual([0, 0, 0]);
+    const inexistente = await postImportar(new Request("http://x", json({ paciente_id: p.id })), params({ nome: "nao_existe" }));
+    expect(inexistente.status).toBe(404);
+    const ruim = await postImportar(new Request("http://x", json({ paciente_id: p.id })), params({ nome: "../x" }));
+    expect(ruim.status).toBe(400);
   });
 });
 

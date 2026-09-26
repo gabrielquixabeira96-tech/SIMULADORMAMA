@@ -12,9 +12,10 @@
     "typecheck": "next typegen && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "next build && playwright test",
+    "test:e2e": "NEXT_PUBLIC_GANCHOS_TESTE=1 next build && playwright test",
     "db:migrate": "node --experimental-strip-types scripts/migrar.ts",
-    "db:migrate:test": "node --experimental-strip-types scripts/migrar.ts --teste"
+    "db:migrate:test": "node --experimental-strip-types scripts/migrar.ts --teste",
+    "validacao:marcos": "NEXT_PUBLIC_GANCHOS_TESTE=1 next build && RELATORIO_VALIDACAO=1 playwright test --project=desenho-B e2e/validacao.spec.ts"
   },
   "dependencies": {
     "@next/env": "16.3.6",

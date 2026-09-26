@@ -6,6 +6,8 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { Vetor3 } from "@simulador/contratos";
 import { verticeMaisProximo, type MalhaCarregada } from "./carregar";
+import { posicionarCamera } from "./camera";
+import { NOMES_VISTAS, type NomeVista } from "./vistas";
 
 export interface Marcador {
   id: string;
@@ -23,6 +25,7 @@ interface Props {
   marcadores: Marcador[];
   linhaRegua: [Vetor3, Vetor3] | null;
   clicavel: boolean;
+  vista: NomeVista;
   onClique: (c: CliqueNaMalha) => void;
 }
 
@@ -32,30 +35,80 @@ const OPCOES_CAMERA = { fov: 35, near: 1, far: 20000, position: [0, 0, 1200] as 
 const OPCOES_GL = { preserveDrawingBuffer: false, antialias: true };
 const ESTILO_CANVAS = { background: "var(--fundo-viewer)" };
 
-function Enquadrar({ carregada }: { carregada: MalhaCarregada }) {
+function Enquadrar({ carregada, vista }: { carregada: MalhaCarregada; vista: NomeVista }) {
   const obter = useThree((s) => s.get);
   const controles = useThree((s) => s.controls);
+  const invalidar = useThree((s) => s.invalidate);
   useEffect(() => {
     const { camera } = obter();
-    const cam = camera as THREE.PerspectiveCamera;
+    const centro = posicionarCamera(camera as THREE.PerspectiveCamera, carregada.caixa, vista);
     const ctl = controles as unknown as { target: THREE.Vector3; update: () => void } | null;
-    const esfera = carregada.caixa.getBoundingSphere(new THREE.Sphere());
-    const r = Math.max(esfera.radius, 1);
-    // Paciente olha para +Z (contratos §1): câmera à frente, em +Z.
-    cam.position.set(esfera.center.x, esfera.center.y, esfera.center.z + r * 2.6);
-    cam.near = r / 200;
-    cam.far = r * 50;
-    cam.updateProjectionMatrix();
-    cam.lookAt(esfera.center);
     if (ctl) {
-      ctl.target.copy(esfera.center);
+      ctl.target.copy(centro);
       ctl.update();
     }
-  }, [carregada, obter, controles]);
+    invalidar();
+  }, [carregada, vista, obter, controles, invalidar]);
   return null;
 }
 
-export default function Visualizador({ carregada, marcadores, linhaRegua, clicavel, onClique }: Props) {
+/**
+ * Gancho de TESTE (só em builds com NEXT_PUBLIC_GANCHOS_TESTE=1, usado pelos e2e de validação):
+ * projeta um ponto 3D (mm) para pixels da página com a câmera viva e diz se ele está visível
+ * (primeira interseção do raio a < 1 mm do ponto) e o cosseno entre o raio e a normal da face.
+ * Não altera nada na cena; é o "olho" de um operador que mira o ponto e clica.
+ */
+const GANCHOS_TESTE = process.env.NEXT_PUBLIC_GANCHOS_TESTE === "1";
+
+function GanchoTeste({ carregada }: { carregada: MalhaCarregada }) {
+  const obter = useThree((s) => s.get);
+  useEffect(() => {
+    const w = window as unknown as { __simuladorViewer?: unknown };
+    w.__simuladorViewer = {
+      projetar(p: [number, number, number]) {
+        const { camera, gl, raycaster } = obter();
+        camera.updateMatrixWorld();
+        const alvo = new THREE.Vector3(...p);
+        const ndc = alvo.clone().project(camera);
+        const rect = gl.domElement.getBoundingClientRect();
+        const x = rect.left + ((ndc.x + 1) / 2) * rect.width;
+        const y = rect.top + ((1 - ndc.y) / 2) * rect.height;
+        raycaster.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), camera);
+        const hit = raycaster.intersectObject(carregada.objeto, true)[0];
+        const visivel = !!hit && hit.point.distanceTo(alvo) < 1.0 && Math.abs(ndc.x) < 0.98 && Math.abs(ndc.y) < 0.98;
+        const cos = hit?.face ? Math.abs(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).dot(raycaster.ray.direction)) : 0;
+        return { x, y, visivel, cos, mm_por_px: (2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360) * camera.position.distanceTo(alvo)) / rect.height };
+      },
+      /** Avalia todas as vistas SEM renderizar: a de maior cosseno em que o ponto é visível. */
+      melhorVista(p: [number, number, number], margemTopoPx = 60) {
+        const { camera, gl } = obter();
+        const rect = gl.domElement.getBoundingClientRect();
+        const alvo = new THREE.Vector3(...p);
+        const tmp = (camera as THREE.PerspectiveCamera).clone();
+        const ray = new THREE.Raycaster();
+        let melhor: { vista: NomeVista; cos: number } | null = null;
+        for (const v of NOMES_VISTAS) {
+          posicionarCamera(tmp, carregada.caixa, v);
+          const ndc = alvo.clone().project(tmp);
+          const y = rect.top + ((1 - ndc.y) / 2) * rect.height;
+          if (Math.abs(ndc.x) > 0.95 || Math.abs(ndc.y) > 0.95 || y < margemTopoPx) continue;
+          ray.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), tmp);
+          const hit = ray.intersectObject(carregada.objeto, true)[0];
+          if (!hit || hit.point.distanceTo(alvo) >= 1.0 || !hit.face) continue;
+          const cos = Math.abs(hit.face.normal.clone().transformDirection(hit.object.matrixWorld).dot(ray.ray.direction));
+          if (!melhor || cos > melhor.cos) melhor = { vista: v, cos };
+        }
+        return melhor;
+      },
+    };
+    return () => {
+      delete w.__simuladorViewer;
+    };
+  }, [carregada, obter]);
+  return null;
+}
+
+export default function Visualizador({ carregada, marcadores, linhaRegua, clicavel, vista, onClique }: Props) {
   const raioMarcador = useMemo(() => {
     if (!carregada) return 3;
     const r = carregada.caixa.getBoundingSphere(new THREE.Sphere()).radius;
@@ -76,6 +129,7 @@ export default function Visualizador({ carregada, marcadores, linhaRegua, clicav
 
   return (
     <Canvas
+      frameloop="demand"
       data-testid="viewer-canvas"
       camera={OPCOES_CAMERA}
       gl={OPCOES_GL}
@@ -87,7 +141,8 @@ export default function Visualizador({ carregada, marcadores, linhaRegua, clicav
       <OrbitControls makeDefault enableDamping={false} />
       {carregada && (
         <>
-          <Enquadrar carregada={carregada} />
+          <Enquadrar carregada={carregada} vista={vista} />
+          {GANCHOS_TESTE && <GanchoTeste carregada={carregada} />}
           <primitive object={carregada.objeto} onClick={aoClicar} />
         </>
       )}

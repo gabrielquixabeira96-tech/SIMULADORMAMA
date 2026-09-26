@@ -17,6 +17,7 @@ import type { ConfigPublica } from "@/config/publica";
 import { distanciaEuclidiana, distanciasEuclidianas } from "@/medidas/geometria";
 import type { MalhaCarregada } from "@/viewer/carregar";
 import type { CliqueNaMalha, Marcador } from "@/viewer/Visualizador";
+import { NOMES_VISTAS, VISTAS, type NomeVista } from "@/viewer/vistas";
 import { FormularioTepid, valoresTepidVazios, type ErroCampoUI, type ResultadoTepidUI, type ValoresTepidForm } from "./FormularioTepid";
 import { PainelDistancias, PainelVolume, type EstadoMedicao } from "./PainelMedidas";
 
@@ -75,6 +76,8 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   const urlsLocais = useRef<string[]>([]);
 
   const [ferramenta, setFerramenta] = useState<Ferramenta>("navegar");
+  const [vista, setVista] = useState<NomeVista>("frente");
+  const [landmarksGabarito, setLandmarksGabarito] = useState<Record<string, { posicao: Vetor3 }> | null>(null);
   const [pontosRegua, setPontosRegua] = useState<Vetor3[]>([]);
   const [reguaMm, setReguaMm] = useState("100");
   const [calibrada, setCalibrada] = useState(false);
@@ -156,6 +159,8 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     if (!r.ok) return setMensagem({ tipo: "erro", texto: `Upload falhou: ${await lerErro(r)}` });
     const j = await r.json();
     setCalibrada(false);
+    setLandmarksGabarito(null);
+    setGabarito(null);
     const { carregarGlb } = await import("@/viewer/carregar");
     await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: marcarSintetica, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
@@ -186,6 +191,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     const mod = await import("@/viewer/carregar");
     const base = `/api/sinteticos/${t.nome}`;
     setCalibrada(true);
+    setLandmarksGabarito(null);
     if (t.gabarito && recursos.medicao_automatica_3d) {
       fetch(`${base}/gabarito.json`)
         .then((r) => (r.ok ? r.json() : null))
@@ -197,6 +203,39 @@ export function Consulta({ config }: { config: ConfigPublica }) {
         ? mod.carregarGlb(`${base}/torso.glb`)
         : mod.carregarObj(new Map([["torso.obj", `${base}/torso.obj`], ["torso.mtl", `${base}/torso.mtl`], ["textura.png", `${base}/textura.png`]])),
     );
+  }
+
+  /** Torso sintético pelo MESMO caminho de uma malha enviada (ADR 0003 item 9). */
+  async function importarSintetico(t: TorsoSintetico) {
+    if (!paciente) return;
+    setCarregando(true);
+    setMensagem({ tipo: "info", texto: `Processando ${t.nome} no serviço de malha…` });
+    const r = await fetch(`/api/sinteticos/${t.nome}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: paciente.id }) });
+    setCarregando(false);
+    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Importação falhou: ${await lerErro(r)}` });
+    const j = await r.json();
+    setCalibrada(true);
+    setGabarito(recursos.medicao_automatica_3d ? (j.gabarito?.distancias ?? null) : null);
+    setLandmarksGabarito(j.gabarito?.landmarks ?? null);
+    const { carregarGlb } = await import("@/viewer/carregar");
+    await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: true, versao: 1 }, () =>
+      carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
+    );
+    setMensagem({ tipo: "info", texto: `Torso ${t.nome} processado: ${j.meta?.processada?.n_vertices ?? "?"} vértices (malha ${j.malha_id}).` });
+  }
+
+  /** Landmarks `origem: "gabarito"` (contratos §2) projetados no vértice mais próximo da malha aberta. */
+  async function aplicarLandmarksGabarito() {
+    if (!carregada || !landmarksGabarito) return;
+    const { verticeMaisProximoGlobal } = await import("@/viewer/carregar");
+    const novos: Landmarks = {};
+    for (const id of LANDMARK_IDS) {
+      const g = landmarksGabarito[id];
+      if (g) novos[id] = { posicao: g.posicao, vertice: verticeMaisProximoGlobal(carregada.malha.geometry, g.posicao), origem: "gabarito" };
+    }
+    setLandmarks(novos);
+    setMedicao(null);
+    setEstadoMedicao("ocioso");
   }
 
   function aoClicar(c: CliqueNaMalha) {
@@ -322,7 +361,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       <div className="coluna-viewer">
         <div className="viewer" data-testid="viewer">
           {carregada || carregando ? (
-            <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={pontosRegua.length === 2 ? [pontosRegua[0]!, pontosRegua[1]!] : null} clicavel={ferramenta !== "navegar"} onClique={aoClicar} />
+            <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={pontosRegua.length === 2 ? [pontosRegua[0]!, pontosRegua[1]!] : null} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicar} />
           ) : (
             <div className="viewer-vazio">Nenhuma malha aberta. Envie um OBJ/PLY, abra um arquivo local ou um torso sintético.</div>
           )}
@@ -334,6 +373,13 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           </p>
         )}
         <p className="nota">+Y cranial, +Z anterior, +X lado esquerdo da paciente. Escala em mm, sem ajuste na carga.</p>
+        <div className="ferramentas" role="toolbar" aria-label="Vista da câmera">
+          {NOMES_VISTAS.map((v) => (
+            <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
+              {VISTAS[v].rotulo}
+            </button>
+          ))}
+        </div>
         <div className="ferramentas" role="toolbar" aria-label="Ferramenta de clique">
           {(["navegar", "regua", "landmarks"] as const).map((f) => (
             <button key={f} type="button" aria-pressed={ferramenta === f} disabled={!carregada || (f === "landmarks" && !podeMarcar)} onClick={() => setFerramenta(f)}>
@@ -403,9 +449,16 @@ export function Consulta({ config }: { config: ConfigPublica }) {
             <div className="linha-form">
               <span>Torsos sintéticos:</span>
               {sinteticos.map((t) => (
-                <button key={t.nome} type="button" onClick={() => abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)}>
-                  {t.nome}
-                </button>
+                <span key={t.nome} className="par-botoes">
+                  <button type="button" className="secundario" onClick={() => abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)} title="Pré-visualizar o GLB do gerador (não grava)">
+                    {t.nome}
+                  </button>
+                  {paciente && t.obj && (
+                    <button type="button" onClick={() => importarSintetico(t)} disabled={carregando} data-testid={`importar-${t.nome}`} title="Processar pelo serviço de malha, como um upload">
+                      processar
+                    </button>
+                  )}
+                </span>
               ))}
             </div>
           )}
@@ -472,6 +525,11 @@ export function Consulta({ config }: { config: ConfigPublica }) {
             <button type="button" className="secundario" onClick={limparMedidas}>
               Limpar landmarks
             </button>
+            {landmarksGabarito && fonte?.tipo === "servidor" && fonte.sintetica && (
+              <button type="button" className="secundario" onClick={aplicarLandmarksGabarito} data-testid="aplicar-gabarito">
+                Landmarks do gabarito (sintético)
+              </button>
+            )}
             {recursos.medicao_automatica_3d && (
               <button type="button" onClick={medirNoServico} disabled={!indicesOk || !obrigatoriosOk || estadoMedicao === "medindo"}>
                 Medir geodésicas e volume
@@ -483,7 +541,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           </div>
         </section>
 
-        <PainelDistancias recursos={recursos} euclidianas={euclidianas} medicao={medicao} estado={estadoMedicao} gabarito={fonte?.tipo === "sintetico" ? gabarito : null} />
+        <PainelDistancias recursos={recursos} euclidianas={euclidianas} medicao={medicao} estado={estadoMedicao} gabarito={fonte?.tipo === "sintetico" || (fonte?.tipo === "servidor" && fonte.sintetica) ? gabarito : null} />
         <PainelVolume recursos={recursos} medicao={medicao} estado={estadoMedicao} />
 
         <FormularioTepid

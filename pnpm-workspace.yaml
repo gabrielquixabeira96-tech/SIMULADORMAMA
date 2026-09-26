@@ -1,3 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# ADR 0009: o `sharp` (dependência OPCIONAL do next) traz @img/sharp-libvips-* sob LGPL-3.0.
+# O app não usa next/image nem sharp; a dependência é removida da árvore.
+overrides:
+  sharp: "-"
