@@ -35,6 +35,16 @@ export const operadorSchema = z
   .transform((s) => s.toUpperCase())
   .pipe(z.string().regex(/^[A-Z0-9][A-Z0-9-]{1,15}$/, "use um código pseudônimo (letras, dígitos e hífen; 2–16), nunca o nome"));
 
+/**
+ * Na demonstração sintética (ADR 0018, revisão R1), o operador é só um código do tipo OP-NN: nenhum
+ * texto livre é gravado, nem um "pseudônimo" que poderia ser um nome abreviado ou iniciais.
+ */
+export const OPERADOR_DEMO = /^OP-[0-9]{2}$/;
+
+export function exigirOperadorDemo(operador: string, demo: boolean = demoAtiva()): void {
+  if (demo && !OPERADOR_DEMO.test(operador)) throw new ErroSessao(422, "operador_invalido", "na demonstração sintética o código do operador é OP-NN (ex.: OP-01)");
+}
+
 export const criarSessaoSchema = z.strictObject({
   operador: operadorSchema,
   tipo_operador: z.enum(["humano", "simulado"]).default("humano"),
@@ -227,6 +237,7 @@ export function ordemItens(scanIds: readonly string[], repeticoes: number, semen
 
 export async function criarSessao(entrada: unknown, desenho: Desenho): Promise<Sessao> {
   const e = criarSessaoSchema.parse(entrada);
+  exigirOperadorDemo(e.operador);
   const elegiveis = await torsosElegiveis();
   if (elegiveis.length === 0) throw new ErroSessao(409, "sem_torsos_sinteticos", "nenhum torso sintético com gabarito em DATA_DIR/sinteticos (rode 'bash scripts/mesh.sh torsos')");
   const torsos = e.torsos ? [...new Set(e.torsos)] : elegiveis;

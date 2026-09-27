@@ -118,8 +118,13 @@ test("fluxo com torso sintético: importar t01 → landmarks do gabarito → med
   paginas.forEach((t, i) => expect(t.split(FAIXA).length - 1, `página ${i + 1}`).toBeGreaterThanOrEqual(i === 0 ? 3 : 2));
 });
 
-test("sessão de Bland-Altman na demo: marcada demo e sem observação livre", async ({ request, baseURL }) => {
-  const s = await (await request.post("/api/validacao/sessoes", { headers: { Origin: baseURL! }, data: { operador: "OP-DEMO", torsos: [TORSO] } })).json();
+test("sessão de Bland-Altman na demo: operador OP-NN, marcada demo e sem observação livre", async ({ request, baseURL }) => {
+  // R1: na demo o operador é só OP-NN (nem pseudônimo livre)
+  const livre = await request.post("/api/validacao/sessoes", { headers: { Origin: baseURL! }, data: { operador: "MARIA-S", torsos: [TORSO] } });
+  expect(livre.status()).toBe(422);
+  expect((await livre.json()).erro.codigo).toBe("operador_invalido");
+  const s = await (await request.post("/api/validacao/sessoes", { headers: { Origin: baseURL! }, data: { operador: "OP-01", torsos: [TORSO] } })).json();
+  expect(s.operador).toBe("OP-01");
   const enc = await request.post(`/api/validacao/sessoes/${s.id}/encerrar`, { headers: { Origin: baseURL! }, data: { observacoes: "Fulana de Tal" } });
   expect(enc.status()).toBe(403);
   expect((await enc.json()).erro.codigo).toBe("desligado_na_demo");

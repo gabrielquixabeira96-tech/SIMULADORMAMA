@@ -8,7 +8,8 @@
  *    anamnese, DATA_DIR/pacientes);
  *  - sem a variável, nada muda (tabela de requisições comparada com a v0.1.2).
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -17,6 +18,7 @@ import { torsoGerado, torsoUtilizavel } from "@/config/demo";
 import { MARCA_BANCO_DEMO, motivoTokenFraco, verificarAmbienteDemo, verificarBenchmarkNaRede, verificarDadosDemo, type ConsultaDemo } from "@/config/subida";
 import { proxy } from "@/proxy";
 import { avaliarRequisicao, modoBenchmarkNaRede, origemOriginal } from "@/seguranca/requisicao";
+import { criarSessao, ErroSessao, exigirOperadorDemo } from "@/validacao/sessao";
 
 const TOKEN = "3f9a1c7e5b2d8046af13ce97b5d20e6184c7a93f0b5e2d71c86a4f309eb7d152"; // 64 hex (openssl rand -hex 32)
 const PUBLICO = "sb-abc123.vercel.run";
@@ -364,5 +366,32 @@ describe("torsos utilizáveis e defesa em profundidade nas rotas", () => {
     await expect(
       registrarMalha({ paciente, upload: { arquivos: [], principal: "scan.obj", formato: "obj" } as unknown as Parameters<typeof registrarMalha>[0]["upload"], unidade: "mm", recorte: "abaixo_do_pescoco", sintetica: false, desenho: "B", origem: "upload" }),
     ).rejects.toThrow(/só torsos sintéticos/);
+  });
+});
+
+describe("sessão de Bland-Altman na demo: operador só OP-NN (revisão R1)", () => {
+  it("na demo aceita só OP-00..OP-99; fora dela vale o pseudônimo da v0.1.2", () => {
+    for (const ok of ["OP-01", "OP-99", "OP-00"]) expect(() => exigirOperadorDemo(ok, true), ok).not.toThrow();
+    for (const ruim of ["OP-1", "OP-001", "MARIA-S", "OP-AB", "GQS", "op-01"]) {
+      let err: unknown;
+      try {
+        exigirOperadorDemo(ruim, true);
+      } catch (e) {
+        err = e;
+      }
+      expect(err, ruim).toBeInstanceOf(ErroSessao);
+      expect((err as ErroSessao).status).toBe(422);
+      expect((err as ErroSessao).codigo).toBe("operador_invalido");
+    }
+    expect(() => exigirOperadorDemo("MARIA-S", false)).not.toThrow();
+  });
+
+  it("criarSessao recusa o pseudônimo livre com DEMO_SINTETICA=1 antes de tocar em DATA_DIR (minúsculas viram OP-NN)", async () => {
+    vi.stubEnv("DEMO_SINTETICA", "1");
+    vi.stubEnv("DATA_DIR", mkdtempSync(join(tmpdir(), "simulador-r1-"))); // vazio: nenhuma sessão é criada
+    await expect(criarSessao({ operador: "GQS-96" }, "B")).rejects.toMatchObject({ codigo: "operador_invalido", status: 422 });
+    await expect(criarSessao({ operador: "Maria Silva" }, "B")).rejects.toThrow(); // o esquema geral já recusa
+    // "op-01" é normalizado para "OP-01" pelo esquema e passa pela guarda; cai adiante por falta de torsos
+    await expect(criarSessao({ operador: "op-01" }, "B")).rejects.toMatchObject({ codigo: "sem_torsos_sinteticos" });
   });
 });

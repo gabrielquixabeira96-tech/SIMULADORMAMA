@@ -303,7 +303,7 @@ export function SessaoBlandAltman({ sessaoInicial, demo = false }: { sessaoInici
         <form onSubmit={iniciar} className="linha-form">
           <label>
             Código do operador (pseudônimo, nunca o nome)
-            <input value={operador} onChange={(e) => setOperador(e.target.value)} placeholder="OP-01" required pattern="[A-Za-z0-9][A-Za-z0-9-]{1,15}" data-testid="operador" />
+            <input value={operador} onChange={(e) => setOperador(e.target.value)} placeholder="OP-01" required pattern={demo ? "OP-[0-9]{2}" : "[A-Za-z0-9][A-Za-z0-9-]{1,15}"} title={demo ? "na demonstração: OP-NN (ex.: OP-01)" : undefined} data-testid="operador" />
           </label>
           <label>
             Operador
