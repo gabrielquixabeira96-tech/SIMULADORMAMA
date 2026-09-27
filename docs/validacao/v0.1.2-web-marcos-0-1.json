@@ -1,0 +1,1303 @@
+{
+  "esquema": "validacao_componente/web-marcos-0-1",
+  "versao_software": "0.1.2",
+  "data": "2026-09-27",
+  "commit_base": "b8018c8",
+  "ambiente": {
+    "os": "linux",
+    "node": "v22.22.2",
+    "navegador": "chromium 141.0.7390.37",
+    "viewport": "1920x1080",
+    "webgl": "SwiftShader (headless)"
+  },
+  "parametros": {
+    "torsos": [
+      "t01_simetrico_300",
+      "t02_assimetrico",
+      "t03_pequeno_ptose"
+    ],
+    "decimacao_alvo_vertices": 40000,
+    "geodesica": "mmp (services/mesh, a partir da posicao exata)",
+    "jitter_px": 1,
+    "repeticoes": 2,
+    "mm_por_px": {
+      "min": 0.542,
+      "max": 0.642
+    },
+    "vistas": {
+      "t01_simetrico_300": {
+        "furcula": "frente",
+        "mamilo_dir": "frente",
+        "mamilo_esq": "frente",
+        "sulco_dir": "inferior",
+        "sulco_esq": "inferior",
+        "linha_media_inferior": "frente",
+        "base_medial_dir": "frente",
+        "base_lateral_dir": "perfil_dir",
+        "base_medial_esq": "frente",
+        "base_lateral_esq": "perfil_esq"
+      },
+      "t02_assimetrico": {
+        "furcula": "frente",
+        "mamilo_dir": "frente",
+        "mamilo_esq": "frente",
+        "sulco_dir": "inferior_dir",
+        "sulco_esq": "inferior",
+        "linha_media_inferior": "frente",
+        "base_medial_dir": "frente",
+        "base_lateral_dir": "obliqua_dir",
+        "base_medial_esq": "frente",
+        "base_lateral_esq": "obliqua_esq"
+      },
+      "t03_pequeno_ptose": {
+        "furcula": "obliqua_esq",
+        "mamilo_dir": "frente",
+        "mamilo_esq": "frente",
+        "sulco_dir": "inferior",
+        "sulco_esq": "inferior",
+        "linha_media_inferior": "frente",
+        "base_medial_dir": "frente",
+        "base_lateral_dir": "obliqua_dir",
+        "base_medial_esq": "frente",
+        "base_lateral_esq": "obliqua_esq"
+      }
+    }
+  },
+  "marco0": {
+    "erro_max_mm": 0.08,
+    "criterio_1mm": true,
+    "por_torso": [
+      {
+        "torso": "t01_simetrico_300",
+        "caixa_obj_mm": [
+          300,
+          475,
+          250
+        ],
+        "erro_caixa_processada_mm": 0.002,
+        "erro_max_distancias_mm": 0.08,
+        "erros": {
+          "ssn_n_dir": {
+            "euclidiana": 0,
+            "geodesica": -0.07999999999998408
+          },
+          "ssn_n_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "n_imf_dir": {
+            "euclidiana": 0,
+            "geodesica": 0.07000000000000739
+          },
+          "n_imf_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "base_dir": {
+            "euclidiana": 0,
+            "geodesica": 0.060000000000002274
+          },
+          "base_esq": {
+            "euclidiana": 0,
+            "geodesica": 0.060000000000002274
+          },
+          "intermamilar": {
+            "euclidiana": 0,
+            "geodesica": -0.05000000000001137
+          }
+        }
+      },
+      {
+        "torso": "t02_assimetrico",
+        "caixa_obj_mm": [
+          320,
+          475,
+          259.75
+        ],
+        "erro_caixa_processada_mm": 0.047,
+        "erro_max_distancias_mm": 0,
+        "erros": {
+          "ssn_n_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "ssn_n_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "n_imf_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "n_imf_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "base_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "base_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "intermamilar": {
+            "euclidiana": 0,
+            "geodesica": 0
+          }
+        }
+      },
+      {
+        "torso": "t03_pequeno_ptose",
+        "caixa_obj_mm": [
+          280,
+          475,
+          219.95
+        ],
+        "erro_caixa_processada_mm": 0.05,
+        "erro_max_distancias_mm": 0,
+        "erros": {
+          "ssn_n_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "ssn_n_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "n_imf_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "n_imf_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "base_dir": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "base_esq": {
+            "euclidiana": 0,
+            "geodesica": 0
+          },
+          "intermamilar": {
+            "euclidiana": 0,
+            "geodesica": 0
+          }
+        }
+      }
+    ]
+  },
+  "marco1": {
+    "bland_altman_geral": {
+      "n": 84,
+      "vies_mm": 0.0227,
+      "dp_mm": 0.5544,
+      "loa_inferior_mm": -1.0639,
+      "loa_superior_mm": 1.1094,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 1.38,
+      "por_medida": {
+        "ssn_n_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.035,
+          "dp_mm": 0.3955,
+          "loa_inferior_mm": -0.7402,
+          "loa_superior_mm": 0.8102
+        },
+        "ssn_n_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.075,
+          "dp_mm": 0.3905,
+          "loa_inferior_mm": -0.6904,
+          "loa_superior_mm": 0.8404
+        },
+        "ssn_n_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.15,
+          "dp_mm": 0.8156,
+          "loa_inferior_mm": -1.7486,
+          "loa_superior_mm": 1.4486
+        },
+        "ssn_n_esq:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1117,
+          "dp_mm": 0.8507,
+          "loa_inferior_mm": -1.7791,
+          "loa_superior_mm": 1.5558
+        },
+        "n_imf_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0733,
+          "dp_mm": 0.663,
+          "loa_inferior_mm": -1.2261,
+          "loa_superior_mm": 1.3727
+        },
+        "n_imf_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1383,
+          "dp_mm": 0.7296,
+          "loa_inferior_mm": -1.2917,
+          "loa_superior_mm": 1.5684
+        },
+        "n_imf_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.0033,
+          "dp_mm": 0.6683,
+          "loa_inferior_mm": -1.3132,
+          "loa_superior_mm": 1.3065
+        },
+        "n_imf_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.015,
+          "dp_mm": 0.701,
+          "loa_inferior_mm": -1.359,
+          "loa_superior_mm": 1.389
+        },
+        "base_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.2267,
+          "dp_mm": 0.2497,
+          "loa_inferior_mm": -0.2627,
+          "loa_superior_mm": 0.7161
+        },
+        "base_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1583,
+          "dp_mm": 0.3215,
+          "loa_inferior_mm": -0.4719,
+          "loa_superior_mm": 0.7885
+        },
+        "base_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0533,
+          "dp_mm": 0.3885,
+          "loa_inferior_mm": -0.7082,
+          "loa_superior_mm": 0.8148
+        },
+        "base_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.0567,
+          "dp_mm": 0.429,
+          "loa_inferior_mm": -0.7841,
+          "loa_superior_mm": 0.8975
+        },
+        "intermamilar:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.13,
+          "dp_mm": 0.6154,
+          "loa_inferior_mm": -1.3363,
+          "loa_superior_mm": 1.0763
+        },
+        "intermamilar:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1183,
+          "dp_mm": 0.6387,
+          "loa_inferior_mm": -1.3702,
+          "loa_superior_mm": 1.1336
+        }
+      }
+    },
+    "n_imf": {
+      "n": 24,
+      "vies_mm": 0.0558,
+      "dp_mm": 0.6468,
+      "loa_inferior_mm": -1.212,
+      "loa_superior_mm": 1.3236,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 1.38,
+      "por_medida": {
+        "n_imf_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0733,
+          "dp_mm": 0.663,
+          "loa_inferior_mm": -1.2261,
+          "loa_superior_mm": 1.3727
+        },
+        "n_imf_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1383,
+          "dp_mm": 0.7296,
+          "loa_inferior_mm": -1.2917,
+          "loa_superior_mm": 1.5684
+        },
+        "n_imf_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.0033,
+          "dp_mm": 0.6683,
+          "loa_inferior_mm": -1.3132,
+          "loa_superior_mm": 1.3065
+        },
+        "n_imf_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.015,
+          "dp_mm": 0.701,
+          "loa_inferior_mm": -1.359,
+          "loa_superior_mm": 1.389
+        }
+      }
+    },
+    "sem_n_imf": {
+      "n": 60,
+      "vies_mm": 0.0095,
+      "dp_mm": 0.5183,
+      "loa_inferior_mm": -1.0065,
+      "loa_superior_mm": 1.0255,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 1.27,
+      "por_medida": {
+        "ssn_n_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.035,
+          "dp_mm": 0.3955,
+          "loa_inferior_mm": -0.7402,
+          "loa_superior_mm": 0.8102
+        },
+        "ssn_n_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.075,
+          "dp_mm": 0.3905,
+          "loa_inferior_mm": -0.6904,
+          "loa_superior_mm": 0.8404
+        },
+        "ssn_n_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.15,
+          "dp_mm": 0.8156,
+          "loa_inferior_mm": -1.7486,
+          "loa_superior_mm": 1.4486
+        },
+        "ssn_n_esq:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1117,
+          "dp_mm": 0.8507,
+          "loa_inferior_mm": -1.7791,
+          "loa_superior_mm": 1.5558
+        },
+        "base_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.2267,
+          "dp_mm": 0.2497,
+          "loa_inferior_mm": -0.2627,
+          "loa_superior_mm": 0.7161
+        },
+        "base_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1583,
+          "dp_mm": 0.3215,
+          "loa_inferior_mm": -0.4719,
+          "loa_superior_mm": 0.7885
+        },
+        "base_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0533,
+          "dp_mm": 0.3885,
+          "loa_inferior_mm": -0.7082,
+          "loa_superior_mm": 0.8148
+        },
+        "base_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.0567,
+          "dp_mm": 0.429,
+          "loa_inferior_mm": -0.7841,
+          "loa_superior_mm": 0.8975
+        },
+        "intermamilar:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.13,
+          "dp_mm": 0.6154,
+          "loa_inferior_mm": -1.3363,
+          "loa_superior_mm": 1.0763
+        },
+        "intermamilar:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1183,
+          "dp_mm": 0.6387,
+          "loa_inferior_mm": -1.3702,
+          "loa_superior_mm": 1.1336
+        }
+      }
+    },
+    "euclidiana": {
+      "n": 42,
+      "vies_mm": 0.015,
+      "dp_mm": 0.5431,
+      "loa_inferior_mm": -1.0494,
+      "loa_superior_mm": 1.0794,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 1.29,
+      "por_medida": {
+        "ssn_n_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.035,
+          "dp_mm": 0.3955,
+          "loa_inferior_mm": -0.7402,
+          "loa_superior_mm": 0.8102
+        },
+        "ssn_n_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.15,
+          "dp_mm": 0.8156,
+          "loa_inferior_mm": -1.7486,
+          "loa_superior_mm": 1.4486
+        },
+        "n_imf_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0733,
+          "dp_mm": 0.663,
+          "loa_inferior_mm": -1.2261,
+          "loa_superior_mm": 1.3727
+        },
+        "n_imf_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.0033,
+          "dp_mm": 0.6683,
+          "loa_inferior_mm": -1.3132,
+          "loa_superior_mm": 1.3065
+        },
+        "base_dir:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.2267,
+          "dp_mm": 0.2497,
+          "loa_inferior_mm": -0.2627,
+          "loa_superior_mm": 0.7161
+        },
+        "base_esq:euclidiana": {
+          "n": 6,
+          "vies_mm": 0.0533,
+          "dp_mm": 0.3885,
+          "loa_inferior_mm": -0.7082,
+          "loa_superior_mm": 0.8148
+        },
+        "intermamilar:euclidiana": {
+          "n": 6,
+          "vies_mm": -0.13,
+          "dp_mm": 0.6154,
+          "loa_inferior_mm": -1.3363,
+          "loa_superior_mm": 1.0763
+        }
+      }
+    },
+    "geodesica": {
+      "n": 42,
+      "vies_mm": 0.0305,
+      "dp_mm": 0.572,
+      "loa_inferior_mm": -1.0907,
+      "loa_superior_mm": 1.1517,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 1.38,
+      "por_medida": {
+        "ssn_n_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.075,
+          "dp_mm": 0.3905,
+          "loa_inferior_mm": -0.6904,
+          "loa_superior_mm": 0.8404
+        },
+        "ssn_n_esq:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1117,
+          "dp_mm": 0.8507,
+          "loa_inferior_mm": -1.7791,
+          "loa_superior_mm": 1.5558
+        },
+        "n_imf_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1383,
+          "dp_mm": 0.7296,
+          "loa_inferior_mm": -1.2917,
+          "loa_superior_mm": 1.5684
+        },
+        "n_imf_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.015,
+          "dp_mm": 0.701,
+          "loa_inferior_mm": -1.359,
+          "loa_superior_mm": 1.389
+        },
+        "base_dir:geodesica": {
+          "n": 6,
+          "vies_mm": 0.1583,
+          "dp_mm": 0.3215,
+          "loa_inferior_mm": -0.4719,
+          "loa_superior_mm": 0.7885
+        },
+        "base_esq:geodesica": {
+          "n": 6,
+          "vies_mm": 0.0567,
+          "dp_mm": 0.429,
+          "loa_inferior_mm": -0.7841,
+          "loa_superior_mm": 0.8975
+        },
+        "intermamilar:geodesica": {
+          "n": 6,
+          "vies_mm": -0.1183,
+          "dp_mm": 0.6387,
+          "loa_inferior_mm": -1.3702,
+          "loa_superior_mm": 1.1336
+        }
+      }
+    },
+    "criterio_2mm": true
+  },
+  "pares": [
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 198.05,
+      "medido_mm": 198.48,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 210.57,
+      "medido_mm": 211.06,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 198.05,
+      "medido_mm": 197.19,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 210.55,
+      "medido_mm": 209.75,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 90.23,
+      "medido_mm": 89.33,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 92.82,
+      "medido_mm": 91.86,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 90.23,
+      "medido_mm": 90.38,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 92.89,
+      "medido_mm": 93.04,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 113.05,
+      "medido_mm": 113.46,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 162.78,
+      "medido_mm": 162.7,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 113.05,
+      "medido_mm": 113.47,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 162.78,
+      "medido_mm": 163.06,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 189.83,
+      "medido_mm": 189.16,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 229.9,
+      "medido_mm": 229.21,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 198.05,
+      "medido_mm": 198.17,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 210.57,
+      "medido_mm": 210.65,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 198.05,
+      "medido_mm": 198.99,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 210.55,
+      "medido_mm": 211.61,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 90.23,
+      "medido_mm": 91.16,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 92.82,
+      "medido_mm": 93.95,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 90.23,
+      "medido_mm": 89.94,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 92.89,
+      "medido_mm": 92.48,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 113.05,
+      "medido_mm": 113.04,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 162.78,
+      "medido_mm": 162.61,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 113.05,
+      "medido_mm": 113.42,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 162.78,
+      "medido_mm": 163.49,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 189.83,
+      "medido_mm": 190.32,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 229.9,
+      "medido_mm": 230.39,
+      "torso": "t01_simetrico_300",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 215.15,
+      "medido_mm": 215.61,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 227.73,
+      "medido_mm": 228.23,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 203.18,
+      "medido_mm": 203.16,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 215.4,
+      "medido_mm": 215.4,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 94,
+      "medido_mm": 93.98,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 95.71,
+      "medido_mm": 95.82,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 87.17,
+      "medido_mm": 86.73,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 89.06,
+      "medido_mm": 88.71,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 118.93,
+      "medido_mm": 119.34,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 178.14,
+      "medido_mm": 178.36,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 111.13,
+      "medido_mm": 110.79,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 162.97,
+      "medido_mm": 162.63,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 199.82,
+      "medido_mm": 199.47,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 238.12,
+      "medido_mm": 237.8,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 215.15,
+      "medido_mm": 214.98,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 227.73,
+      "medido_mm": 227.64,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 203.18,
+      "medido_mm": 203.01,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 215.4,
+      "medido_mm": 215.21,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 94,
+      "medido_mm": 93.67,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 95.71,
+      "medido_mm": 95.44,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 87.17,
+      "medido_mm": 86.84,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 89.06,
+      "medido_mm": 88.79,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 118.93,
+      "medido_mm": 119.34,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 178.14,
+      "medido_mm": 178.8,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 111.13,
+      "medido_mm": 110.69,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 162.97,
+      "medido_mm": 162.61,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 199.82,
+      "medido_mm": 198.92,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 238.12,
+      "medido_mm": 237.18,
+      "torso": "t02_assimetrico",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 218.74,
+      "medido_mm": 218.7,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 226.38,
+      "medido_mm": 226.39,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 218.74,
+      "medido_mm": 219.21,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 226.41,
+      "medido_mm": 226.94,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 96.53,
+      "medido_mm": 97.19,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 97.08,
+      "medido_mm": 97.77,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 96.53,
+      "medido_mm": 96.13,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 97.08,
+      "medido_mm": 96.67,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 95.49,
+      "medido_mm": 95.79,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 132.11,
+      "medido_mm": 132.49,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 95.49,
+      "medido_mm": 95.87,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 132.11,
+      "medido_mm": 132.37,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 158.03,
+      "medido_mm": 158.64,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 177.67,
+      "medido_mm": 178.31,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_1"
+    },
+    {
+      "medida": "ssn_n_dir:euclidiana",
+      "distancia": "ssn_n_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 218.74,
+      "medido_mm": 218.15,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_dir:geodesica",
+      "distancia": "ssn_n_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 226.38,
+      "medido_mm": 225.84,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:euclidiana",
+      "distancia": "ssn_n_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 218.74,
+      "medido_mm": 217.48,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "ssn_n_esq:geodesica",
+      "distancia": "ssn_n_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 226.41,
+      "medido_mm": 225.14,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:euclidiana",
+      "distancia": "n_imf_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 96.53,
+      "medido_mm": 96.63,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_dir:geodesica",
+      "distancia": "n_imf_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 97.08,
+      "medido_mm": 97.21,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:euclidiana",
+      "distancia": "n_imf_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 96.53,
+      "medido_mm": 97.82,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "n_imf_esq:geodesica",
+      "distancia": "n_imf_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 97.08,
+      "medido_mm": 98.46,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:euclidiana",
+      "distancia": "base_dir",
+      "tipo": "euclidiana",
+      "referencia_mm": 95.49,
+      "medido_mm": 95.33,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_dir:geodesica",
+      "distancia": "base_dir",
+      "tipo": "geodesica",
+      "referencia_mm": 132.11,
+      "medido_mm": 132.05,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:euclidiana",
+      "distancia": "base_esq",
+      "tipo": "euclidiana",
+      "referencia_mm": 95.49,
+      "medido_mm": 95.42,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "base_esq:geodesica",
+      "distancia": "base_esq",
+      "tipo": "geodesica",
+      "referencia_mm": 132.11,
+      "medido_mm": 131.9,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:euclidiana",
+      "distancia": "intermamilar",
+      "tipo": "euclidiana",
+      "referencia_mm": 158.03,
+      "medido_mm": 158.07,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    },
+    {
+      "medida": "intermamilar:geodesica",
+      "distancia": "intermamilar",
+      "tipo": "geodesica",
+      "referencia_mm": 177.67,
+      "medido_mm": 177.78,
+      "torso": "t03_pequeno_ptose",
+      "operador": "simulado_2"
+    }
+  ],
+  "duracao_s": 88
+}
