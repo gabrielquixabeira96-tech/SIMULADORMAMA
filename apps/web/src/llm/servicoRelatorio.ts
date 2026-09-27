@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import type { Desenho, Medidas, MedidasDigitadas } from "@simulador/contratos";
 import type pg from "pg";
 import { buscarImplante } from "@/catalogo/catalogo";
+import { demoAtiva } from "@/config/demo";
 import { isoComFuso, raizRepo, usuarioAtual, versaoSoftware } from "@/config/ambiente";
 import { AVISO_FIXO } from "@/config/aviso";
 import { carregarConfigSimulacaoUI, carregarTepidConfig } from "@/config/arquivosConfig";
@@ -139,7 +140,7 @@ export async function gerarRelatorioDoPedido(p: PedidoRelatorio, desenho: Desenh
   const sim = carregarConfigSimulacaoUI();
   const tepid = carregarTepidConfig();
 
-  const relatorio = await gerarRelatorio(
+  const gerado = await gerarRelatorio(
     {
       relatorioId: randomUUID(),
       atendimentoId: atendimento.id,
@@ -158,6 +159,8 @@ export async function gerarRelatorioDoPedido(p: PedidoRelatorio, desenho: Desenh
     },
     provedor,
   );
+  // modo demonstração sintética (ADR 0018): marcado no payload (resposta, banco e PDF)
+  const relatorio: RelatorioFinal = demoAtiva() ? { ...gerado, demo: true } : gerado;
 
   await transacao(async (c) => {
     await inserirRelatorio(relatorio, c);

@@ -8,6 +8,9 @@
  *  - fluxo com torso sintético: paciente → importar t01 → landmarks do gabarito → medidas B
  *    (geodésica e volume pelo serviço) → relatório (mock).
  */
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { importarTorso, lerGabarito, medirNoServico, novoAtendimento } from "./apoio";
 
@@ -17,6 +20,23 @@ const FAIXA = "DEMONSTRAÇÃO — dados sintéticos, não é previsão clínica"
 const TORSO = "t01_simetrico_300";
 
 test.use({ viewport: { width: 1920, height: 1080 } });
+
+/** Texto do PDF por página (pdfjs-dist, só em teste). */
+async function textoPorPagina(bytes: Uint8Array): Promise<string[]> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const req = createRequire(import.meta.url);
+  const standardFontDataUrl = `${resolve(dirname(req.resolve("pdfjs-dist/package.json")), "standard_fonts")}/`;
+  const tarefa = pdfjs.getDocument({ data: new Uint8Array(bytes), useSystemFonts: false, disableFontFace: true, standardFontDataUrl });
+  const doc = await tarefa.promise;
+  const paginas: string[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const partes: string[] = [];
+    for (const it of (await (await doc.getPage(i)).getTextContent()).items) if ("str" in it) partes.push(it.str);
+    paginas.push(partes.join(" ").replace(/\s+/g, " "));
+  }
+  await tarefa.destroy();
+  return paginas;
+}
 
 test("faixa DEMONSTRAÇÃO visível em todas as páginas", async ({ page }) => {
   for (const [caminho, status] of [["/", 200], ["/benchmark", 200], ["/validacao/bland-altman", 200], ["/nao-existe", 404]] as const) {
@@ -83,7 +103,28 @@ test("fluxo com torso sintético: importar t01 → landmarks do gabarito → med
     expect(Math.abs(med.distancias[id].geodesica_mm - gab.distancias[id]!.geodesica_mm), id).toBeLessThanOrEqual(1);
   }
   await expect(page.getByTestId("volume-dir")).toContainText("±");
+  const respRel = page.waitForResponse((r) => r.url().endsWith("/api/relatorio") && r.request().method() === "POST");
   await page.getByTestId("relatorio-gerar").click();
+  expect((await (await respRel).json()).relatorio.demo).toBe(true);
   await expect(page.getByTestId("relatorio-conteudo")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("faixa-demo")).toBeInViewport();
+
+  // PDF baixado: faixa DEMONSTRAÇÃO na tarja e no rodapé de TODAS as páginas (texto extraído)
+  await page.getByTestId("relatorio-pdf-gerar").click();
+  await expect(page.getByTestId("relatorio-pdf-baixar")).toBeVisible({ timeout: 60_000 });
+  const [download] = await Promise.all([page.waitForEvent("download"), page.getByTestId("relatorio-pdf-baixar").click()]);
+  const paginas = await textoPorPagina(new Uint8Array(readFileSync((await download.path())!)));
+  expect(paginas.length).toBeGreaterThanOrEqual(1);
+  paginas.forEach((t, i) => expect(t.split(FAIXA).length - 1, `página ${i + 1}`).toBeGreaterThanOrEqual(i === 0 ? 3 : 2));
+});
+
+test("sessão de Bland-Altman na demo: marcada demo e sem observação livre", async ({ request, baseURL }) => {
+  const s = await (await request.post("/api/validacao/sessoes", { headers: { Origin: baseURL! }, data: { operador: "OP-DEMO", torsos: [TORSO] } })).json();
+  const enc = await request.post(`/api/validacao/sessoes/${s.id}/encerrar`, { headers: { Origin: baseURL! }, data: { observacoes: "Fulana de Tal" } });
+  expect(enc.status()).toBe(403);
+  expect((await enc.json()).erro.codigo).toBe("desligado_na_demo");
+  expect((await request.post(`/api/validacao/sessoes/${s.id}/cancelar`, { headers: { Origin: baseURL! }, data: {} })).status()).toBe(200);
+  const pl = await (await request.get("/api/validacao/planilha?formato=json")).json();
+  expect(pl.demo).toBe(true);
+  expect(pl.linhas.every((l: { fonte: string }) => l.fonte.startsWith("demo:"))).toBe(true);
 });

@@ -2,6 +2,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { z } from "zod";
 import { raizRepo } from "@/config/ambiente";
+import { TEXTO_FAIXA_DEMO } from "@/config/aviso";
 import { blandAltman, type ResultadoBlandAltman } from "./estatistica";
 import { ehNimf, listarSessoes, type ResultadoSessao } from "./sessao";
 
@@ -60,7 +61,13 @@ export interface Planilha {
   linhas: Linha[];
   resumo: GrupoResumo[];
   notas: string[];
+  /** Só em instância de demonstração sintética (ADR 0018): toda linha sai com fonte `demo:<fonte>`. */
+  demo?: true;
 }
+
+/** Prefixo da coluna `fonte` para linhas vindas de demonstração sintética (ADR 0018). */
+export const PREFIXO_FONTE_DEMO = "demo:";
+export const NOTA_DEMO = `${TEXTO_FAIXA_DEMO}. Planilha exportada de instância de demonstração (ADR 0018): linhas com fonte "demo:..." não valem como validação.`;
 
 const NOTAS = [
   "Desvio = medido − referência (mm). Referência = gabarito analítico do torso sintético (contratos §4.3).",
@@ -161,7 +168,7 @@ async function linhasDasSessoes(): Promise<{ linhas: Linha[]; resumo: GrupoResum
       linhas.push({
         versao_software: s.versao_software,
         data,
-        fonte: "sessao_bland_altman",
+        fonte: s.demo ? `${PREFIXO_FONTE_DEMO}sessao_bland_altman` : "sessao_bland_altman",
         registro: `sessao:${s.id}`,
         commit: null,
         desenho: s.desenho,
@@ -179,15 +186,15 @@ async function linhasDasSessoes(): Promise<{ linhas: Linha[]; resumo: GrupoResum
         observacoes: obs,
       });
     }
-    resumo.push({ fonte: "sessao_bland_altman", registro: `sessao:${s.id}`, versao_software: s.versao_software, data, operador: s.operador, tipo_operador: s.tipo_operador, geral: r.geral, n_imf: r.n_imf, sem_n_imf: r.sem_n_imf });
+    resumo.push({ fonte: s.demo ? `${PREFIXO_FONTE_DEMO}sessao_bland_altman` : "sessao_bland_altman", registro: `sessao:${s.id}`, versao_software: s.versao_software, data, operador: s.operador, tipo_operador: s.tipo_operador, geral: r.geral, n_imf: r.n_imf, sem_n_imf: r.sem_n_imf });
   }
   return { linhas, resumo };
 }
 
-export async function montarPlanilha(opcoes: { versaoSoftware: string; geradaEm: string; dirValidacao?: string }): Promise<Planilha> {
+export async function montarPlanilha(opcoes: { versaoSoftware: string; geradaEm: string; dirValidacao?: string; demo?: boolean }): Promise<Planilha> {
   const reg = await linhasDosRegistros(opcoes.dirValidacao ?? resolve(/*turbopackIgnore: true*/ raizRepo(), "docs/validacao"));
   const ses = await linhasDasSessoes();
-  return {
+  const p: Planilha = {
     esquema: ESQUEMA_PLANILHA,
     gerada_em: opcoes.geradaEm,
     versao_software: opcoes.versaoSoftware,
@@ -195,6 +202,16 @@ export async function montarPlanilha(opcoes: { versaoSoftware: string; geradaEm:
     linhas: [...reg.linhas, ...ses.linhas],
     resumo: [...reg.resumo, ...ses.resumo],
     notas: NOTAS,
+  };
+  if (!opcoes.demo) return p;
+  // instância de demonstração (ADR 0018): toda linha e todo grupo marcados, mais a nota
+  const marcar = (f: string | number | null) => (typeof f === "string" && !f.startsWith(PREFIXO_FONTE_DEMO) ? `${PREFIXO_FONTE_DEMO}${f}` : f);
+  return {
+    ...p,
+    linhas: p.linhas.map((l) => ({ ...l, fonte: marcar(l.fonte) })),
+    resumo: p.resumo.map((g) => ({ ...g, fonte: String(marcar(g.fonte)) })),
+    notas: [NOTA_DEMO, ...p.notas],
+    demo: true,
   };
 }
 

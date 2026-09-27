@@ -11,6 +11,7 @@ import { GET as getSimulacoes, POST as postSimulacao } from "@/app/api/malhas/[i
 import { POST as postMalha } from "@/app/api/malhas/route";
 import { POST as postPaciente } from "@/app/api/pacientes/route";
 import { caminhoEmDataDir } from "@/config/ambiente";
+import { carregarConfigSimulacaoUI } from "@/config/arquivosConfig";
 import { consultar, fecharPools } from "@/db/pool";
 import { contarAuditoria, dbDisponivel } from "../helpers/banco";
 import { chamadas, iniciarMockMesh, pararMockMesh, resetarMockMesh } from "../helpers/meshMock";
@@ -26,6 +27,7 @@ afterAll(async () => {
 });
 
 const IMPLANTE = "motiva-rsd-300";
+const VERSAO_CONFIG = carregarConfigSimulacaoUI().versao;
 const json = (corpo: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 const lm = (x: number, y: number, z: number, v: number) => ({ posicao: [x, y, z], vertice: v, origem: "gabarito" });
@@ -113,7 +115,7 @@ describe.skipIf(!dbDisponivel())("morphs e simulações mostradas", () => {
     vi.stubEnv("DESENHO", "B");
     const id = await novaMalha();
     const previsto = { delta_projecao_mamilo_mm: { dir: 29.1, esq: 29.1 }, delta_y_sulco_mm: { dir: 0, esq: 0 }, delta_y_mamilo_mm: { dir: 3.4, esq: 3.4 } };
-    const r = await postSimulacao(new Request("http://x", json({ implante_id: IMPLANTE, plano: "dual_plane", imf: "rebaixar", lado: "ambos", versao_config_simulacao: "1.1", nao_calibrado: true, previsto })), params(id));
+    const r = await postSimulacao(new Request("http://x", json({ implante_id: IMPLANTE, plano: "dual_plane", imf: "rebaixar", lado: "ambos", versao_config_simulacao: VERSAO_CONFIG, nao_calibrado: true, previsto })), params(id));
     expect(r.status).toBe(201);
     const { id: simId } = await r.json();
     expect(await contarAuditoria("simulacoes", simId, "simulou")).toBe(1);
@@ -125,7 +127,7 @@ describe.skipIf(!dbDisponivel())("morphs e simulações mostradas", () => {
     vi.stubEnv("DESENHO", "A");
     const a = await (await getSimulacoes(new Request("http://x"), params(id))).json();
     expect(a.simulacoes[0].previsto).toBeNull();
-    const ruim = await postSimulacao(new Request("http://x", json({ implante_id: IMPLANTE, plano: "submuscular", imf: "manter", lado: "ambos", versao_config_simulacao: "1.1", nao_calibrado: true })), params(id));
+    const ruim = await postSimulacao(new Request("http://x", json({ implante_id: IMPLANTE, plano: "submuscular", imf: "manter", lado: "ambos", versao_config_simulacao: VERSAO_CONFIG, nao_calibrado: true })), params(id));
     expect(ruim.status).toBe(400);
   });
 });
@@ -180,10 +182,27 @@ describe.skipIf(!dbDisponivel())("DESENHO=A: `previsto` nunca sai nem é gravado
     expect(texto).not.toContain("delta_y_mamilo_mm");
   });
 
+  it("versao_config_simulacao: nunca texto livre (regex) e sempre a do servidor; o gravado é a do config", async () => {
+    vi.stubEnv("DESENHO", "B");
+    const id = await novaMalha();
+    const corpo = { implante_id: IMPLANTE, plano: "subglandular", imf: "manter", lado: "ambos", nao_calibrado: true };
+    for (const livre of ["Fulana de Tal CPF 123.456.789-09", "1.2 ", "", "x".repeat(33), "1.2\nobs"]) {
+      const r = await postSimulacao(new Request("http://x", json({ ...corpo, versao_config_simulacao: livre })), params(id));
+      expect(r.status, JSON.stringify(livre)).toBe(400);
+    }
+    const outra = await postSimulacao(new Request("http://x", json({ ...corpo, versao_config_simulacao: "9.9" })), params(id));
+    expect(outra.status).toBe(409);
+    expect((await outra.json()).erro.codigo).toBe("versao_config_divergente");
+    expect((await consultar("select 1 from simulacoes where malha_id = $1", [id])).rowCount).toBe(0);
+    expect((await postSimulacao(new Request("http://x", json({ ...corpo, versao_config_simulacao: VERSAO_CONFIG })), params(id))).status).toBe(201);
+    const gravada = await consultar<{ versao_config_simulacao: string }>("select versao_config_simulacao from simulacoes where malha_id = $1", [id]);
+    expect(gravada.rows.map((r) => r.versao_config_simulacao)).toEqual([VERSAO_CONFIG]);
+  });
+
   it("POST /simulacoes em A: previsto não nulo → 403 e nada gravado; previsto null → 201 com coluna null", async () => {
     vi.stubEnv("DESENHO", "A");
     const id = await novaMalha();
-    const corpo = { implante_id: IMPLANTE, plano: "subglandular", imf: "manter", lado: "ambos", versao_config_simulacao: "1.1", nao_calibrado: true };
+    const corpo = { implante_id: IMPLANTE, plano: "subglandular", imf: "manter", lado: "ambos", versao_config_simulacao: VERSAO_CONFIG, nao_calibrado: true };
     const r = await postSimulacao(new Request("http://x", json({ ...corpo, previsto: PREVISTO })), params(id));
     expect(r.status).toBe(403);
     expect(await r.json()).toMatchObject({ erro: { codigo: "desligado_no_desenho_a", detalhes: { recurso: "numeros_calculados_no_relatorio" } } });

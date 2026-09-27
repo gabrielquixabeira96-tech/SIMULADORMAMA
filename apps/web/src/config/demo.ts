@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { erro } from "@/api/respostas";
-import { CODIGO_DESLIGADO_NA_DEMO, modoDemoSintetica } from "@/seguranca/requisicao";
+import { modoDemoSintetica } from "@/seguranca/requisicao";
 import { caminhoEmDataDir } from "./ambiente";
 
 /**
@@ -35,9 +34,4 @@ export async function torsoGerado(nome: string): Promise<boolean> {
 /** No modo demo, só torsos gerados pelo services/mesh são utilizáveis; fora dele, todos (v0.1.2). */
 export async function torsoUtilizavel(nome: string, env: Readonly<Record<string, string | undefined>> = process.env): Promise<boolean> {
   return demoAtiva(env) ? torsoGerado(nome) : true;
-}
-
-/** 403 padronizado das rotas fechadas na demo (a mesma resposta do proxy; defesa em profundidade). */
-export function desligadoNaDemo() {
-  return erro(403, CODIGO_DESLIGADO_NA_DEMO, "desligado na demonstração sintética: só torsos sintéticos, sem upload de malha nem anamnese em texto livre");
 }

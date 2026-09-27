@@ -1,8 +1,8 @@
 import { uuidSchema } from "@simulador/contratos";
 import { z } from "zod";
-import { json, lerJson } from "@/api/respostas";
+import { desligadoNaDemo, json, lerJson } from "@/api/respostas";
 import { usuarioAtual } from "@/config/ambiente";
-import { demoAtiva, desligadoNaDemo } from "@/config/demo";
+import { demoAtiva } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { registrarAuditoria } from "@/db/auditoria";
 import { transacao } from "@/db/pool";

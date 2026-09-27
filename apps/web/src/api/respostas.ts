@@ -8,6 +8,7 @@ import { BancoIndisponivelError } from "@/db/pool";
 import { EscalaInvalidaError } from "@/medidas/geometria";
 import { ErroMesh } from "@/mesh/cliente";
 import { log } from "@/log/logger";
+import { CODIGO_DESLIGADO_NA_DEMO } from "@/seguranca/requisicao";
 
 const SEM_CACHE = { "Cache-Control": "private, no-store" };
 
@@ -17,6 +18,11 @@ export function json(corpo: unknown, status = 200): NextResponse {
 
 export function erro(status: number, codigo: string, mensagem?: string, detalhes?: Record<string, unknown>): NextResponse {
   return NextResponse.json({ erro: { codigo, ...(mensagem ? { mensagem } : {}), ...(detalhes ? { detalhes } : {}) } }, { status, headers: SEM_CACHE });
+}
+
+/** 403 das rotas fechadas no modo demo sintética (a mesma resposta do proxy; ADR 0018). */
+export function desligadoNaDemo(): NextResponse {
+  return erro(403, CODIGO_DESLIGADO_NA_DEMO, "desligado na demonstração sintética: só torsos sintéticos, sem upload de malha nem anamnese em texto livre");
 }
 
 /** 403 padronizado do ADR 0005. */

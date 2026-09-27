@@ -1,6 +1,6 @@
 import { modoRecorteSchema, unidadeOrigemSchema, uuidSchema } from "@simulador/contratos";
-import { erro, json, limitarCorpo, tratarErro } from "@/api/respostas";
-import { demoAtiva, desligadoNaDemo } from "@/config/demo";
+import { desligadoNaDemo, erro, json, limitarCorpo, tratarErro } from "@/api/respostas";
+import { demoAtiva } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { pacientePorId } from "@/db/repositorio";
 import { registrarMalha } from "@/malhas/registrar";

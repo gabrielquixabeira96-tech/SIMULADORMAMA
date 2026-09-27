@@ -29,7 +29,8 @@
  *    nenhum. Token, Host, Origin e Content-Type continuam valendo em todas as rotas.
  * 6. Proxy TLS (ADR 0018): `X-Forwarded-Proto`/`X-Forwarded-Host` só são levados em conta com
  *    `DEMO_SINTETICA=1` ou `APP_CONFIAR_PROXY_TLS=1`; no modo local padrão são ignorados. O host
- *    encaminhado também tem de estar permitido e passa a ser o host comparado com o `Origin`.
+ *    encaminhado também tem de estar permitido e passa a ser o host comparado com o `Origin`. Vale
+ *    o ÚLTIMO valor de cada cabeçalho (o acrescentado pelo proxy de borda).
  */
 
 export const COOKIE_TOKEN = "simulador_token";
@@ -119,9 +120,12 @@ export function modoBenchmarkNaRede(env: { BENCHMARK_HABILITADO?: string | undef
   return env.BENCHMARK_HABILITADO === "1" && hostsForaDoLoopback(env.APP_HOSTS_PERMITIDOS).length > 0;
 }
 
-/** Primeiro valor de um cabeçalho encaminhado (`a, b` → `a`), em minúsculas; vazio → null. */
-function primeiroValor(v: string | null): string | null {
-  const x = (v ?? "").split(",")[0]!.trim().toLowerCase();
+/**
+ * ÚLTIMO valor de um cabeçalho encaminhado (`a, b` → `b`), em minúsculas; vazio → null. O último é
+ * o que o proxy de borda (o mais próximo do Next) acrescentou; os anteriores podem vir do cliente.
+ */
+function ultimoValor(v: string | null): string | null {
+  const x = (v ?? "").split(",").pop()!.trim().toLowerCase();
   return x ? x : null;
 }
 
@@ -129,7 +133,7 @@ function primeiroValor(v: string | null): string | null {
  * Protocolo e host ORIGINAIS da requisição (o que o navegador vê), para o `Location` do
  * redirecionamento do `?token=` e o `Secure` do cookie. Sem confiança no proxy: o protocolo da URL
  * e o `Host` (comportamento da v0.1.2). Com confiança: `X-Forwarded-Proto` (só http/https) e
- * `X-Forwarded-Host`, quando presentes.
+ * `X-Forwarded-Host` (último valor da lista), quando presentes.
  */
 export function origemOriginal(a: {
   protocoloUrl: string;
@@ -140,9 +144,9 @@ export function origemOriginal(a: {
 }): { protocolo: "http:" | "https:"; host: string } {
   const doUrl = a.protocoloUrl === "https:" ? "https:" : "http:";
   if (!a.confiar) return { protocolo: doUrl, host: a.host };
-  const xfp = primeiroValor(a.xForwardedProto);
+  const xfp = ultimoValor(a.xForwardedProto);
   const protocolo = xfp === "https" ? "https:" : xfp === "http" ? "http:" : doUrl;
-  return { protocolo, host: primeiroValor(a.xForwardedHost) ?? a.host };
+  return { protocolo, host: ultimoValor(a.xForwardedHost) ?? a.host };
 }
 
 export function hostPermitido(host: string, extras: string | undefined): boolean {
@@ -174,7 +178,7 @@ export function avaliarRequisicao(r: EntradaRequisicao, parametroToken: string |
   // é ele que o navegador põe no Origin.
   let host = hostCabecalho;
   if (confiarProxyTls(r.env)) {
-    const encaminhado = primeiroValor(r.cabecalho("x-forwarded-host"));
+    const encaminhado = ultimoValor(r.cabecalho("x-forwarded-host"));
     if (encaminhado !== null) {
       if (!hostPermitido(encaminhado, r.env.APP_HOSTS_PERMITIDOS)) {
         return { ok: false, recusa: { status: 403, codigo: "host_nao_permitido", mensagem: "host encaminhado não permitido" } };

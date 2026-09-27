@@ -3,9 +3,11 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { DISTANCIA_IDS, LANDMARK_IDS, landmarksSchema, type Desenho, type DistanciaId, type Landmarks } from "@simulador/contratos";
 import { z } from "zod";
 import { caminhoEmDataDir, isoComFuso, versaoSoftware } from "@/config/ambiente";
+import { demoAtiva } from "@/config/demo";
 import { log } from "@/log/logger";
 import { distanciasEuclidianas } from "@/medidas/geometria";
 import { ClienteMesh } from "@/mesh/cliente";
+import { CODIGO_DESLIGADO_NA_DEMO } from "@/seguranca/requisicao";
 import { blandAltman, embaralhar, prng, repetibilidade, arred4, type ResultadoBlandAltman, type Repetibilidade } from "./estatistica";
 import { garantirScan, lerGabarito, sha256Gabarito, sha256TorsoObj, torsosElegiveis } from "./scans";
 
@@ -80,12 +82,14 @@ export const sessaoSchema = z.object({
   itens: z.array(itemSchema),
   observacoes: z.string().nullable(),
   resultado: z.unknown().nullable(),
+  /** Sessão feita numa instância de demonstração sintética (ADR 0018); ausente fora dela. */
+  demo: z.literal(true).optional(),
 });
 export type Sessao = z.infer<typeof sessaoSchema>;
 
 export class ErroSessao extends Error {
   constructor(
-    readonly status: 400 | 404 | 409 | 422,
+    readonly status: 400 | 403 | 404 | 409 | 422,
     readonly codigo: string,
     mensagem: string,
   ) {
@@ -255,6 +259,7 @@ export async function criarSessao(entrada: unknown, desenho: Desenho): Promise<S
     itens,
     observacoes: null,
     resultado: null,
+    ...(demoAtiva() ? { demo: true as const } : {}),
   };
   await gravarSessao(s);
   return s;
@@ -466,6 +471,8 @@ export function encerrarSessao(id: string, entrada: unknown): Promise<Sessao> {
     const s = await lerSessao(id);
     exigirAberta(s);
     const { observacoes } = z.strictObject({ observacoes: observacaoSchema.optional() }).parse(entrada ?? {});
+    // modo demo (ADR 0018): nenhum texto livre é gravado, nem a observação do operador
+    if (demoAtiva() && observacoes) throw new ErroSessao(403, CODIGO_DESLIGADO_NA_DEMO, "observação livre desligada na demonstração sintética");
     const faltam = s.itens.filter((i) => i.registrado_em === null).length;
     if (faltam) throw new ErroSessao(409, "sessao_incompleta", `faltam ${faltam} item(ns) para encerrar`);
     const gabaritos: Record<string, Awaited<ReturnType<typeof lerGabarito>>> = {};

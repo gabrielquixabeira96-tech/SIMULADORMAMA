@@ -142,6 +142,27 @@ describe.skipIf(!dbDisponivel())("relatório + PDF pelas rotas", () => {
     expect(JSON.stringify(aud)).not.toMatch(/\/tmp|\/home|DATA_DIR/);
   });
 
+  it("demo (ADR 0018): relatório com demo: true (resposta e banco) e PDF com a faixa em todas as páginas; fora da demo, sem o campo", async () => {
+    vi.stubEnv("DESENHO", "B");
+    const c = await cenario("B");
+    const { relatorio: normal } = await (await postRelatorio(post({ paciente_id: c.paciente.id, malha_id: c.malhaId }))).json();
+    expect(normal).not.toHaveProperty("demo");
+    vi.stubEnv("DEMO_SINTETICA", "1");
+    const r = await postRelatorio(post({ paciente_id: c.paciente.id, malha_id: c.malhaId }));
+    expect(r.status).toBe(201);
+    const { relatorio } = await r.json();
+    expect(relatorio.demo).toBe(true);
+    const gravado = await consultar<{ payload: { demo?: boolean } }>("select payload from relatorios where id = $1", [relatorio.relatorio_id]);
+    expect(gravado.rows[0]!.payload.demo).toBe(true);
+    // PDF gerado FORA da demo a partir do relatório da demo continua com a faixa (vem do payload)
+    vi.stubEnv("DEMO_SINTETICA", "");
+    const pdf = await postPdf(post({ atendimento_id: relatorio.atendimento_id, relatorio_id: relatorio.relatorio_id }));
+    expect(pdf.status).toBe(201);
+    const baixado = await getPdf(new Request(`http://x/api/pdf/${relatorio.atendimento_id}?download=1`), { params: Promise.resolve({ atendimentoId: relatorio.atendimento_id }) });
+    const { porPagina } = await extrairTextoPdf(new Uint8Array(await baixado.arrayBuffer()));
+    for (const t of porPagina) expect(t.replace(/\s+/g, " ")).toContain("DEMONSTRAÇÃO — dados sintéticos, não é previsão clínica");
+  });
+
   it("A: relatório e PDF sem nenhum número calculado, mesmo com medida antiga que os tinha", async () => {
     vi.stubEnv("DESENHO", "A");
     const c = await cenario("B");

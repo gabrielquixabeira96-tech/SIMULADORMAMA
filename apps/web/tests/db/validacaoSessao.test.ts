@@ -78,6 +78,8 @@ function criarTorsos() {
     mkdirSync(d, { recursive: true });
     writeFileSync(join(d, "torso.obj"), OBJ);
     writeFileSync(join(d, "gabarito.json"), JSON.stringify(gabarito(t)));
+    // como os do gerador (mesh.cli torso): elegíveis também no modo demo (ADR 0018)
+    writeFileSync(join(d, "parametros.json"), JSON.stringify({ esquema: "torso_parametros/1.0", nome: t }));
   }
 }
 
@@ -259,6 +261,30 @@ describe.skipIf(!dbDisponivel())("sessão de Bland-Altman (rotas + banco + mock 
     // a planilha não inclui sessão cancelada
     const csv = await (await getPlanilha(get("http://x/api/validacao/planilha"))).text();
     expect(csv).not.toContain(`sessao:${s.id}`);
+  });
+
+  it("demo (ADR 0018): sessão marcada demo, observação livre recusada (403) e planilha com fonte demo", async () => {
+    vi.stubEnv("DEMO_SINTETICA", "1");
+    const s = await (await postSessao(post({ operador: "OP-09", torsos: ["tx_gama"] }))).json();
+    expect(JSON.parse(readFileSync(caminhoEmDataDir(`validacao/sessoes/${s.id}.json`), "utf8")).demo).toBe(true);
+    const r = await postEncerrar(post({ observacoes: "Fulana de Tal" }), p({ id: s.id }));
+    expect(r.status).toBe(403);
+    expect((await r.json()).erro.codigo).toBe("desligado_na_demo");
+    expect((await postCancelar(post({}), p({ id: s.id }))).status).toBe(200);
+    const js = await (await getPlanilha(get("http://x/api/validacao/planilha?formato=json"))).json();
+    expect(js.demo).toBe(true);
+    expect(js.notas[0]).toContain("DEMONSTRAÇÃO");
+    expect(js.linhas.length).toBeGreaterThan(0);
+    expect(js.linhas.every((l: any) => String(l.fonte).startsWith("demo:"))).toBe(true);
+    expect(js.resumo.every((g: any) => g.fonte.startsWith("demo:"))).toBe(true);
+    const csv = await getPlanilha(get("http://x/api/validacao/planilha"));
+    expect(csv.headers.get("content-disposition")).toContain("planilha-art5-DEMO-");
+    expect(await csv.text()).toContain("demo:");
+    // fora da demo: sem marca nas linhas que não vieram de sessão demo
+    vi.stubEnv("DEMO_SINTETICA", "");
+    const fora = await (await getPlanilha(get("http://x/api/validacao/planilha?formato=json"))).json();
+    expect(fora).not.toHaveProperty("demo");
+    expect(fora.linhas.some((l: any) => String(l.fonte).startsWith("demo:"))).toBe(false);
   });
 
   it("N1: arquivo de sessão inválido → fail closed (todos os gabaritos bloqueados, planilha 409) até ser removido", async () => {

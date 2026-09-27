@@ -99,11 +99,25 @@ describe("proxy TLS: redirecionamento do ?token= e cookie", () => {
     expect(c).toMatch(/SameSite=strict/i);
   });
 
-  it("demo com Host público e só X-Forwarded-Proto (lista 'https, http'): Location https://<Host>", () => {
+  it("demo com Host público e só X-Forwarded-Proto: vale o ÚLTIMO valor da lista (o do proxy de borda)", () => {
     demo();
-    const r = proxy(req(`/benchmark?token=${TOKEN}`, { headers: { host: PUBLICO, "x-forwarded-proto": "https, http" } }));
+    const r = proxy(req(`/benchmark?token=${TOKEN}`, { headers: { host: PUBLICO, "x-forwarded-proto": "http, https" } }));
     expect(r.headers.get("location")).toBe(`https://${PUBLICO}/benchmark`);
     expect(r.headers.get("set-cookie")).toMatch(/Secure/i);
+    // o cliente forja "https" na frente, o proxy acrescenta "http": vale o do proxy
+    const r2 = proxy(req(`/?token=${TOKEN}`, { headers: { host: PUBLICO, "x-forwarded-proto": "https, http" } }));
+    expect(r2.headers.get("location")).toBe(`http://${PUBLICO}/`);
+    expect(r2.headers.get("set-cookie")).not.toMatch(/Secure/i);
+  });
+
+  it("X-Forwarded-Host: valor forjado pelo cliente na frente da lista é ignorado; vale o último", async () => {
+    demo();
+    const forjadoNaFrente = proxy(req(`/?token=${TOKEN}`, { headers: { host: "localhost:3000", "x-forwarded-proto": "https", "x-forwarded-host": `evil.example, ${PUBLICO}` } }));
+    expect(forjadoNaFrente.status).toBe(303);
+    expect(forjadoNaFrente.headers.get("location")).toBe(`https://${PUBLICO}/`);
+    const ultimoRuim = proxy(req("/", { headers: { host: "localhost:3000", "x-forwarded-host": `${PUBLICO}, evil.example`, ...auth } }));
+    expect(ultimoRuim.status).toBe(403);
+    expect(await codigo(ultimoRuim)).toBe("host_nao_permitido");
   });
 
   it("demo sem cabeçalhos de proxy (http direto): comportamento da v0.1.2 (http://, sem Secure)", () => {
@@ -144,7 +158,7 @@ describe("proxy TLS: redirecionamento do ?token= e cookie", () => {
 
   it("origemOriginal: sem confiança ignora os cabeçalhos", () => {
     expect(origemOriginal({ protocoloUrl: "http:", host: "127.0.0.1:3000", xForwardedProto: "https", xForwardedHost: "evil.example", confiar: false })).toEqual({ protocolo: "http:", host: "127.0.0.1:3000" });
-    expect(origemOriginal({ protocoloUrl: "http:", host: "127.0.0.1:3000", xForwardedProto: "HTTPS", xForwardedHost: "Pub.Example, x", confiar: true })).toEqual({ protocolo: "https:", host: "pub.example" });
+    expect(origemOriginal({ protocoloUrl: "http:", host: "127.0.0.1:3000", xForwardedProto: "HTTPS", xForwardedHost: "x, Pub.Example", confiar: true })).toEqual({ protocolo: "https:", host: "pub.example" });
   });
 });
 
@@ -204,6 +218,16 @@ describe("subida no modo demo: ambiente", () => {
     expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: "curto" })).toThrow(/mínimo 32/);
     expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: undefined })).toThrow(/APP_TOKEN_LOCAL/);
     expect(() => verificarAmbienteDemo({ ...ok, DATABASE_URL: "" })).toThrow(/DATABASE_URL obrigatório/);
+  });
+
+  it("token da demo: exatamente 64 hex minúsculos, comparado CRU (sem trim), como no proxy", () => {
+    expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: TOKEN.toUpperCase() })).toThrow(/64 caracteres hexadecimais/);
+    expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: `${TOKEN} ` })).toThrow(/64 caracteres hexadecimais/);
+    expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: TOKEN.slice(0, 48) })).toThrow(/64 caracteres hexadecimais/);
+    expect(() => verificarAmbienteDemo({ ...ok, APP_TOKEN_LOCAL: "Zq8#vL2@pX9!mK4$wR7&tN1*bH6%cJ3^yF5(dG0)sA" })).toThrow(/64 caracteres hexadecimais/); // forte, mas fora do formato
+    // o proxy compara o valor cru: com espaço no ambiente, o token "limpo" não autentica
+    vi.stubEnv("APP_TOKEN_LOCAL", `${TOKEN} `);
+    expect(proxy(req("/api/config", { headers: auth })).status).toBe(401);
   });
 
   it("DEMO_SINTETICA só aceita 1, 0 ou vazio; fora do modo nada é exigido", () => {

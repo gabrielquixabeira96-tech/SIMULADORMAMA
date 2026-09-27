@@ -40,7 +40,8 @@ const TOKEN_MIN_BITS_EMPIRICOS = 96;
  * (o que o scripts/demo_sandbox.sh usa) passa com folga.
  */
 export function motivoTokenFraco(token: string): string | null {
-  const t = token.trim();
+  // valor CRU, sem trim: o proxy compara exatamente o que está no ambiente
+  const t = token;
   if (t.length < TOKEN_MIN_CARACTERES) return `APP_TOKEN_LOCAL com ${t.length} caracteres (mínimo ${TOKEN_MIN_CARACTERES}; use openssl rand -hex 32)`;
   if (/token|senha|segredo|secret|password|changeme|exemplo|example|troque|xxxx/i.test(t)) return "APP_TOKEN_LOCAL parece valor de exemplo";
   const freq = new Map<string, number>();
@@ -65,7 +66,7 @@ export function motivoTokenFraco(token: string): string | null {
  * Checagens de AMBIENTE do modo demo (síncronas). `DEMO_SINTETICA` só aceita "1" (ligado), "0" ou
  * vazio (desligado): um valor como "true" recusaria em silêncio a intenção do operador. Com a
  * demo ligada: LLM travado em mock (sem `ANTHROPIC_API_KEY`, `LLM_MODO=mock` explícito), token
- * forte e `DATABASE_URL` definido (banco próprio da demo).
+ * forte no formato `^[0-9a-f]{64}$` (valor cru, sem trim) e `DATABASE_URL` definido (banco próprio da demo).
  */
 export function verificarAmbienteDemo(env: Readonly<Record<string, string | undefined>>): void {
   const v = env.DEMO_SINTETICA ?? "";
@@ -74,8 +75,11 @@ export function verificarAmbienteDemo(env: Readonly<Record<string, string | unde
   const base = "DEMO_SINTETICA=1 (ADR 0018)";
   if ((env.ANTHROPIC_API_KEY ?? "").trim() !== "") throw new Error(`${base}: ANTHROPIC_API_KEY tem de ficar vazia (LLM só em mock; nenhum dado sai do Brasil)`);
   if ((env.LLM_MODO ?? "").trim().toLowerCase() !== "mock") throw new Error(`${base}: LLM_MODO=mock obrigatório (recebido '${env.LLM_MODO ?? ""}')`);
-  const fraco = motivoTokenFraco(env.APP_TOKEN_LOCAL ?? "");
+  const token = env.APP_TOKEN_LOCAL ?? "";
+  const fraco = motivoTokenFraco(token);
   if (fraco) throw new Error(`${base}: ${fraco}`);
+  // formato exato do scripts/demo_sandbox.sh (openssl rand -hex 32), comparado CRU (sem trim), como no proxy
+  if (!/^[0-9a-f]{64}$/.test(token)) throw new Error(`${base}: APP_TOKEN_LOCAL tem de ter exatamente 64 caracteres hexadecimais minúsculos (openssl rand -hex 32)`);
   if ((env.DATABASE_URL ?? "").trim() === "") throw new Error(`${base}: DATABASE_URL obrigatório (banco próprio da demo, criado por scripts/demo_sandbox.sh)`);
 }
 
@@ -133,6 +137,7 @@ export async function validarAmbienteNaSubida(): Promise<void> {
     );
     if (modoDemoSintetica({ DEMO_SINTETICA: process.env.DEMO_SINTETICA })) {
       await verificarDadosDemo(async (sql) => (await consultar(sql)).rows, dataDir());
+      if (process.env.APP_BUILD_DEMO !== "1") log.warn("build_nao_e_da_demo", { nota: "build sem DEMO_SINTETICA=1: teto de corpo do proxy continua 520 MB (upload fechado mesmo assim); use scripts/demo_sandbox.sh preparar" });
       log.warn("modo_demo_sintetica", { hosts: hostsForaDoLoopback(process.env.APP_HOSTS_PERMITIDOS).length, nota: "upload e anamnese fechados; LLM em mock; só torsos sintéticos (ADR 0018)" });
     }
     if (!process.env.APP_TOKEN_LOCAL) log.warn("token_local_desligado", { motivo: "APP_TOKEN_LOCAL ausente (só aceito em next dev)" });

@@ -112,7 +112,7 @@ function Resultado({ sessao }: { sessao: VistaSessao }) {
   );
 }
 
-export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | null }) {
+export function SessaoBlandAltman({ sessaoInicial, demo = false }: { sessaoInicial: string | null; demo?: boolean }) {
   const [sessao, setSessao] = useState<VistaSessao | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: "info" | "erro"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -394,10 +394,12 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
             {proximo === null && (
               <section className="painel">
                 <h3>Encerrar</h3>
-                <label className="linha-form">
-                  Observações (opcional; sem nome, CRM, e-mail ou qualquer dado de paciente ou do operador)
-                  <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} maxLength={500} data-testid="observacoes" />
-                </label>
+                {!demo && (
+                  <label className="linha-form">
+                    Observações (opcional; sem nome, CRM, e-mail ou qualquer dado de paciente ou do operador)
+                    <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} maxLength={500} data-testid="observacoes" />
+                  </label>
+                )}
                 <button type="button" onClick={encerrar} disabled={ocupado} data-testid="encerrar-sessao">
                   Encerrar sessão e revelar o gabarito
                 </button>

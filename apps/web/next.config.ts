@@ -12,6 +12,9 @@ loadEnvConfig(raizRepo);
 
 const versao = readFileSync(resolve(raizRepo, "VERSION"), "utf8").trim();
 const dev = process.env.NODE_ENV !== "production";
+// Build da demonstração sintética (ADR 0018; scripts/demo_sandbox.sh builda com DEMO_SINTETICA=1):
+// sem upload de malha, o maior corpo é JSON de landmarks/medidas (poucos KB) -> teto de 2 MB.
+const buildDemo = process.env.DEMO_SINTETICA === "1";
 
 /**
  * CSP (revisão v0.1.1). Tudo servido pelo próprio app; nenhum CDN. `'unsafe-inline'` em script-src
@@ -73,10 +76,13 @@ const config: NextConfig = {
     // Com o proxy (src/proxy.ts) o Next bufferiza o corpo e TRUNCA em silêncio acima deste limite
     // (padrão 10 MB): precisa cobrir o upload de malhas (500 MB, ADR 0003) + margem do multipart.
     // O limite real é aplicado pela rota (stream contado; 413).
-    proxyClientMaxBodySize: "520mb",
+    // No build da demo (sem upload), 2 MB.
+    proxyClientMaxBodySize: buildDemo ? "2mb" : "520mb",
   },
   env: {
     APP_VERSION: versao,
+    // a subida em modo demo avisa se o build não foi feito para a demo (teto de corpo de 520 MB)
+    APP_BUILD_DEMO: buildDemo ? "1" : "0",
   },
   async headers() {
     return [

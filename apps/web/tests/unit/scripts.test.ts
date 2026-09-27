@@ -185,4 +185,25 @@ describe("scripts/demo_sandbox.sh (ADR 0018): guardas que não sobem nada", () =
     expect(url.stderr).toMatch(/DEMO_HOST_PUBLICO invalido/);
     expect(readFileSync(join(d, "demo.env"), "utf8")).not.toMatch(/APP_TOKEN_LOCAL/); // nenhum token gerado antes das guardas
   });
+
+  it("valida DEMO_DESENHO (A|B) e portas numéricas antes de qualquer comando", () => {
+    const d = novoTmp("simulador-demo-");
+    const des = rodar(["status"], { DEMO_DIR: d, DEMO_DESENHO: "B; rm -rf /" });
+    expect(des.status).not.toBe(0);
+    expect(des.stderr).toMatch(/DEMO_DESENHO invalido/);
+    for (const [k, v] of [["DEMO_PORTA", "3000x"], ["DEMO_PG_PORTA", "0"], ["DEMO_MESH_PORTA", "70000"]]) {
+      const r = rodar(["status"], { DEMO_DIR: d, [k]: v });
+      expect(r.status, k).not.toBe(0);
+      expect(r.stderr, k).toMatch(/porta invalida/);
+    }
+  });
+
+  it("apagar recusa pasta sem o marcador gravado pelo script (nunca apaga DEMO_DIR errado)", () => {
+    const d = novoTmp("simulador-demo-");
+    writeFileSync(join(d, "importante.txt"), "nao apagar");
+    const r = rodar(["apagar"], { DEMO_DIR: d, DEMO_PG_DIR: join(d, "pg-inexistente") });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao tem o marcador/);
+    expect(readFileSync(join(d, "importante.txt"), "utf8")).toBe("nao apagar");
+  });
 });

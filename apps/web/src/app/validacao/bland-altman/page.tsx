@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { demoAtiva } from "@/config/demo";
 import { recursoAtivo } from "@/config/desenho";
 import { RECURSO_VALIDACAO } from "@/validacao/http";
 import { SessaoBlandAltman } from "@/validacao/SessaoBlandAltman";
@@ -32,7 +33,7 @@ export default async function PaginaBlandAltman({ searchParams }: { searchParams
           DATA_DIR/validacao/sessoes e na planilha do art. 5º da RDC 657.
         </p>
       </header>
-      <SessaoBlandAltman sessaoInicial={sessao} />
+      <SessaoBlandAltman sessaoInicial={sessao} demo={demoAtiva()} />
     </>
   );
 }

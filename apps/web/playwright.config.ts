@@ -51,7 +51,8 @@ const DATA_DIR_E2E = process.env.E2E_DATA_DIR;
 process.env.E2E_MESH_URL = MESH_URL;
 
 // Token local (ADR 0003 item 7): um por execução; os servidores exigem, o navegador manda em todo pedido.
-process.env.E2E_APP_TOKEN ??= randomBytes(24).toString("hex");
+// 64 hex: o formato exigido pelo servidor em modo demo (ADR 0018)
+process.env.E2E_APP_TOKEN ??= randomBytes(32).toString("hex");
 const TOKEN = process.env.E2E_APP_TOKEN;
 
 // Portas sobrescrevíveis (E2E_PORTA_A/B) para rodar worktrees em paralelo sem colisão.

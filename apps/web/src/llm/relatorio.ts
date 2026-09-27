@@ -62,6 +62,8 @@ export interface RelatorioFinal {
   llm: { modo: ModoLLM; modelo: string };
   secoes: SecaoRelatorio[];
   verificacao: VerificacaoNumeros;
+  /** Só no modo demonstração sintética (ADR 0018); ausente fora dele. O PDF põe a faixa DEMONSTRAÇÃO. */
+  demo?: true;
 }
 
 export class RelatorioInconsistenteError extends Error {

@@ -51,6 +51,13 @@ sudo_() { if [[ "$(id -u)" -eq 0 ]]; then "$@"; elif tem sudo; then sudo "$@"; e
 
 # Seguranca do estado: DEMO_DIR nunca dentro do repositorio (o .gitignore nao cobre tudo nele).
 case "$(realpath -m "$DEMO_DIR")/" in "$RAIZ"/*) erro "DEMO_DIR ($DEMO_DIR) nao pode ficar dentro do repositorio";; esac
+# Entradas validadas antes de irem para comandos, SQL ou o ambiente do servidor.
+[[ "$DESENHO_DEMO" =~ ^[AB]$ ]] || erro "DEMO_DESENHO invalido: '$DESENHO_DEMO' (A ou B)"
+for _p in "$PORTA" "$PG_PORTA" "$MESH_PORTA"; do
+  [[ "$_p" =~ ^[0-9]{1,5}$ && "$_p" -ge 1 && "$_p" -le 65535 ]] || erro "porta invalida: '$_p' (DEMO_PORTA, DEMO_PG_PORTA, DEMO_MESH_PORTA: 1-65535)"
+done
+# Marcador gravado pelo proprio script: 'apagar' so remove pastas que o tenham (nunca um DEMO_DIR errado).
+MARCADOR=".simulador-demo-sintetica"
 
 # ------------------------------------------------------------------ ferramentas
 pg_bin() {
@@ -104,6 +111,8 @@ PG_USER="$(id -un)"
 if [[ "$(id -u)" -eq 0 ]]; then PG_USER="${DEMO_PG_USER:-postgres}"; fi
 como_pg() { if [[ "$(id -u)" -eq 0 ]]; then runuser -u "$PG_USER" -- "$@"; else "$@"; fi; }
 psql_admin() { como_pg "$PGBIN/psql" -h "$PG_SOCK" -p "$PG_PORTA" -U postgres -d postgres -v ON_ERROR_STOP=1 -tAc "$1"; }
+# SQL pela entrada padrao (nao aparece no argv/ps): usado para comandos com a senha do role.
+psql_admin_stdin() { como_pg "$PGBIN/psql" -h "$PG_SOCK" -p "$PG_PORTA" -U postgres -d postgres -v ON_ERROR_STOP=1 -tA -f -; }
 pg_pronto() { [[ -n "${PGBIN:-}" ]] && "$PGBIN/pg_isready" -h 127.0.0.1 -p "$PG_PORTA" >/dev/null 2>&1; }
 
 pg_start() {
@@ -128,6 +137,7 @@ pg_cluster() {
     mkdir -p "$PG_DIR"
     [[ "$(id -u)" -eq 0 ]] && chown "$PG_USER" "$PG_DIR"
     como_pg mkdir -p "$PG_DADOS" "$PG_SOCK"
+    como_pg touch "$PG_DIR/$MARCADOR"
     como_pg chmod 700 "$PG_DADOS" "$PG_SOCK"
     como_pg test -w "$PG_DADOS" || erro "o usuario $PG_USER nao escreve em $PG_DADOS (como root, aponte DEMO_PG_DIR para um caminho acessivel a ele)"
     # socket local (pasta 0700 do dono do cluster): trust; TCP em 127.0.0.1: senha (scram)
@@ -155,11 +165,11 @@ banco() {
   else
     senha="$(openssl rand -hex 16)"
   fi
-  if [[ "$(psql_admin "select 1 from pg_roles where rolname='$DB_ROLE'")" != "1" ]]; then
-    psql_admin "create role $DB_ROLE login password '$senha'" >/dev/null
-  else
-    psql_admin "alter role $DB_ROLE password '$senha'" >/dev/null
-  fi
+  [[ "$senha" =~ ^[0-9a-f]{32}$ ]] || erro "senha do banco em $ENV_DEMO fora do formato esperado (use 'recriar-banco' ou 'apagar')"
+  local verbo="alter"
+  [[ "$(psql_admin "select 1 from pg_roles where rolname='$DB_ROLE'")" == "1" ]] || verbo="create"
+  # senha pela entrada padrao do psql, nunca no argv
+  printf "%s role %s login password '%s';\n" "$verbo" "$DB_ROLE" "$senha" | psql_admin_stdin >/dev/null
   if [[ "$(psql_admin "select 1 from pg_database where datname='$DB_NOME'")" != "1" ]]; then
     psql_admin "create database $DB_NOME owner $DB_ROLE encoding 'UTF8'" >/dev/null
     msg "banco $DB_NOME criado"
@@ -173,6 +183,7 @@ banco() {
 env_base() {
   mkdir -p "$DEMO_DIR" "$LOGS" "$RUN" "$DATA_DIR_DEMO"
   chmod 700 "$DEMO_DIR"
+  touch "$DEMO_DIR/$MARCADOR"
   [[ -f "$ENV_DEMO" ]] || { : > "$ENV_DEMO"; chmod 600 "$ENV_DEMO"; }
   escrever_var DEMO_SINTETICA 1
   escrever_var DESENHO "$DESENHO_DEMO"
@@ -214,8 +225,8 @@ cmd_preparar() {
       || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli morphs --sintetico "$DATA_DIR_DEMO/sinteticos/$t" --catalogo tests/fixtures/catalogo_teste.json >/dev/null )
   done
 
-  msg "next build (sem ganchos de teste)"
-  ( unset NEXT_PUBLIC_GANCHOS_TESTE; cd "$RAIZ/apps/web" && pnpm_ exec next build >"$LOGS/build.log" 2>&1 ) \
+  msg "next build da demo (DEMO_SINTETICA=1: teto de corpo 2 MB; sem ganchos de teste)"
+  ( unset NEXT_PUBLIC_GANCHOS_TESTE; export DEMO_SINTETICA=1; cd "$RAIZ/apps/web" && pnpm_ exec next build >"$LOGS/build.log" 2>&1 ) \
     || { tail -n 40 "$LOGS/build.log" >&2; erro "next build falhou (log em $LOGS/build.log)"; }
   msg "pronto. Agora: DEMO_HOST_PUBLICO=<host da porta $PORTA> bash scripts/demo_sandbox.sh subir"
 }
@@ -314,9 +325,15 @@ cmd_recriar_banco() {
 }
 
 cmd_apagar() {
+  # so apaga pastas criadas por este script (marcador); nunca um DEMO_DIR/DEMO_PG_DIR apontado por engano
+  local d
+  for d in "$DEMO_DIR" "$PG_DIR"; do
+    [[ ! -e "$d" || -f "$d/$MARCADOR" ]] || erro "$d existe mas nao tem o marcador $MARCADOR: nao apago (confira DEMO_DIR/DEMO_PG_DIR)"
+  done
   cmd_parar || true
-  if [[ -d "$DEMO_DIR" ]]; then rm -rf "$DEMO_DIR"; msg "$DEMO_DIR apagado"; fi
-  if [[ -d "$PG_DIR" ]]; then rm -rf "$PG_DIR"; msg "$PG_DIR apagado"; fi
+  for d in "$PG_DIR" "$DEMO_DIR"; do
+    if [[ -d "$d" ]]; then rm -rf -- "$d"; msg "$d apagado"; fi
+  done
 }
 
 case "${1:-}" in

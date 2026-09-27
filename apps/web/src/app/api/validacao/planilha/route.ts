@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { bloquearSeDesligado, erro, json } from "@/api/respostas";
 import { isoComFuso, versaoSoftware } from "@/config/ambiente";
+import { demoAtiva } from "@/config/demo";
 import { auditarSessao, erroValidacao, RECURSO_VALIDACAO } from "@/validacao/http";
 import { montarPlanilha, paraCsv } from "@/validacao/planilha";
 import { algumBloqueio, bloqueioGabarito } from "@/validacao/sessao";
@@ -30,10 +31,11 @@ export async function GET(req: Request) {
     }
     const agora = isoComFuso();
     const versao = versaoSoftware();
-    const p = await montarPlanilha({ versaoSoftware: versao, geradaEm: agora });
+    const demo = demoAtiva();
+    const p = await montarPlanilha({ versaoSoftware: versao, geradaEm: agora, demo });
     await auditarSessao("exportou", randomUUID(), { formato, n_linhas: p.linhas.length, n_grupos: p.resumo.length }, "validacao_planilha");
     if (formato === "json") return json(p);
-    const nome = `planilha-art5-v${versao}-${agora.slice(0, 10)}.csv`;
+    const nome = `planilha-art5${demo ? "-DEMO" : ""}-v${versao}-${agora.slice(0, 10)}.csv`;
     return new Response(paraCsv(p, { separador: sepParam === "virgula" ? "," : ";" }), {
       headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${nome}"`, "Cache-Control": "private, no-store" },
     });

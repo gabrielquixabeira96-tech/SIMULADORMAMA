@@ -12,6 +12,8 @@ import {
   type DistanciaId,
   type MalhaMeta,
 } from "@simulador/contratos";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
@@ -144,7 +146,7 @@ handlers.push(
       malha_id: r.data.malha_dir.split("/").pop(),
       sha256_malha_base: "d".repeat(64),
       versao_software: "0.0.1",
-      versao_config_simulacao: "1.1",
+      versao_config_simulacao: JSON.parse(readFileSync(resolve(__dirname, "../../../../config/simulacao.json"), "utf8")).versao as string,
       nao_calibrado: true,
       gerado_em: "2026-09-26T14:10:00-04:00",
       lados: r.data.lados,
