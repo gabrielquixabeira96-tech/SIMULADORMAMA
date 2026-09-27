@@ -80,31 +80,42 @@ describe("proxy com APP_TOKEN_LOCAL", () => {
     expect(passou(proxy(req("/api/config", { headers: { host: "localhost:3000", authorization: `Bearer ${TOKEN}` } })))).toBe(true);
   });
 
-  it("benchmark ligado + host fora do loopback: só /benchmark e /api/benchmark*; rotas de paciente → 403", async () => {
+  it("modo benchmark na rede (pela CONFIGURAÇÃO): só as rotas do benchmark, qualquer Host; resto → 403", async () => {
     vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
     vi.stubEnv("APP_HOSTS_PERMITIDOS", "192.168.0.10");
     vi.stubEnv("BENCHMARK_HABILITADO", "1");
-    const lan = (c: string, method = "GET") =>
-      proxy(req(c, { method, headers: { host: "192.168.0.10:3000", authorization: `Bearer ${TOKEN}`, ...(method === "POST" ? { "content-type": "application/json", origin: "http://192.168.0.10:3000" } : {}) } }));
-    for (const c of ["/benchmark", "/api/benchmark/arquivo?nome=x"]) expect(passou(lan(c))).toBe(true);
-    expect(passou(lan("/api/benchmark", "POST"))).toBe(true);
-    for (const c of ["/", "/api/pacientes", "/api/malhas/1/arquivo?nome=processada.glb", "/api/pdf", "/pacientes/P-ABC123", "/benchmarkx"]) {
-      const r = lan(c);
+    const com = (host: string, c: string, method = "GET") =>
+      proxy(req(c, { method, headers: { host, authorization: `Bearer ${TOKEN}`, ...(method === "POST" ? { "content-type": "application/json", origin: `http://${host}` } : {}) } }));
+    // achado da revisão: Host forjado de loopback numa instância exposta NÃO libera rotas de paciente
+    for (const host of ["192.168.0.10:3000", "localhost:3000", "127.0.0.1", "127.0.0.1:3000", "LOCALHOST", "LOCALHOST:3000", "[::1]", "[::1]:3000"]) {
+      const r = com(host, "/api/pacientes");
+      expect(r.status, host).toBe(403);
+      expect(await codigo(r)).toBe("rota_restrita_benchmark");
+      for (const c of ["/benchmark", "/api/benchmark/arquivo?nome=x"]) expect(passou(com(host, c)), `${host} ${c}`).toBe(true);
+      expect(passou(com(host, "/api/benchmark", "POST")), host).toBe(true);
+    }
+    for (const c of ["/", "/api/config", "/api/malhas/1/arquivo?nome=processada.glb", "/api/pdf", "/pacientes/P-ABC123", "/benchmarkx", "/api/benchmark/outra", "/_next/data/x.json"]) {
+      const r = com("192.168.0.10:3000", c);
       expect(r.status, c).toBe(403);
       expect(await codigo(r)).toBe("rota_restrita_benchmark");
     }
-    // no loopback a mesma instância continua normal; sem o benchmark, o host extra também
-    expect(passou(proxy(req("/api/pacientes", { headers: { authorization: `Bearer ${TOKEN}` } })))).toBe(true);
+    // fora do modo: benchmark ligado só em loopback, ou host extra sem benchmark → comportamento normal
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "localhost, 127.0.0.1");
+    expect(passou(com("localhost:3000", "/api/pacientes"))).toBe(true);
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "192.168.0.10");
     vi.stubEnv("BENCHMARK_HABILITADO", "0");
-    expect(passou(lan("/api/pacientes"))).toBe(true);
+    expect(passou(com("192.168.0.10:3000", "/api/pacientes"))).toBe(true);
   });
 
-  it("subida recusa benchmark exposto na rede quando DATA_DIR tem pacientes/", () => {
-    const expor = { BENCHMARK_HABILITADO: "1", APP_HOSTS_PERMITIDOS: "localhost, 192.168.0.10" };
-    expect(() => verificarBenchmarkNaRede(expor, () => true)).toThrow(/DATA_DIR sem pacientes/);
+  it("subida recusa o modo benchmark na rede com DATABASE_URL ou DATA_DIR/pacientes", () => {
+    const expor = { BENCHMARK_HABILITADO: "1", APP_HOSTS_PERMITIDOS: "localhost, 192.168.0.10", DATABASE_URL: "" };
     expect(() => verificarBenchmarkNaRede(expor, () => false)).not.toThrow();
-    expect(() => verificarBenchmarkNaRede({ ...expor, APP_HOSTS_PERMITIDOS: "localhost,127.0.0.1" }, () => true)).not.toThrow();
-    expect(() => verificarBenchmarkNaRede({ ...expor, BENCHMARK_HABILITADO: "" }, () => true)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, DATABASE_URL: "postgres://u:s@127.0.0.1/simulador" }, () => false)).toThrow(/DATABASE_URL tem de ficar vazio/);
+    expect(() => verificarBenchmarkNaRede({ ...expor, DATABASE_URL: undefined }, () => false)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede(expor, () => true)).toThrow(/DATA_DIR sem pacientes/);
+    // fora do modo (só loopback, ou benchmark desligado): nada a recusar
+    expect(() => verificarBenchmarkNaRede({ ...expor, APP_HOSTS_PERMITIDOS: "localhost,127.0.0.1", DATABASE_URL: "postgres://x" }, () => true)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, BENCHMARK_HABILITADO: "", DATABASE_URL: "postgres://x" }, () => true)).not.toThrow();
   });
 
   it("GET não exige Content-Type nem Origin", () => {

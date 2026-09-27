@@ -14,11 +14,12 @@
  *    próprio app. Sem `Origin`, só passa quem se autenticou pelo cabeçalho `Authorization`
  *    (cliente não-navegador; um navegador sempre manda `Origin` em POST, e um site de terceiros
  *    não consegue pôr `Authorization` sem CORS, que o app não habilita).
- * 4. Benchmark na rede local (ADR 0003, revisão v0.1.2): com `BENCHMARK_HABILITADO=1`, uma
- *    requisição por host FORA do loopback (nome de `APP_HOSTS_PERMITIDOS`) só alcança
- *    `/benchmark`, `/api/benchmark*` e `/_next/*`; qualquer outra rota (pacientes, malhas, PDF…)
- *    → 403 `rota_restrita_benchmark`. A subida também recusa essa combinação se `DATA_DIR/pacientes`
- *    existir (`config/subida.ts`).
+ * 4. Modo "benchmark na rede" (ADR 0003, revisão v0.1.2): decidido pela CONFIGURAÇÃO, nunca pela
+ *    requisição (o Host é do cliente e pode ser forjado). Com `BENCHMARK_HABILITADO=1` e algum host
+ *    fora do loopback em `APP_HOSTS_PERMITIDOS`, a instância inteira só atende `/benchmark`,
+ *    `/api/benchmark` e `/api/benchmark/arquivo` — qualquer outra rota → 403
+ *    `rota_restrita_benchmark`, seja qual for o Host (inclusive `localhost`). A subida também
+ *    recusa esse modo com `DATABASE_URL` definido ou `DATA_DIR/pacientes` existente (`config/subida.ts`).
  */
 
 export const COOKIE_TOKEN = "simulador_token";
@@ -66,15 +67,11 @@ function nomeDoHost(host: string): string {
   return i >= 0 ? h.slice(0, i) : h;
 }
 
-/** Host (com ou sem porta) é de loopback? */
-export function hostEhLoopback(host: string): boolean {
-  return HOSTS_LOOPBACK.has(nomeDoHost(host));
-}
-
-/** Rotas alcançáveis fora do loopback quando o benchmark está ligado (nenhuma toca dado de paciente). */
-export function rotaDoBenchmark(caminho: string): boolean {
-  return caminho === "/benchmark" || caminho === "/api/benchmark" || caminho.startsWith("/api/benchmark/") || caminho.startsWith("/_next/");
-}
+/**
+ * Únicas rotas atendidas no modo "benchmark na rede" (nenhuma toca banco nem dado de paciente).
+ * Os estáticos do Next (`/_next/static`, `/_next/image`, `favicon.ico`) já ficam fora do matcher do proxy.
+ */
+export const ROTAS_BENCHMARK_NA_REDE: ReadonlySet<string> = new Set(["/benchmark", "/api/benchmark", "/api/benchmark/arquivo"]);
 
 /** Nomes extras de `APP_HOSTS_PERMITIDOS` que NÃO são loopback (exposição na rede). */
 export function hostsForaDoLoopback(extras: string | undefined): string[] {
@@ -82,6 +79,11 @@ export function hostsForaDoLoopback(extras: string | undefined): string[] {
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter((n) => n && !HOSTS_LOOPBACK.has(n));
+}
+
+/** A instância está no modo "benchmark na rede"? Só pela configuração (env), nunca pela requisição. */
+export function modoBenchmarkNaRede(env: { BENCHMARK_HABILITADO?: string | undefined; APP_HOSTS_PERMITIDOS?: string | undefined }): boolean {
+  return env.BENCHMARK_HABILITADO === "1" && hostsForaDoLoopback(env.APP_HOSTS_PERMITIDOS).length > 0;
 }
 
 export function hostPermitido(host: string, extras: string | undefined): boolean {
@@ -109,8 +111,8 @@ export function avaliarRequisicao(r: EntradaRequisicao, parametroToken: string |
   if (!host || !hostPermitido(host, r.env.APP_HOSTS_PERMITIDOS)) {
     return { ok: false, recusa: { status: 403, codigo: "host_nao_permitido", mensagem: "host não permitido (o app só atende em loopback)" } };
   }
-  if (r.env.BENCHMARK_HABILITADO === "1" && !hostEhLoopback(host) && !rotaDoBenchmark(r.caminho)) {
-    return { ok: false, recusa: { status: 403, codigo: "rota_restrita_benchmark", mensagem: "fora do loopback, com o benchmark ligado, só as rotas /benchmark são atendidas" } };
+  if (modoBenchmarkNaRede(r.env) && !ROTAS_BENCHMARK_NA_REDE.has(r.caminho)) {
+    return { ok: false, recusa: { status: 403, codigo: "rota_restrita_benchmark", mensagem: "instância de benchmark na rede: só /benchmark e /api/benchmark são atendidas" } };
   }
 
   // ---- token local

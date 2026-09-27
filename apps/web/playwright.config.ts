@@ -60,6 +60,10 @@ const next = (desenho: "A" | "B") => ({
     APP_TOKEN_LOCAL: TOKEN,
     // /benchmark (plano A14): ligado só no servidor B para o e2e cobrir os dois estados (A = padrão, 404)
     BENCHMARK_HABILITADO: desenho === "B" ? "1" : "0",
+    // E2E_BENCHMARK_NA_REDE=1 (só com e2e/benchmark.spec.ts): o servidor B sobe no modo "benchmark na
+    // rede" do ADR 0003 (revisão v0.1.2) — host extra fora do loopback (192.0.2.10, TEST-NET, nunca
+    // roteado) e SEM banco —, provando que a página funciona só com as rotas liberadas pelo proxy.
+    ...(desenho === "B" && process.env.E2E_BENCHMARK_NA_REDE === "1" ? { APP_HOSTS_PERMITIDOS: "192.0.2.10", DATABASE_URL: "" } : {}),
   },
 });
 

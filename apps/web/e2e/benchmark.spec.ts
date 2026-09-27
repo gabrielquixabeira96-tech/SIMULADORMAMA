@@ -29,6 +29,15 @@ test("benchmark ligado: roda o roteiro, mostra p50/p95 e baixa o JSON importáve
   expect((await request.get("/api/benchmark/arquivo?nome=processada.obj")).status()).toBe(400);
   expect((await request.get("/api/benchmark/arquivo?nome=../../pacientes/x.glb")).status()).toBe(400);
 
+  if (process.env.E2E_BENCHMARK_NA_REDE === "1") {
+    // modo "benchmark na rede" (ADR 0003, revisão v0.1.2): fora das rotas do benchmark tudo é 403,
+    // mesmo com token e Host de loopback; a página abaixo tem de funcionar só com as rotas liberadas
+    for (const c of ["/", "/api/config", "/api/pacientes"]) {
+      const resp = await request.get(c, { headers: { Host: "localhost" } });
+      expect(resp.status(), c).toBe(403);
+      expect((await resp.json()).erro.codigo).toBe("rota_restrita_benchmark");
+    }
+  }
   const r = await page.goto("/benchmark");
   expect(r?.status()).toBe(200);
   await page.getByTestId("benchmark-rodar").click();
