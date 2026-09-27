@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mesh"
-version = "0.0.1"
+version = "0.1.2"
 description = "services/mesh — processamento de malha, torso sintetico e antropometria do simulador de mamoplastia (mm, quadro anatomico, contrato 1.0)"
 requires-python = ">=3.11"
 license = { text = "Proprietario (dependencias: apenas MIT/BSD/Apache-2.0 e equivalentes; ver THIRD_PARTY_LICENSES.md)" }

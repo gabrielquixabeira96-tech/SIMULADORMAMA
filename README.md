@@ -1,8 +1,8 @@
 # Simulador 3D de mamoplastia de aumento
 
-Simulador em tempo real do resultado de mamoplastia de aumento com prótese, para uso na consulta. Versão **`0.1.1`**: MVP técnico dos Marcos 0, 1, 2 e 2b (fases 0–2 da estratégia), com dados **sintéticos** apenas — sem pacientes reais, sem deploy.
+Simulador em tempo real do resultado de mamoplastia de aumento com prótese, para uso na consulta. Versão **`0.1.2`**: MVP técnico dos Marcos 0, 1, 2 e 2b (fases 0–2 da estratégia), com dados **sintéticos** apenas — sem pacientes reais, sem deploy.
 
-Fonte da verdade do produto: [`ESTRATEGIA.md`](ESTRATEGIA.md). Escopo desta execução: [`docs/PROMPT.md`](docs/PROMPT.md). Contratos entre os componentes: [`docs/contratos.md`](docs/contratos.md). Decisões: [`docs/adr/`](docs/adr/README.md). Registro de validação desta versão: [`docs/validacao/v0.1.1.md`](docs/validacao/v0.1.1.md) (v0.1.1 = correções da revisão de código da v0.1.0: autenticação local, flag A/B, LGPD, CI e rastreabilidade).
+Fonte da verdade do produto: [`ESTRATEGIA.md`](ESTRATEGIA.md). Escopo desta execução: [`docs/PROMPT.md`](docs/PROMPT.md). Contratos entre os componentes: [`docs/contratos.md`](docs/contratos.md). Decisões: [`docs/adr/`](docs/adr/README.md). Registro de validação desta versão: [`docs/validacao/v0.1.2.md`](docs/validacao/v0.1.2.md) (v0.1.2 = CI honesta, registros de validação gerados por comando com glTF-Validator, ADR 0016, latência de 2 painéis e `/benchmark`, sessão de Bland-Altman com operador humano e planilha do art. 5º; mudanças em [`mudancas-v0.1.2.md`](docs/validacao/mudancas-v0.1.2.md)).
 
 > Aviso fixo do produto: **"Ilustração, não previsão de resultado"**. Toda superfície simulada é exibida com envelope de incerteza (±4,5 mm RMS, configurável em `config/simulacao.json`). Não há compartilhamento nem exportação para redes sociais (Res. CFM 2.336/2023). Coeficientes da simulação **não calibrados**; limiares TEPID a **conferir no texto original**; catálogo **não verificado** com os fabricantes.
 
@@ -107,13 +107,13 @@ python3 scripts/validar_config.py           # configs e registros contra config/
 7. Só licenças MIT/BSD/Apache-2.0 ou equivalentes; a CI roda `scripts/licencas.sh --checar` (ADR 0009).
 8. Cada versão tem registro em `docs/validacao/` (a CI falha sem ele).
 
-## Estado dos marcos (v0.1.1)
+## Estado dos marcos (v0.1.2)
 
-Números e critérios em [`docs/validacao/v0.1.1.md`](docs/validacao/v0.1.1.md) (gerado por `bash scripts/validacao.sh`).
+Números e critérios em [`docs/validacao/v0.1.2.md`](docs/validacao/v0.1.2.md) (gerado por `bash scripts/validacao.sh`); pendências humanas em [`pendencias-v0.1.2.md`](docs/validacao/pendencias-v0.1.2.md).
 
 | Marco | Critério | Situação |
 |---|---|---|
 | 0 — Fundação | 3 torsos sintéticos no viewer com escala correta; erro ±1 mm contra o gabarito | atingido |
-| 1 — Viewer e antropometria | Bland-Altman LoA dentro de ±2 mm em ≥30 pares | atingido (operador simulado; falta operador humano) |
-| 2 — Catálogo e simulação | latência < 100 ms; regressão geométrica; monotonicidade; simetria | atingido (latência medida em SwiftShader, não no iPad) |
+| 1 — Viewer e antropometria | Bland-Altman LoA dentro de ±2 mm em ≥30 pares | atingido com operador simulado; ferramenta para operador humano pronta (`/validacao/bland-altman`, só em B, ADR 0017), sessão com o cirurgião pendente |
+| 2 — Catálogo e simulação | latência < 100 ms (1 painel) e p95 ≤ 85 ms (2 painéis); regressão geométrica; monotonicidade; simetria | atingido em SwiftShader; medição no iPad pendente (página `/benchmark`). Sugestão de implante em B ainda `501`, aguardando decisão |
 | 2b — LLM e registro | E2E Playwright do upload ao PDF, em A e B | atingido (LLM em mock) |

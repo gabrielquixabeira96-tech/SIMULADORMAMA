@@ -1,6 +1,6 @@
 {
   "name": "@simulador/contratos",
-  "version": "0.0.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Tipos TS e esquemas zod espelhando config/schemas/*.schema.json e docs/contratos.md (contrato 1.0).",
   "license": "UNLICENSED",

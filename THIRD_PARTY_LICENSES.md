@@ -1,6 +1,6 @@
 # Licenças de terceiros
 
-Gerado por `scripts/licencas.sh` em 2026-09-27T08:21:52Z para a versão 0.1.1. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
+Gerado por `scripts/licencas.sh` em 2026-09-27T11:32:59Z para a versão 0.1.2. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
 
 ## Permitidas
 

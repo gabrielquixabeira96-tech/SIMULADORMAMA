@@ -51,6 +51,9 @@ fi
 titulo "Repositorio"
 VERSAO="$(tr -d '[:space:]' < VERSION)"
 [[ "$VERSAO" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] && ok "VERSION=$VERSAO" || falha "VERSION invalida: '$VERSAO'"
+# Manifestos (package.json da raiz, web, contratos e pyproject do services/mesh) iguais a VERSION (A3).
+python3 scripts/checar_versao.py >/dev/null && ok "manifestos na versao $VERSAO (scripts/checar_versao.py)" \
+  || { python3 scripts/checar_versao.py || true; falha "versao de manifesto diverge de VERSION (scripts/checar_versao.py)"; }
 [[ -f "docs/validacao/v$VERSAO.md" ]] && ok "registro de validacao docs/validacao/v$VERSAO.md existe" \
   || falha "falta docs/validacao/v$VERSAO.md (restricao 8, RDC 657 art. 5)"
 grep -q '"gru1"' vercel.json && ok "vercel.json fixa regiao gru1" || falha "vercel.json sem gru1"

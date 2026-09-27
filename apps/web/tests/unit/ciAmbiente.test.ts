@@ -5,9 +5,9 @@
  * do repositório é alterado. Nenhum teste aqui se auto-pula (um pulado invalidaria a CI).
  */
 import { spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { faltasMeshReal } from "../helpers/meshReal";
 
@@ -50,7 +50,17 @@ describe("A1: schemas validados de verdade na CI", () => {
     cpSync(join(RAIZ, "scripts"), join(d, "scripts"), { recursive: true });
     cpSync(join(RAIZ, "config"), join(d, "config"), { recursive: true });
     cpSync(join(RAIZ, "docs/validacao"), join(d, "docs/validacao"), { recursive: true });
-    cpSync(join(RAIZ, "VERSION"), join(d, "VERSION"));
+    // VERSION da cópia = último registro consolidado existente. No commit de release, o sidecar da
+    // versão nova só nasce DEPOIS (scripts/validacao.sh roda sobre esse commit); o que este teste
+    // mede é o schema de config, não a presença do registro (que a própria CI confere à parte).
+    const consolidados = readdirSync(join(RAIZ, "docs/validacao"))
+      .map((n) => /^v(\d+)\.(\d+)\.(\d+)\.json$/.exec(n))
+      .filter((m): m is RegExpExecArray => m !== null)
+      .map((m) => [Number(m[1]), Number(m[2]), Number(m[3])] as const)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+    const ultimo = consolidados.at(-1);
+    expect(ultimo).toBeDefined();
+    writeFileSync(join(d, "VERSION"), `${ultimo!.join(".")}\n`);
     const pyJs = pythonComJsonschema();
     const rodar = () => spawnSync(pyJs ?? "python3", [join(d, "scripts/validar_config.py")], { encoding: "utf8" });
     if (!pyJs) {
@@ -130,5 +140,54 @@ describe("A2: integração real obrigatória e testes pulados no resumo", () => 
 describe("A4: telemetria do Next.js desligada na CI", () => {
   it("ci.sh exporta NEXT_TELEMETRY_DISABLED=1", () => {
     expect(CI).toMatch(/^export NEXT_TELEMETRY_DISABLED=1$/m);
+  });
+});
+
+describe("A3: versões dos manifestos iguais a VERSION", () => {
+  const MANIFESTOS = ["package.json", "apps/web/package.json", "packages/contratos/package.json", "services/mesh/pyproject.toml"];
+  const copia = () => {
+    const d = novoTmp("simulador-versao-");
+    cpSync(join(RAIZ, "VERSION"), join(d, "VERSION"));
+    for (const m of MANIFESTOS) {
+      mkdirSync(dirname(join(d, m)), { recursive: true });
+      cpSync(join(RAIZ, m), join(d, m));
+    }
+    return d;
+  };
+  const checar = (raiz: string) => spawnSync("python3", [join(RAIZ, "scripts/checar_versao.py"), "--raiz", raiz], { encoding: "utf8" });
+
+  it("ci.sh chama scripts/checar_versao.py na etapa Repositorio", () => {
+    expect(CI).toMatch(/python3 scripts\/checar_versao\.py/);
+  });
+
+  it("o repositório está alinhado: sai 0", () => {
+    const r = checar(RAIZ);
+    expect(r.status, r.stderr).toBe(0);
+    expect(r.stdout).toContain(`todos os manifestos em ${readFileSync(join(RAIZ, "VERSION"), "utf8").trim()}`);
+  });
+
+  it.each(MANIFESTOS)("um manifesto divergente (%s) derruba a checagem", (m) => {
+    const d = copia();
+    expect(checar(d).status).toBe(0);
+    const arq = join(d, m);
+    const texto = readFileSync(arq, "utf8");
+    const novo = m.endsWith(".toml")
+      ? texto.replace(/^version = "[^"]*"/m, 'version = "9.9.9"')
+      : JSON.stringify({ ...JSON.parse(texto), version: "9.9.9" });
+    expect(novo).not.toBe(texto);
+    writeFileSync(arq, novo);
+    const r = checar(d);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain(`DIVERGE ${m}`);
+  });
+
+  it("manifesto sem versão também diverge; VERSION inválida sai 2", () => {
+    const d = copia();
+    const semVersao = JSON.parse(readFileSync(join(d, "packages/contratos/package.json"), "utf8"));
+    delete semVersao.version;
+    writeFileSync(join(d, "packages/contratos/package.json"), JSON.stringify(semVersao));
+    expect(checar(d).status).toBe(1);
+    writeFileSync(join(d, "VERSION"), "v1\n");
+    expect(checar(d).status).toBe(2);
   });
 });
