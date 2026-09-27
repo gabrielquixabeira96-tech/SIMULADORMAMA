@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/relatorio_prosa.schema.json",
+  "title": "relatorio_prosa/1.0",
+  "description": "Saida da ferramenta redigir_prosa_relatorio do LLM (docs/contratos.md secao 14.3). Os numeros do relatorio vem de template travado; aqui so prosa. Teste travado: toda sequencia de digitos nos paragrafos deve pertencer a numeros_permitidos da entrada.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "paragrafos"],
+  "properties": {
+    "esquema": { "const": "relatorio_prosa/1.0" },
+    "paragrafos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["introducao", "o_que_foi_simulado", "limitacoes", "proximos_passos"],
+      "properties": {
+        "introducao": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "o_que_foi_simulado": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "limitacoes": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "proximos_passos": { "type": "string", "minLength": 1, "maxLength": 1500 }
+      }
+    }
+  }
+}

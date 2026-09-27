@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/medidas.schema.json",
+  "title": "medidas/1.0",
+  "description": "Registro de medidas trocado entre apps/web e services/mesh (docs/contratos.md secao 6). Unidades: mm e mL.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "medida_id", "malha_id", "pseudonimo", "desenho", "versao_software", "versao_config", "unidade", "quadro", "gerado_em", "gerado_por", "escala", "landmarks", "quadro_anatomico", "distancias", "volumes", "geodesica", "medidas_digitadas"],
+  "properties": {
+    "esquema": { "const": "medidas/1.0" },
+    "medida_id": { "$ref": "#/$defs/uuid" },
+    "malha_id": { "$ref": "#/$defs/uuid" },
+    "pseudonimo": { "type": "string", "pattern": "^P-[0-9A-HJ-NP-Z]{6}$" },
+    "desenho": { "enum": ["A", "B"] },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "versao_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tepid", "simulacao"],
+      "properties": { "tepid": { "type": "string" }, "simulacao": { "type": "string" } }
+    },
+    "unidade": { "const": "mm" },
+    "quadro": { "enum": ["scan", "anatomico"] },
+    "gerado_em": { "type": "string", "format": "date-time" },
+    "gerado_por": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componente", "usuario_id"],
+      "properties": { "componente": { "enum": ["web", "mesh"] }, "usuario_id": { "type": "string" } }
+    },
+    "escala": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metodo", "fator"],
+      "properties": {
+        "metodo": { "enum": ["regua_2_pontos", "gabarito", "nenhuma"] },
+        "regua_mm": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+        "pontos": { "type": ["array", "null"], "items": { "$ref": "#/$defs/vetor3" }, "minItems": 2, "maxItems": 2 },
+        "fator": { "type": "number", "exclusiveMinimum": 0 },
+        "aplicado_em": { "type": ["string", "null"], "format": "date-time" }
+      }
+    },
+    "landmarks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "furcula": { "$ref": "#/$defs/landmark" },
+        "mamilo_dir": { "$ref": "#/$defs/landmark" },
+        "mamilo_esq": { "$ref": "#/$defs/landmark" },
+        "sulco_dir": { "$ref": "#/$defs/landmark" },
+        "sulco_esq": { "$ref": "#/$defs/landmark" },
+        "linha_media_inferior": { "$ref": "#/$defs/landmark" },
+        "base_medial_dir": { "$ref": "#/$defs/landmark" },
+        "base_lateral_dir": { "$ref": "#/$defs/landmark" },
+        "base_medial_esq": { "$ref": "#/$defs/landmark" },
+        "base_lateral_esq": { "$ref": "#/$defs/landmark" }
+      }
+    },
+    "quadro_anatomico": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origem", "x", "y", "z", "matriz"],
+          "properties": {
+            "origem": { "$ref": "#/$defs/vetor3" },
+            "x": { "$ref": "#/$defs/vetor3" },
+            "y": { "$ref": "#/$defs/vetor3" },
+            "z": { "$ref": "#/$defs/vetor3" },
+            "matriz": { "type": "array", "items": { "type": "number" }, "minItems": 16, "maxItems": 16, "description": "4x4 coluna-major (THREE.Matrix4.elements), scan -> anatomico" }
+          }
+        }
+      ]
+    },
+    "distancias": {
+      "oneOf": [
+        { "type": "null", "description": "obrigatoriamente null em DESENHO=A" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ssn_n_dir", "ssn_n_esq", "n_imf_dir", "n_imf_esq", "base_dir", "base_esq", "intermamilar"],
+          "properties": {
+            "ssn_n_dir": { "$ref": "#/$defs/distanciaOuNulo" },
+            "ssn_n_esq": { "$ref": "#/$defs/distanciaOuNulo" },
+            "n_imf_dir": { "$ref": "#/$defs/distanciaOuNulo" },
+            "n_imf_esq": { "$ref": "#/$defs/distanciaOuNulo" },
+            "base_dir": { "$ref": "#/$defs/distanciaOuNulo" },
+            "base_esq": { "$ref": "#/$defs/distanciaOuNulo" },
+            "intermamilar": { "$ref": "#/$defs/distanciaOuNulo" }
+          }
+        }
+      ]
+    },
+    "volumes": {
+      "oneOf": [
+        { "type": "null", "description": "obrigatoriamente null em DESENHO=A" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dir", "esq"],
+          "properties": { "dir": { "$ref": "#/$defs/volumeOuNulo" }, "esq": { "$ref": "#/$defs/volumeOuNulo" } }
+        }
+      ]
+    },
+    "geodesica": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["algoritmo", "biblioteca"],
+          "properties": { "algoritmo": { "enum": ["mmp", "calor"] }, "biblioteca": { "type": "string" }, "versao": { "type": "string" } }
+        }
+      ]
+    },
+    "medidas_digitadas": {
+      "oneOf": [
+        { "type": "null", "description": "proibido em DESENHO=A" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["base_mm", "apss_mm", "pinca_polo_superior_mm", "pinca_sulco_mm", "n_imf_estirado_mm"],
+          "properties": {
+            "base_mm": { "$ref": "#/$defs/porLado" },
+            "apss_mm": { "$ref": "#/$defs/porLado" },
+            "pinca_polo_superior_mm": { "$ref": "#/$defs/porLado" },
+            "pinca_sulco_mm": { "$ref": "#/$defs/porLado" },
+            "n_imf_estirado_mm": { "$ref": "#/$defs/porLado" }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "desenho": { "const": "A" } } },
+      "then": {
+        "properties": {
+          "distancias": { "type": "null" },
+          "volumes": { "type": "null" },
+          "medidas_digitadas": { "type": "object" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "vetor3": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "porLado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "esq"],
+      "properties": { "dir": { "type": "number", "minimum": 0 }, "esq": { "type": "number", "minimum": 0 } }
+    },
+    "landmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posicao", "vertice", "origem"],
+      "properties": {
+        "posicao": { "$ref": "#/$defs/vetor3" },
+        "vertice": { "type": "integer", "minimum": 0 },
+        "origem": { "enum": ["clique", "gabarito", "automatico"] }
+      }
+    },
+    "distanciaOuNulo": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["euclidiana_mm", "geodesica_mm"],
+          "properties": {
+            "euclidiana_mm": { "type": "number", "minimum": 0 },
+            "geodesica_mm": { "type": ["number", "null"], "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "volumeOuNulo": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["valor_ml", "incerteza_ml", "metodo"],
+          "properties": {
+            "valor_ml": { "type": "number", "minimum": 0 },
+            "incerteza_ml": { "type": "number", "minimum": 0 },
+            "metodo": { "enum": ["plano_base_elipse"] },
+            "motivo": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

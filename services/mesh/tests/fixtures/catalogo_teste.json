@@ -1,0 +1,200 @@
+{
+  "esquema": "catalogo/1.0",
+  "fabricante": "Teste",
+  "documento": {
+    "titulo": "Catalogo sintetico de testes do services/mesh (EXEMPLO NAO CLINICO)",
+    "url": null,
+    "ano": null,
+    "data_acesso": "2026-09-26",
+    "sha256": null
+  },
+  "nota_geral": "conferir versão vigente e registro ANVISA com o fabricante",
+  "implantes": [
+    {
+      "id": "teste-redondo-moderado-250",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Redondo Moderado (teste)",
+      "referencia_fabricante": null,
+      "forma": "redonda",
+      "perfil": "moderado",
+      "perfil_fabricante": null,
+      "superficie": "lisa",
+      "superficie_fabricante": null,
+      "base_mm": 110.0,
+      "altura_mm": 110.0,
+      "projecao_mm": 35.0,
+      "volume_ml": 250.0,
+      "coesividade": {
+        "nivel": null,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "teste-redondo-moderado-300",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Redondo Moderado (teste)",
+      "referencia_fabricante": null,
+      "forma": "redonda",
+      "perfil": "moderado",
+      "perfil_fabricante": null,
+      "superficie": "lisa",
+      "superficie_fabricante": null,
+      "base_mm": 116.0,
+      "altura_mm": 116.0,
+      "projecao_mm": 38.0,
+      "volume_ml": 300.0,
+      "coesividade": {
+        "nivel": null,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "teste-redondo-moderado-350",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Redondo Moderado (teste)",
+      "referencia_fabricante": null,
+      "forma": "redonda",
+      "perfil": "moderado",
+      "perfil_fabricante": null,
+      "superficie": "lisa",
+      "superficie_fabricante": null,
+      "base_mm": 122.0,
+      "altura_mm": 122.0,
+      "projecao_mm": 40.0,
+      "volume_ml": 350.0,
+      "coesividade": {
+        "nivel": null,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "teste-redondo-moderado-400",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Redondo Moderado (teste)",
+      "referencia_fabricante": null,
+      "forma": "redonda",
+      "perfil": "moderado",
+      "perfil_fabricante": null,
+      "superficie": "lisa",
+      "superficie_fabricante": null,
+      "base_mm": 127.0,
+      "altura_mm": 127.0,
+      "projecao_mm": 42.0,
+      "volume_ml": 400.0,
+      "coesividade": {
+        "nivel": null,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "teste-anatomico-alto-280",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Anatomico Alto (teste)",
+      "referencia_fabricante": null,
+      "forma": "anatomica",
+      "perfil": "alto",
+      "perfil_fabricante": null,
+      "superficie": "microtexturizada",
+      "superficie_fabricante": null,
+      "base_mm": 110.0,
+      "altura_mm": 120.0,
+      "projecao_mm": 42.0,
+      "volume_ml": 280.0,
+      "coesividade": {
+        "nivel": 3,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "teste-anatomico-alto-350",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Anatomico Alto (teste)",
+      "referencia_fabricante": null,
+      "forma": "anatomica",
+      "perfil": "alto",
+      "perfil_fabricante": null,
+      "superficie": "microtexturizada",
+      "superficie_fabricante": null,
+      "base_mm": 120.0,
+      "altura_mm": 130.0,
+      "projecao_mm": 47.0,
+      "volume_ml": 350.0,
+      "coesividade": {
+        "nivel": 3,
+        "descricao_fabricante": null,
+        "escala": "desconhecida"
+      },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": {
+        "url": null,
+        "pagina": null,
+        "documento": "seed sintetica; valores inventados para teste"
+      },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    }
+  ]
+}

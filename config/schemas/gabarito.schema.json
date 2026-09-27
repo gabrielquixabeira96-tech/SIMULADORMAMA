@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/gabarito.schema.json",
+  "title": "gabarito/1.0",
+  "description": "Gabarito de medidas reais de um torso sintetico (docs/contratos.md secao 4.3). Unidades: mm e mL; quadro anatomico; Y para cima; +X esquerda da paciente; +Z anterior.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "nome", "gerado_em", "versao_software", "unidade", "quadro", "parametros", "landmarks", "distancias", "volumes", "malha", "geodesica"],
+  "properties": {
+    "esquema": { "const": "gabarito/1.0" },
+    "nome": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+    "gerado_em": { "type": "string", "format": "date-time" },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "unidade": { "const": "mm" },
+    "quadro": { "const": "anatomico" },
+    "parametros": { "type": "object", "required": ["esquema"], "properties": { "esquema": { "const": "torso_parametros/1.0" } } },
+    "landmarks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["furcula", "mamilo_dir", "mamilo_esq", "sulco_dir", "sulco_esq", "linha_media_inferior", "base_medial_dir", "base_lateral_dir", "base_medial_esq", "base_lateral_esq"],
+      "properties": {
+        "furcula": { "$ref": "#/$defs/landmark" },
+        "mamilo_dir": { "$ref": "#/$defs/landmark" },
+        "mamilo_esq": { "$ref": "#/$defs/landmark" },
+        "sulco_dir": { "$ref": "#/$defs/landmark" },
+        "sulco_esq": { "$ref": "#/$defs/landmark" },
+        "linha_media_inferior": { "$ref": "#/$defs/landmark" },
+        "base_medial_dir": { "$ref": "#/$defs/landmark" },
+        "base_lateral_dir": { "$ref": "#/$defs/landmark" },
+        "base_medial_esq": { "$ref": "#/$defs/landmark" },
+        "base_lateral_esq": { "$ref": "#/$defs/landmark" }
+      }
+    },
+    "distancias": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ssn_n_dir", "ssn_n_esq", "n_imf_dir", "n_imf_esq", "base_dir", "base_esq", "intermamilar"],
+      "properties": {
+        "ssn_n_dir": { "$ref": "#/$defs/distancia" },
+        "ssn_n_esq": { "$ref": "#/$defs/distancia" },
+        "n_imf_dir": { "$ref": "#/$defs/distancia" },
+        "n_imf_esq": { "$ref": "#/$defs/distancia" },
+        "base_dir": { "$ref": "#/$defs/distancia" },
+        "base_esq": { "$ref": "#/$defs/distancia" },
+        "intermamilar": { "$ref": "#/$defs/distancia" }
+      }
+    },
+    "volumes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dir", "esq"],
+      "properties": {
+        "dir": { "$ref": "#/$defs/volumeGabarito" },
+        "esq": { "$ref": "#/$defs/volumeGabarito" }
+      }
+    },
+    "malha": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["densa", "decimada"],
+      "properties": {
+        "densa": { "$ref": "#/$defs/malhaInfo" },
+        "decimada": { "$ref": "#/$defs/malhaInfo" }
+      }
+    },
+    "geodesica": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algoritmo", "biblioteca", "malha"],
+      "properties": {
+        "algoritmo": { "enum": ["mmp", "calor"] },
+        "biblioteca": { "type": "string" },
+        "versao": { "type": "string" },
+        "malha": { "enum": ["densa", "decimada"] }
+      }
+    }
+  },
+  "$defs": {
+    "vetor3": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "landmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["posicao", "vertice", "origem"],
+      "properties": {
+        "posicao": { "$ref": "#/$defs/vetor3" },
+        "vertice": { "type": "integer", "minimum": 0 },
+        "origem": { "const": "gabarito" }
+      }
+    },
+    "distancia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["euclidiana_mm", "geodesica_mm"],
+      "properties": {
+        "euclidiana_mm": { "type": "number", "minimum": 0 },
+        "geodesica_mm": { "type": "number", "minimum": 0 }
+      }
+    },
+    "volumeGabarito": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adicionado_ml", "estimado_plano_base_elipse_ml"],
+      "properties": {
+        "adicionado_ml": { "type": "number", "minimum": 0 },
+        "estimado_plano_base_elipse_ml": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "malhaInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arquivo", "n_vertices", "n_faces"],
+      "properties": {
+        "arquivo": { "type": "string" },
+        "n_vertices": { "type": "integer", "minimum": 3 },
+        "n_faces": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

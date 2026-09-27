@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/anamnese.schema.json",
+  "title": "anamnese/1.0",
+  "description": "Saida da ferramenta registrar_anamnese do LLM (docs/contratos.md secao 14.2). Usado como input_schema do tool use. Nunca contem nome, documento, contato ou datas completas.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "queixa_principal", "objetivo_estetico", "tamanho_desejado_descricao", "gestacoes", "cirurgias_mamarias_previas", "comorbidades_relatadas", "tabagismo", "medicamentos", "alergias", "expectativas_irreais_sinalizadas", "campos_nao_informados"],
+  "properties": {
+    "esquema": { "const": "anamnese/1.0" },
+    "queixa_principal": { "type": "string", "maxLength": 1000 },
+    "objetivo_estetico": { "enum": ["aumento_discreto", "aumento_moderado", "aumento_marcado", "correcao_assimetria", "outro"] },
+    "tamanho_desejado_descricao": { "type": ["string", "null"], "maxLength": 300 },
+    "gestacoes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numero", "amamentou", "planeja"],
+      "properties": {
+        "numero": { "type": ["integer", "null"], "minimum": 0 },
+        "amamentou": { "type": ["boolean", "null"] },
+        "planeja": { "enum": ["sim", "nao", "incerto", "nao_informado"] }
+      }
+    },
+    "cirurgias_mamarias_previas": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+    "comorbidades_relatadas": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+    "tabagismo": { "enum": ["nunca", "ex", "atual", "nao_informado"] },
+    "medicamentos": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+    "alergias": { "type": "array", "items": { "type": "string", "maxLength": 200 } },
+    "expectativas_irreais_sinalizadas": { "type": "boolean" },
+    "campos_nao_informados": { "type": "array", "items": { "type": "string" } },
+    "texto_fonte_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "preenchido pelo web, nao pelo LLM" }
+  }
+}

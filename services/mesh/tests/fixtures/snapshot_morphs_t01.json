@@ -1,0 +1,1010 @@
+{
+ "mt__teste-anatomico-alto-280__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.04,
+   "esq": 5.04
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.04,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 5.04
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.93,
+   "esq": 3.93
+  },
+  "delta_y_sulco_mm": {
+   "dir": -11.2,
+   "esq": -11.2
+  }
+ },
+ "mt__teste-anatomico-alto-280__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.93,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -11.2,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.93
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -11.2
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.78,
+   "esq": 3.78
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.78,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.78
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.67,
+   "esq": 2.67
+  },
+  "delta_y_sulco_mm": {
+   "dir": -11.2,
+   "esq": -11.2
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.67,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -11.2,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-280__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.67
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -11.2
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.08,
+   "esq": 30.08
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.64,
+   "esq": 5.64
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.08,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.64,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 30.08
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 5.64
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.08,
+   "esq": 30.08
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.25,
+   "esq": 4.25
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.08,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.25,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 30.08
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 4.25
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 35.96,
+   "esq": 35.96
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.23,
+   "esq": 4.23
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 35.96,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.23,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 35.96
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 4.23
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 35.96,
+   "esq": 35.96
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.84,
+   "esq": 2.84
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 35.96,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.84,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-anatomico-alto-350__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 35.96
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.84
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 22.4,
+   "esq": 22.4
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.2,
+   "esq": 4.2
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 22.4,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.2,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 22.4
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 4.2
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 22.4,
+   "esq": 22.4
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.21,
+   "esq": 3.21
+  },
+  "delta_y_sulco_mm": {
+   "dir": -10.0,
+   "esq": -10.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 22.4,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.21,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -10.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 22.4
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.21
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -10.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.77,
+   "esq": 26.77
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.15,
+   "esq": 3.15
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.77,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.15,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.77
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.15
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.77,
+   "esq": 26.77
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.16,
+   "esq": 2.16
+  },
+  "delta_y_sulco_mm": {
+   "dir": -10.0,
+   "esq": -10.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.77,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.16,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -10.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-250__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.77
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.16
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -10.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 24.32,
+   "esq": 24.32
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.56,
+   "esq": 4.56
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 24.32,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.56,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 24.32
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 4.56
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 24.32,
+   "esq": 24.32
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.37,
+   "esq": 3.37
+  },
+  "delta_y_sulco_mm": {
+   "dir": -12.0,
+   "esq": -12.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 24.32,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.37,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -12.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 24.32
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.37
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -12.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 29.07,
+   "esq": 29.07
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.42,
+   "esq": 3.42
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 29.07,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.42,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 29.07
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.42
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 29.07,
+   "esq": 29.07
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.23,
+   "esq": 2.23
+  },
+  "delta_y_sulco_mm": {
+   "dir": -12.0,
+   "esq": -12.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 29.07,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.23,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -12.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-300__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 29.07
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.23
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -12.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 25.6,
+   "esq": 25.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.8,
+   "esq": 4.8
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 25.6,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 4.8,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 25.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 4.8
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 25.6,
+   "esq": 25.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.41,
+   "esq": 3.41
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 25.6,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.41,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 25.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.41
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.6,
+   "esq": 30.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.6,
+   "esq": 3.6
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.6,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.6,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 30.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.6
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.6,
+   "esq": 30.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.21,
+   "esq": 2.21
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 30.6,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.21,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -14.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-350__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 30.6
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.21
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -14.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.04,
+   "esq": 5.04
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 5.04,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 5.04
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.45,
+   "esq": 3.45
+  },
+  "delta_y_sulco_mm": {
+   "dir": -16.0,
+   "esq": -16.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 26.88,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.45,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -16.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__dual_plane__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 26.88
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.45
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -16.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__manter": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.78,
+   "esq": 3.78
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__manter__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 3.78,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__manter__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 3.78
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__rebaixar": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.19,
+   "esq": 2.19
+  },
+  "delta_y_sulco_mm": {
+   "dir": -16.0,
+   "esq": -16.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__rebaixar__dir": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 32.13,
+   "esq": 0.0
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 2.19,
+   "esq": 0.0
+  },
+  "delta_y_sulco_mm": {
+   "dir": -16.0,
+   "esq": 0.0
+  }
+ },
+ "mt__teste-redondo-moderado-400__subglandular__rebaixar__esq": {
+  "delta_projecao_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 32.13
+  },
+  "delta_y_mamilo_mm": {
+   "dir": 0.0,
+   "esq": 2.19
+  },
+  "delta_y_sulco_mm": {
+   "dir": 0.0,
+   "esq": -16.0
+  }
+ }
+}

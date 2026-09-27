@@ -1,0 +1,42 @@
+# ADR 0006 — Camada do LLM
+
+Status: aceito · Data: 2026-09-26
+
+## Contexto
+
+Restrição inegociável 1: o LLM nunca recebe fotos, malhas nem texturas; só dados estruturados e pseudonimizados; medidas, volumes e simulação são determinísticos. Marco 2b: anamnese (texto livre → JSON validado) e relatório para a paciente (números de template travado, LLM só escreve prosa), teste que falha se um número divergir, modo mock sem `ANTHROPIC_API_KEY`. Motivo técnico: a localização espacial do modelo em imagens é aproximada (docs de visão da Anthropic); motivo jurídico: transferência internacional de dado sensível (ADR 0004).
+
+## Decisão
+
+1. **SDK oficial** `@anthropic-ai/sdk` (MIT), chamado **só no servidor** do Next.js (`apps/web/src/llm/`). A chave nunca vai ao cliente.
+2. **Interface única** `ProvedorLLM` com dois métodos: `registrarAnamnese(textoHigienizado) → anamnese/1.0` e `redigirProsaRelatorio(entrada relatorio_entrada/1.0) → relatorio_prosa/1.0`. Duas implementações: `ProvedorAnthropic` e `ProvedorMock`. Seleção: `LLM_MODO=mock` **ou** `ANTHROPIC_API_KEY` ausente → mock. A CI roda sempre em mock; nenhum teste depende de rede.
+3. **Tool use com JSON Schema**: cada método define uma ferramenta cujo `input_schema` é o arquivo de `config/schemas/` (`anamnese.schema.json`, `relatorio_prosa.schema.json`), com `tool_choice` forçando a ferramenta. A resposta é validada de novo com zod antes de ser usada; falha → erro tipado, nunca texto livre.
+4. **Modelos por variável de ambiente** (`LLM_MODELO_ANAMNESE` rápido, `LLM_MODELO_RELATORIO` padrão), nunca hard-coded; `max_tokens` e `temperature 0`.
+5. **Higienização antes do envio** (`higienizar.ts`): remove CPF, RG, telefone, e-mail, URLs, datas completas (`dd/mm/aaaa`) e sequências ≥ 8 dígitos; substitui por `[removido]`. O hash SHA-256 do texto higienizado vai em `texto_fonte_hash`. Teste com fixtures de cada padrão. O texto bruto **não** é persistido.
+6. **Relatório: números travados**. O web monta `dados_travados` e `numeros_permitidos` (todas as representações textuais dos números que o template exibirá, ex. `"300"`, `"4,5"`, `"116"`). As seções numéricas do relatório e do PDF são renderizadas por template (JSX), nunca pelo LLM. A prosa retornada passa por `verificarNumeros(prosa, numerosPermitidos)`: toda ocorrência de `\d+([.,]\d+)?` em qualquer parágrafo tem de pertencer ao conjunto; caso contrário a prosa é rejeitada, o evento vai à auditoria e a UI usa a prosa do mock (que não contém dígitos). **Este é o teste que "falha se qualquer número divergir"**, e vale tanto para o provedor real quanto para o mock.
+7. **Em `DESENHO=A`** (ADR 0005), `dados_travados.distancias` e `volumes` são `null` e `numeros_permitidos` só contém valores digitados e do catálogo.
+8. **Sem RAG, sem regras clínicas no prompt** nesta fase: os alertas TEPID vêm de `config/tepid.json` avaliado em código (só B), e o LLM não sugere implante nem plano. O prompt de sistema diz explicitamente que o modelo não faz recomendação clínica nem cita números fora da lista.
+9. **Logs**: registram só `pseudonimo`, `atendimento_id`, modelo, tokens e latência; nunca o texto de entrada ou saída.
+
+## Alternativas
+
+- Saída em texto livre com regex de extração: frágil; tool use + schema é determinístico. Rejeitada.
+- LLM gerar o relatório inteiro e depois "auditar" números: inverte a responsabilidade; o teste travado ficaria reativo. Rejeitada.
+- Modelo local (open-weights) para eliminar transferência internacional: possível ADR futuro, a interface `ProvedorLLM` já permite.
+- Enviar imagem para "descrição da mama": proibido pela restrição 1.
+
+## Consequências
+
+- Qualidade da prosa depende do modelo, mas a exatidão numérica não depende dele nunca.
+- Antes de qualquer paciente real: cláusulas-padrão ANPD, aditivo de zero retenção e TCLE informando o uso de IA (Res. CFM 2.454/2026). Pendência de Gabriel, fora do código.
+- Mock precisa ser mantido em paridade com os esquemas; o teste de contrato do mock é obrigatório.
+
+## Desvio registrado (v0.1.0, 2026-09-26) — temperatura
+
+O item 4 previa `temperature 0`. Na implementação (Marco 2b), o SDK oficial `@anthropic-ai/sdk` marca o parâmetro `temperature` como descontinuado e modelos recentes recusam valor diferente do padrão. Decisão: **a temperatura só é enviada se `LLM_TEMPERATURA` estiver definida no ambiente** (`apps/web/src/llm/anthropic.ts`; `.env.example` a deixa comentada); sem ela, vale o padrão do modelo. O determinismo que importa não depende disso: tool use com `tool_choice` forçado, JSON Schema revalidado por zod e `verificarNumeros` travado (item 6) seguem valendo, e a CI roda sempre em mock determinístico.
+
+## Revisão v0.1.1 (2026-09-26) — nome próprio, CPF e numerais
+
+1. **Nome de pessoa é recusado, não "removido"**. Regex não remove nome com segurança; a v0.1.0 deixava passar "Maria Souza, 32 anos…", "Sra. Ana Lima…", "Dona Joana…". Agora `llm/nomes.ts` detecta por heurística, sem dependência pesada: (a) pronome de tratamento + palavra capitalizada (Sr., Sra., Srta., Dr., Dra., Prof., Dona, Seu, Dom); (b) prenome brasileiro frequente (lista embutida, sem os que também são palavras comuns); (c) ≥ 2 palavras capitalizadas fora do início da frase (fabricantes do catálogo, meses e termos clínicos ficam numa lista de exceções). A anamnese com nome volta `422 nome_proprio_detectado` com mensagem pedindo para remover o nome (sem ecoá-lo), **antes** de tocar no banco ou no provedor; a guarda do payload (`assegurarPayloadSeguro`) também recusa (sinais a e b). A UI deixou de prometer que "remove o nome".
+2. **CPF** com espaço, ponto ou hífen entre os grupos ("123 456 789 09", "123.456.789.09") é removido por inteiro (antes sobrava "09"), no texto do LLM e nos logs.
+3. **Verificador de números** (item 6): o texto é normalizado com NFKC (dígitos de largura total viram ASCII e são conferidos pelo valor); numeral Unicode não ASCII que sobrar (`\p{N}`, ex. "٣٢٠") e numeral romano (≥ 2 letras válidas, ex. "CCCXX") são sempre recusados; palavras de quantidade ("dezena(s)", "centena(s)", "milhar(es)", "dúzia", "dobro", "triplo", "metade", "um terço", "três quartos"…) também. "terço"/"quarto" só contam depois de numeral, para não pegar "terço inferior".

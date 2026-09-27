@@ -1,0 +1,14 @@
+{
+  "esquema": "anamnese/1.0",
+  "queixa_principal": "",
+  "objetivo_estetico": "outro",
+  "tamanho_desejado_descricao": null,
+  "gestacoes": { "numero": null, "amamentou": null, "planeja": "nao_informado" },
+  "cirurgias_mamarias_previas": [],
+  "comorbidades_relatadas": [],
+  "tabagismo": "nao_informado",
+  "medicamentos": [],
+  "alergias": [],
+  "expectativas_irreais_sinalizadas": false,
+  "campos_nao_informados": []
+}

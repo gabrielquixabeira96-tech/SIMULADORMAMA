@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/tepid_config.schema.json",
+  "title": "tepid_config/1.0",
+  "description": "Esquema de config/tepid.json (docs/contratos.md secao 8). Todo limiar leva conferir_no_texto_original.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "versao", "status", "nota", "fonte", "campos", "regras", "tabelas"],
+  "properties": {
+    "esquema": { "const": "tepid_config/1.0" },
+    "versao": { "type": "string" },
+    "status": { "enum": ["nao_conferido", "conferido"] },
+    "nota": { "type": "string", "minLength": 1 },
+    "fonte": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referencia", "nota"],
+      "properties": { "referencia": { "type": "string" }, "doi": { "type": "string" }, "nota": { "type": "string" } }
+    },
+    "campos": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_mm", "apss_mm", "pinca_polo_superior_mm", "pinca_sulco_mm", "n_imf_estirado_mm"],
+      "properties": {
+        "base_mm": { "$ref": "#/$defs/campo" },
+        "apss_mm": { "$ref": "#/$defs/campo" },
+        "pinca_polo_superior_mm": { "$ref": "#/$defs/campo" },
+        "pinca_sulco_mm": { "$ref": "#/$defs/campo" },
+        "n_imf_estirado_mm": { "$ref": "#/$defs/campo" }
+      }
+    },
+    "regras": { "type": "array", "items": { "$ref": "#/$defs/regra" } },
+    "tabelas": { "type": "array", "items": { "$ref": "#/$defs/tabela" } }
+  },
+  "$defs": {
+    "nomeCampo": { "enum": ["base_mm", "apss_mm", "pinca_polo_superior_mm", "pinca_sulco_mm", "n_imf_estirado_mm", "volume_ml"] },
+    "campo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rotulo", "unidade", "min", "max", "por_lado", "obrigatorio"],
+      "properties": {
+        "rotulo": { "type": "string" },
+        "unidade": { "const": "mm" },
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "por_lado": { "type": "boolean" },
+        "obrigatorio": { "type": "boolean" }
+      }
+    },
+    "regra": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "campo", "operador", "alerta", "conferir_no_texto_original", "fonte_pagina"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "campo": { "$ref": "#/$defs/nomeCampo" },
+        "operador": { "enum": ["<", "<=", ">", ">=", "entre"] },
+        "limiar_mm": { "type": "number" },
+        "limiar_min_mm": { "type": "number" },
+        "limiar_max_mm": { "type": "number" },
+        "alerta": { "type": "string" },
+        "conferir_no_texto_original": { "type": "boolean" },
+        "fonte_pagina": { "type": ["integer", "null"] }
+      },
+      "allOf": [
+        { "if": { "properties": { "operador": { "const": "entre" } } }, "then": { "required": ["limiar_min_mm", "limiar_max_mm"] }, "else": { "required": ["limiar_mm"] } },
+        { "if": { "properties": { "conferir_no_texto_original": { "const": false } } }, "then": { "properties": { "fonte_pagina": { "type": "integer" } } } }
+      ]
+    },
+    "tabela": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "entrada", "saida", "conferir_no_texto_original", "fonte_pagina"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9_]+$" },
+        "descricao": { "type": "string" },
+        "entrada": { "$ref": "#/$defs/nomeCampo" },
+        "saida": { "enum": ["volume_ml", "delta_volume_ml", "n_imf_mm"] },
+        "pontos": { "type": "array", "minItems": 2, "items": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 } },
+        "interpolar": { "enum": ["linear", "degrau"] },
+        "faixas": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["valor"],
+            "properties": { "ate": { "type": "number" }, "acima": { "type": "number" }, "valor": { "type": "number" } }
+          }
+        },
+        "conferir_no_texto_original": { "type": "boolean" },
+        "fonte_pagina": { "type": ["integer", "null"] }
+      },
+      "oneOf": [{ "required": ["pontos", "interpolar"] }, { "required": ["faixas"] }]
+    }
+  }
+}
