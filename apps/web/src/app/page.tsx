@@ -15,6 +15,13 @@ export default function PaginaConsulta() {
           {config.desenho === "A" ? ": o cirurgião digita as medidas e escolhe o implante; nada é calculado a partir do 3D." : ": medição 3D, volume e alertas TEPID ativos."}
           {" "}Envelope de incerteza da simulação: ±{String(config.envelope_rms_mm).replace(".", ",")} mm RMS.
         </p>
+        {config.recursos.medicao_automatica_3d && (
+          <p className="nota">
+            <a href="/validacao/bland-altman" data-testid="link-validacao">
+              Validação das medidas: sessão de Bland-Altman e planilha do art. 5º
+            </a>
+          </p>
+        )}
       </header>
       <Consulta config={config} />
     </>

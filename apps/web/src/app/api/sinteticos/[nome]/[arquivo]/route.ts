@@ -6,6 +6,7 @@ import { caminhoEmDataDir } from "@/config/ambiente";
 import { getDesenho } from "@/config/desenho";
 import { recursoAtivoEm } from "@/config/recursos";
 import { redigirGabarito } from "@/malhas/arquivos";
+import { torsosComSessaoAberta } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +30,10 @@ export async function GET(_req: Request, ctx: { params: Promise<{ nome: string; 
     const abs = caminhoEmDataDir(`sinteticos/${nome}/${arquivo}`);
     const s = await stat(abs).catch(() => null);
     if (!s?.isFile()) return erro(404, "arquivo_nao_encontrado", "arquivo não encontrado");
+    // Cegueira da sessão de Bland-Altman (ADR 0017): gabarito oculto enquanto houver sessão aberta com o torso.
+    if (arquivo === "gabarito.json" && (await torsosComSessaoAberta()).has(nome)) {
+      return erro(403, "gabarito_oculto_sessao_aberta", "gabarito oculto: há sessão de validação aberta com este torso");
+    }
     const medir = recursoAtivoEm(desenho, "medicao_automatica_3d");
     const volume = recursoAtivoEm(desenho, "volume_calculado");
     if (arquivo === "gabarito.json" && (!medir || !volume)) {

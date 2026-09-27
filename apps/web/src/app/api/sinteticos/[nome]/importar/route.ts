@@ -8,6 +8,7 @@ import { recursoAtivoEm } from "@/config/recursos";
 import { pacientePorId } from "@/db/repositorio";
 import { registrarMalha } from "@/malhas/registrar";
 import { ErroUpload, prepararUpload, type ArquivoUpload } from "@/malhas/upload";
+import { torsosComSessaoAberta } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,10 +45,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
       }
     }
     let gabarito: z.infer<typeof gabaritoSchema> | null = null;
-    try {
-      gabarito = gabaritoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`sinteticos/${nome}/gabarito.json`), "utf8")));
-    } catch {
-      gabarito = null;
+    // Cegueira da sessão de Bland-Altman (ADR 0017): sem gabarito enquanto houver sessão aberta com o torso.
+    if (!(await torsosComSessaoAberta()).has(nome)) {
+      try {
+        gabarito = gabaritoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`sinteticos/${nome}/gabarito.json`), "utf8")));
+      } catch {
+        gabarito = null;
+      }
     }
     const r = await registrarMalha({ paciente, upload: prepararUpload(entradas), unidade: "mm", recorte: "abaixo_do_pescoco", sintetica: true, desenho, origem: "sintetico" });
     // Em A nenhuma distância sai para a UI, nem as do gabarito (ADR 0005); os landmarks servem de âncora.
