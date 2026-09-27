@@ -30,6 +30,8 @@ interface Props {
   peso: number;
   envelopeMm: number;
   vista: NomeVista;
+  /** Expõe o contador de quadros por painel (window.__simuladorSim) para o benchmark de latência. */
+  instrumentar?: boolean;
 }
 
 /** Pose compartilhada entre os canvases (comparação lado a lado com câmeras sincronizadas). */
@@ -69,8 +71,12 @@ class SincroniaCamera {
 
 const GANCHOS_TESTE = process.env.NEXT_PUBLIC_GANCHOS_TESTE === "1";
 type Gancho = { quadros: Record<string, number>; estado: Record<string, unknown>; renderSincrono: Record<string, () => number> };
-function gancho(): Gancho | null {
-  if (!GANCHOS_TESTE || typeof window === "undefined") return null;
+/**
+ * Ganchos de medição: ligados no build de teste (NEXT_PUBLIC_GANCHOS_TESTE=1) ou, só com contador
+ * de quadros e estado da cena, pela página /benchmark (prop `instrumentar`; torso sintético).
+ */
+function gancho(instrumentar = false): Gancho | null {
+  if ((!GANCHOS_TESTE && !instrumentar) || typeof window === "undefined") return null;
   const w = window as unknown as { __simuladorSim?: Gancho };
   w.__simuladorSim ??= { quadros: {}, estado: {}, renderSincrono: {} };
   return w.__simuladorSim;
@@ -81,8 +87,9 @@ const OPCOES_CAMERA = { fov: 35, near: 1, far: 20000, position: [0, 0, 1200] as 
 const OPCOES_GL = { antialias: false, alpha: false, stencil: false, desynchronized: true, powerPreference: "high-performance" as const };
 const ESTILO_CANVAS = { background: "var(--fundo-viewer)" };
 const chaveConjunto = (p: Plano, i: Imf) => `${p}__${i}`;
+const olhoTmp = new THREE.Vector3();
 
-function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, sincronia, onErro }: Omit<Props, "paineis"> & { painel: PainelVista; sincronia: SincroniaCamera; onErro: (m: string | null) => void }) {
+function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, sincronia, onErro, instrumentar }: Omit<Props, "paineis"> & { painel: PainelVista; sincronia: SincroniaCamera; onErro: (m: string | null) => void }) {
   const obter = useThree((s) => s.get);
   const invalidar = useThree((s) => s.invalidate);
   const controles = useThree((s) => s.controls) as unknown as { target: THREE.Vector3; update: () => boolean } | null;
@@ -161,13 +168,19 @@ function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, sincroni
     }
     const { plano: p, imf: i, implanteId, cenas: cs } = atual.current;
     const ativa = cs?.get(chaveConjunto(p, i));
+    // descarte antecipado das faces de costas da pele para a vista atual (mesma imagem, menos
+    // trabalho de vértice/primitiva: decisivo em GPU fraca e no painel duplo)
+    if (ativa) {
+      const cam = obter().camera;
+      ativa.atualizarVista((cam as THREE.PerspectiveCamera).isPerspectiveCamera ? cam.getWorldPosition(olhoTmp) : null);
+    }
     try {
       if (ativa) garantirEnvelope(ativa);
       onErro(null);
     } catch (e) {
       onErro((e as Error).message);
     }
-    const g = gancho();
+    const g = gancho(instrumentar);
     if (g) {
       g.quadros[painel.chave] = (g.quadros[painel.chave] ?? 0) + 1;
       const c = obter().camera.position;

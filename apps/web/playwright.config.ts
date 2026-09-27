@@ -42,7 +42,8 @@ process.env.E2E_MESH_URL = MESH_URL;
 process.env.E2E_APP_TOKEN ??= randomBytes(24).toString("hex");
 const TOKEN = process.env.E2E_APP_TOKEN;
 
-const PORTAS = { A: 3101, B: 3102 } as const;
+// Portas sobrescrevíveis (E2E_PORTA_A/B) para rodar worktrees em paralelo sem colisão.
+const PORTAS = { A: Number(process.env.E2E_PORTA_A || 3101), B: Number(process.env.E2E_PORTA_B || 3102) } as const;
 const next = (desenho: "A" | "B") => ({
   command: `pnpm exec next start -H 127.0.0.1 -p ${PORTAS[desenho]}`,
   url: `http://127.0.0.1:${PORTAS[desenho]}/api/config`,
