@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Demonstracao sintetica (ADR 0018): sobe a pilha inteira (Next + services/mesh + Postgres local +
-# DATA_DIR proprio) numa maquina Linux limpa -- alvo: Vercel Sandbox (Amazon Linux 2023, node22,
-# python3.13) -- so com torsos sinteticos, DEMO_SINTETICA=1, DESENHO=B e LLM em mock.
+# DATA_DIR proprio) numa maquina Linux limpa -- alvo: Vercel Sandbox (observado em gru1: Ubuntu 26.04
+# com apt, usuario ubuntu, HOME=/vercel, node22, Postgres 18, Python 3.14 do sistema -> Python 3.13 via
+# uv; Amazon Linux/dnf continua aceito) -- so com torsos sinteticos, DEMO_SINTETICA=1, DESENHO=B e LLM
+# em mock.
 # Documentacao e riscos: docs/deploy-demo.md. NUNCA usar com dado real.
 #
 # Uso: bash scripts/demo_sandbox.sh <comando>
-#   preparar       instala dependencias (pacotes do sistema so se faltarem), pnpm install, venv do
-#                  services/mesh, cluster Postgres proprio + banco marcado como demo, torsos e
+#   preparar       instala dependencias (pacotes do sistema so se faltarem; apt ou dnf), pnpm install,
+#                  venv do services/mesh (Python 3.11-3.13; com so 3.14+ e pygeodesic sem wheel, usa
+#                  Python 3.13 do uv em ~/.local/bin, instalando o uv so se ausente), cluster
+#                  Postgres proprio + banco marcado como demo, torsos e
 #                  morphs sinteticos, next build
 #   subir          sobe Postgres, mesh (127.0.0.1) e web (0.0.0.0:DEMO_PORTA) com DEMO_SINTETICA=1;
 #                  na primeira vez gera APP_TOKEN_LOCAL aleatorio e o imprime UMA vez
@@ -23,7 +27,7 @@
 #   DEMO_DIR           estado da demo (padrao: $HOME/simulador-demo; FORA do repositorio)
 #   DEMO_PG_DIR        cluster Postgres (padrao: $DEMO_DIR/pg)
 #   DEMO_PORTA (3000)  DEMO_PG_PORTA (5433)  DEMO_MESH_PORTA (8765)  DEMO_DESENHO (B)
-#   DEMO_SEM_INSTALAR=1  nao tenta instalar pacotes do sistema (dnf/apt)
+#   DEMO_SEM_INSTALAR=1  nao tenta instalar pacotes do sistema (dnf/apt) nem o uv
 set -euo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_DIR="${DEMO_DIR:-$HOME/simulador-demo}"
@@ -63,17 +67,63 @@ MARCADOR=".simulador-demo-sintetica"
 pg_bin() {
   local d cands=("${PG_BIN:-}")
   tem initdb && cands+=("$(dirname "$(command -v initdb)")")
-  cands+=(/usr/lib/postgresql/17/bin /usr/lib/postgresql/16/bin /usr/lib/postgresql/15/bin /usr/pgsql-16/bin /usr/bin)
+  # versao decrescente: Ubuntu/Debian (/usr/lib/postgresql/N), depois PGDG/Amazon Linux
+  cands+=(/usr/lib/postgresql/18/bin /usr/lib/postgresql/17/bin /usr/lib/postgresql/16/bin /usr/lib/postgresql/15/bin /usr/pgsql-16/bin /usr/bin)
   for d in "${cands[@]}"; do [[ -n "$d" && -x "$d/initdb" && -x "$d/pg_ctl" && -x "$d/psql" ]] && { echo "$d"; return 0; }; done
   return 1
 }
 
+# Python >= 3.11 com venv/ensurepip. Preferencia: 3.13/3.12/3.11 explicitos, o 3.13 do uv (se o uv ja
+# existir; nada e instalado aqui) e so entao o python3 generico (que pode ser 3.14+, sem wheel do
+# pygeodesic 0.1.11 -- ver python_uv e preparar_venv).
+py_valido() { "$1" -c 'import sys, venv, ensurepip; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; }
+py_versao() { "$1" -c 'import sys; print("%d.%d" % sys.version_info[:2])'; }
+uv_bin() { if tem uv; then command -v uv; elif [[ -x "$HOME/.local/bin/uv" ]]; then echo "$HOME/.local/bin/uv"; else return 1; fi; }
+
 python_ok() {
-  local p
-  for p in python3.13 python3.12 python3.11 python3; do
-    tem "$p" && "$p" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null && { command -v "$p"; return 0; }
+  local p uv
+  for p in python3.13 python3.12 python3.11; do
+    tem "$p" && py_valido "$p" && { command -v "$p"; return 0; }
   done
+  if uv="$(uv_bin)" && p="$("$uv" python find 3.13 2>/dev/null)" && py_valido "$p"; then echo "$p"; return 0; fi
+  tem python3 && py_valido python3 && { command -v python3; return 0; }
   return 1
+}
+
+# Python 3.13 gerenciado pelo uv (MIT OR Apache-2.0; ferramenta de preparo, nao vai para o app).
+# Instala o uv pelo instalador oficial em ~/.local/bin SO se ele faltar, sem mexer no PATH do shell.
+python_uv() {
+  local uv p
+  if ! uv="$(uv_bin)"; then
+    [[ "${DEMO_SEM_INSTALAR:-0}" == "1" ]] && { msg "uv ausente e DEMO_SEM_INSTALAR=1" >&2; return 1; }
+    tem curl || { msg "curl ausente: nao da para instalar o uv" >&2; return 1; }
+    msg "instalando uv em $HOME/.local/bin (instalador oficial astral.sh)" >&2
+    curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >&2 || return 1
+    uv="$(uv_bin)" || return 1
+  fi
+  if ! p="$("$uv" python find 3.13 2>/dev/null)"; then
+    msg "uv python install 3.13" >&2
+    "$uv" python install 3.13 >&2 || return 1
+    p="$("$uv" python find 3.13)" || return 1
+  fi
+  py_valido "$p" || return 1
+  echo "$p"
+}
+
+# venv do services/mesh com o Python dado (recriado se a versao mudou); 1 se as dependencias nao importam
+preparar_venv() {
+  local py="$1"
+  if [[ -x "$VENV/bin/python" && "$(py_versao "$VENV/bin/python" 2>/dev/null || true)" != "$(py_versao "$py")" ]]; then
+    msg "venv do services/mesh com outra versao do Python: recriando"
+    rm -rf -- "$VENV"
+  fi
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    msg "venv do services/mesh com $py (Python $(py_versao "$py"))"
+    "$py" -m venv "$VENV" || return 1
+  fi
+  "$VENV/bin/python" -m pip install -q --upgrade pip || return 1
+  "$VENV/bin/python" -m pip install -q -e "$RAIZ/services/mesh" || return 1
+  "$VENV/bin/python" -c 'import numpy, scipy, trimesh, rtree, fast_simplification, pygeodesic, fastapi, uvicorn' || return 1
 }
 
 instalar_sistema() {
@@ -90,12 +140,17 @@ instalar_sistema() {
     # cabecalhos do Python para compilar pygeodesic/fast-simplification se nao houver wheel
     local py; py="$(python_ok || true)"; [[ -n "$py" ]] && sudo_ dnf install -y -q "$(basename "$py")-devel" 2>/dev/null || true
   elif tem apt-get; then
+    # Ubuntu 26.04 (imagem observada no Vercel Sandbox): postgresql = 18, python3 = 3.14 (o 3.13 vem do uv)
     msg "instalando pacotes (apt: Postgres, compiladores, Python)"
-    sudo_ apt-get update -qq
-    sudo_ apt-get install -y -qq postgresql postgresql-contrib build-essential python3 python3-venv python3-dev openssl curl
+    sudo_ env DEBIAN_FRONTEND=noninteractive apt-get update -qq \
+      || erro "apt-get update falhou (sem sudo? rede bloqueada para os espelhos do Ubuntu?)"
+    sudo_ env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql postgresql-contrib build-essential \
+        python3 python3-venv python3-dev openssl curl ca-certificates \
+      || erro "apt-get install falhou: instale Postgres >= 15, Python >= 3.11 (venv), gcc/g++, openssl e curl"
   else
     erro "sem dnf nem apt-get: instale Postgres >= 15, Python >= 3.11, gcc/g++, openssl e curl"
   fi
+  pg_bin >/dev/null || erro "Postgres ainda nao encontrado depois da instalacao (procurei /usr/lib/postgresql/{18..15}/bin, /usr/pgsql-16/bin e /usr/bin; defina PG_BIN)"
 }
 
 pnpm_() {
@@ -180,7 +235,18 @@ banco() {
       node --experimental-strip-types --no-warnings scripts/migrar.ts --teste --marcar-demo )
 }
 
+# DEMO_DIR ja existente, nao vazio e sem o marcador nao e da demo: recusa (nunca grava demo.env, banco
+# ou dados sinteticos por cima de uma pasta alheia apontada por engano).
+checar_demo_dir() {
+  if [[ -e "$DEMO_DIR" && ! -f "$DEMO_DIR/$MARCADOR" ]]; then
+    [[ -d "$DEMO_DIR" ]] || erro "DEMO_DIR ($DEMO_DIR) existe e nao e pasta"
+    [[ -z "$(ls -A -- "$DEMO_DIR")" ]] || erro "DEMO_DIR ($DEMO_DIR) existe, nao esta vazio e nao tem o marcador $MARCADOR: nao uso (aponte DEMO_DIR para uma pasta nova)"
+  fi
+  return 0
+}
+
 env_base() {
+  checar_demo_dir
   mkdir -p "$DEMO_DIR" "$LOGS" "$RUN" "$DATA_DIR_DEMO"
   chmod 700 "$DEMO_DIR"
   touch "$DEMO_DIR/$MARCADOR"
@@ -197,21 +263,23 @@ env_base() {
 
 # ------------------------------------------------------------------ comandos
 cmd_preparar() {
+  checar_demo_dir # antes de instalar qualquer coisa (env_base confere de novo)
   instalar_sistema
   tem node || erro "node ausente (o sandbox usa o runtime node22)"
   [[ "$(node -p 'process.versions.node.split(".")[0]')" == "22" ]] || erro "node $(node -v): o projeto exige Node 22 (package.json engines)"
   msg "pnpm install"
   ( cd "$RAIZ" && pnpm_ install --frozen-lockfile )
 
-  local py; py="$(python_ok)" || erro "Python >= 3.11 nao encontrado"
-  if [[ ! -x "$VENV/bin/python" ]]; then
-    msg "venv do services/mesh com $py"
-    "$py" -m venv "$VENV"
+  local py; py="$(python_ok)" || py="$(python_uv)" || erro "Python >= 3.11 (com venv) nao encontrado, nem via uv"
+  if ! preparar_venv "$py"; then
+    # Python 3.14+ (Ubuntu 26.04): pygeodesic 0.1.11 nao tem wheel cp314 e a compilacao falha -> 3.13 do uv
+    "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 14) else 1)' \
+      || erro "dependencias do services/mesh nao importam com Python $(py_versao "$py") (pygeodesic sem wheel? instale gcc/g++ e os cabecalhos do Python)"
+    msg "Python $(py_versao "$py") sem pygeodesic funcional: usando Python 3.13 do uv"
+    py="$(python_uv)" || erro "nao consegui o Python 3.13 via uv (rede para astral.sh e github.com liberada no preparo?)"
+    rm -rf -- "$VENV"
+    preparar_venv "$py" || erro "dependencias do services/mesh nao importam nem com o Python 3.13 do uv ($py)"
   fi
-  "$VENV/bin/python" -m pip install -q --upgrade pip
-  "$VENV/bin/python" -m pip install -q -e "$RAIZ/services/mesh"
-  "$VENV/bin/python" -c 'import numpy, scipy, trimesh, rtree, fast_simplification, pygeodesic, fastapi, uvicorn' \
-    || erro "dependencias do services/mesh nao importam (pygeodesic sem wheel? instale gcc-c++ e python3-devel)"
 
   env_base
   pg_cluster

@@ -3,7 +3,7 @@
  * scripts de verdade (bash/python3) em pastas temporárias; nada do repositório é alterado.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -205,5 +205,33 @@ describe("scripts/demo_sandbox.sh (ADR 0018): guardas que não sobem nada", () =
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/nao tem o marcador/);
     expect(readFileSync(join(d, "importante.txt"), "utf8")).toBe("nao apagar");
+  });
+
+  // R2 da revisão: preparar/env_base nunca gravam demo.env, banco ou dados sobre pasta alheia
+  it("preparar recusa DEMO_DIR existente, não vazio e sem o marcador; aceita vazio ou marcado", () => {
+    // "node" falso (versão 18) para o preparar parar logo depois da guarda, sem instalar nada
+    const bin = novoTmp("simulador-bin-");
+    writeFileSync(join(bin, "node"), "#!/bin/sh\necho 18\n");
+    chmodSync(join(bin, "node"), 0o755);
+    const env = { DEMO_SEM_INSTALAR: "1", PATH: `${bin}:/usr/bin:/bin` };
+
+    const alheia = novoTmp("simulador-demo-");
+    writeFileSync(join(alheia, "importante.txt"), "nao mexer");
+    const r = rodar(["preparar"], { ...env, DEMO_DIR: alheia });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao esta vazio e nao tem o marcador/);
+    expect(existsSync(join(alheia, "demo.env"))).toBe(false);
+    expect(existsSync(join(alheia, ".simulador-demo-sintetica"))).toBe(false);
+
+    for (const [rotulo, d] of [
+      ["vazia", novoTmp("simulador-demo-")],
+      ["marcada", (() => { const m = novoTmp("simulador-demo-"); writeFileSync(join(m, ".simulador-demo-sintetica"), ""); writeFileSync(join(m, "demo.env"), "DEMO_SINTETICA=1\n"); return m; })()],
+      ["inexistente", join(novoTmp("simulador-demo-"), "nova")],
+    ] as const) {
+      const ok = rodar(["preparar"], { ...env, DEMO_DIR: d });
+      expect(ok.status, rotulo).not.toBe(0);
+      expect(ok.stderr, rotulo).not.toMatch(/marcador/);
+      expect(ok.stderr, rotulo).toMatch(/exige Node 22/); // passou da guarda e parou no node falso
+    }
   });
 });
