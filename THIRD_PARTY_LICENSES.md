@@ -1,6 +1,6 @@
 # Licenças de terceiros
 
-Gerado por `scripts/licencas.sh` em 2026-09-26T21:16:17Z para a versão 0.1.1. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
+Gerado por `scripts/licencas.sh` em 2026-09-27T08:21:52Z para a versão 0.1.1. Política: ADR 0009 (`docs/adr/0009-licencas.md`). O script falha se alguma dependência instalada tiver licença fora da lista abaixo.
 
 ## Permitidas
 
@@ -14,7 +14,7 @@ RBSM, iRBSM, liRBSM; SMPL, SMPL-X e topologias derivadas; Depth Anything 2 Base/
 
 Diretas de runtime: next/@next/env, react/react-dom, three, @react-three/fiber, @react-three/drei, zod, pg, fflate (todas MIT). Dev: typescript (Apache-2.0), eslint + eslint-config-next, vitest, msw, jsdom, @testing-library/* (MIT), @playwright/test (Apache-2.0; Chromium 1194 pré-instalado, fora do repositório). `sharp` (dependência opcional do `next`, com `@img/sharp-libvips-*` LGPL-3.0) é removido por `overrides: { sharp: "-" }` no `pnpm-workspace.yaml`; o app não usa `next/image`. Atribuições: `caniuse-lite` (CC-BY-4.0, Alexis Deveria/caniuse.com, dados de navegadores usados no build); `axe-core` (MPL-2.0, dev, sem modificação).
 
-_Gerado de `pnpm licenses list`: 536 pacotes (MIT 458 · Apache-2.0 28 · ISC 24 · BSD-2-Clause 9 · BSD-3-Clause 4 · BlueOak-1.0.0 2 · CC0-1.0 2 · MIT-0 2 · (MIT AND Zlib) 1 · (MIT OR CC0-1.0) 1 · 0BSD 1 · CC-BY-4.0 1 · MPL-2.0 1 · Python-2.0 1 · Unlicense 1)._
+_Gerado de `pnpm licenses list`: 537 pacotes (MIT 458 · Apache-2.0 29 · ISC 24 · BSD-2-Clause 9 · BSD-3-Clause 4 · BlueOak-1.0.0 2 · CC0-1.0 2 · MIT-0 2 · (MIT AND Zlib) 1 · (MIT OR CC0-1.0) 1 · 0BSD 1 · CC-BY-4.0 1 · MPL-2.0 1 · Python-2.0 1 · Unlicense 1)._
 
 | Pacote | Versão | Licença |
 |---|---|---|
@@ -278,6 +278,7 @@ _Gerado de `pnpm licenses list`: 536 pacotes (MIT 458 · Apache-2.0 28 · ISC 24
 | globals | 14.0.0, 16.4.0 | MIT |
 | globalthis | 1.0.4 | MIT |
 | glsl-noise | 0.0.0 | MIT |
+| gltf-validator | 2.0.0-dev.3.10 | Apache-2.0 |
 | gopd | 1.2.0 | MIT |
 | graphql | 16.14.2 | MIT |
 | has-bigints | 1.1.0 | MIT |
