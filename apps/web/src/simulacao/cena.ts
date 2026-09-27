@@ -311,7 +311,9 @@ export function maximoCubico(c0: number, c1: number, c2: number, c3: number, lo:
 
 function geometriaCompartilhada(base: THREE.BufferGeometry, indices: readonly number[]): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setIndex(base.getIndex());
+  // Índice PRÓPRIO desta cena (cópia do da base) e único durante toda a vida dela: o descarte de
+  // costas reescreve este mesmo buffer, e o `dispose()` libera exatamente ele (nunca o da base).
+  g.setIndex(new THREE.BufferAttribute(Uint32Array.from(base.getIndex()!.array), 1));
   for (const [nome, attr] of Object.entries(base.attributes)) g.setAttribute(nome, attr);
   // só os targets usados por esta cena: menos trabalho por vértice na GPU
   g.morphAttributes = Object.fromEntries(Object.entries(base.morphAttributes).map(([k, lista]) => [k, indices.map((i) => lista[i]!)]));
@@ -323,7 +325,11 @@ function geometriaCompartilhada(base: THREE.BufferGeometry, indices: readonly nu
   return g;
 }
 
-/** Geometria das cascas: mesmos atributos, índice restrito aos triângulos da região deformada. */
+/**
+ * Geometria das cascas: mesmos atributos, índice restrito aos triângulos da região deformada.
+ * O buffer de índice é alocado uma vez (tamanho do índice completo) e reescrito a cada troca de
+ * alvo, com `drawRange` no trecho válido: nenhum buffer de índice é trocado (e perdido na GPU).
+ */
 function geometriaCasca(g: THREE.BufferGeometry): THREE.BufferGeometry {
   const c = new THREE.BufferGeometry();
   for (const [nome, attr] of Object.entries(g.attributes)) c.setAttribute(nome, attr);
@@ -331,7 +337,8 @@ function geometriaCasca(g: THREE.BufferGeometry): THREE.BufferGeometry {
   c.morphTargetsRelative = g.morphTargetsRelative;
   c.boundingBox = g.boundingBox;
   c.boundingSphere = g.boundingSphere;
-  c.setIndex(new THREE.BufferAttribute(new Uint32Array(0), 1));
+  c.setIndex(new THREE.BufferAttribute(new Uint32Array(g.getIndex()!.count), 1));
+  c.setDrawRange(0, 0);
   return c;
 }
 
@@ -420,24 +427,26 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
   let peso = 0;
 
   // ---- descarte antecipado das faces de costas da pele (dependente da vista) ----
-  const indiceCompleto = g.getIndex()!;
+  // Um único buffer de índice na pele: `idxPele` guarda o índice completo até haver vista; o
+  // descarte grava nele só os triângulos de frente (drawRange = trecho válido) e `atualizarVista(null)`
+  // restaura o completo a partir de `indiceCompleto` (cópia só em CPU). Assim `dispose()` libera tudo.
+  const idxPele = g.getIndex()!;
+  const indiceCompleto = Uint32Array.from(idxPele.array);
+  let idxPeleCompleto = true;
   const posicoes = comoFloat32(g.getAttribute("position") as THREE.BufferAttribute);
-  let idxFrente: THREE.BufferAttribute | null = null;
   const olho = new THREE.Vector3();
   let olhoValido = false;
   let alvoDescarte: number | undefined | null = null; // null = nunca calculado
 
   function refazerDescarte(indice: number | undefined) {
     if (!olhoValido) return;
-    const I = indiceCompleto.array;
-    idxFrente ??= new THREE.BufferAttribute(new Uint32Array(I.length), 1);
-    if (g.getIndex() !== idxFrente) g.setIndex(idxFrente);
-    const saida = idxFrente.array as Uint32Array;
+    const saida = idxPele.array as Uint32Array;
     const D = indice === undefined ? null : comoFloat32(morphPos[indice] as THREE.BufferAttribute);
-    const k = indicesDeFrente(I, posicoes, D, g.morphTargetsRelative, olho, saida);
-    idxFrente.clearUpdateRanges();
-    idxFrente.addUpdateRange(0, k);
-    idxFrente.needsUpdate = true;
+    const k = indicesDeFrente(indiceCompleto, posicoes, D, g.morphTargetsRelative, olho, saida);
+    idxPele.clearUpdateRanges();
+    idxPele.addUpdateRange(0, k);
+    idxPele.needsUpdate = true;
+    idxPeleCompleto = false;
     g.setDrawRange(0, k);
     alvoDescarte = indice;
   }
@@ -451,15 +460,21 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
     }
     mascara.needsUpdate = true;
     // cascas só sobre os triângulos com algum vértice deformado (desenho mais barato, mesmo resultado)
-    const idx = indiceCompleto;
-    const tri: number[] = [];
-    if (idx) {
-      const a = idx.array;
-      for (let t = 0; t < a.length; t += 3) if (arr[a[t]!]! > 0 || arr[a[t + 1]!]! > 0 || arr[a[t + 2]!]! > 0) tri.push(a[t]!, a[t + 1]!, a[t + 2]!);
-    } else {
-      for (let v = 0; v + 2 < arr.length; v += 3) if (arr[v]! > 0 || arr[v + 1]! > 0 || arr[v + 2]! > 0) tri.push(v, v + 1, v + 2);
+    const a = indiceCompleto;
+    const idxCasca = gCasca.getIndex()!;
+    const tri = idxCasca.array as Uint32Array;
+    let k = 0;
+    for (let t = 0; t + 2 < a.length; t += 3) {
+      if (arr[a[t]!]! > 0 || arr[a[t + 1]!]! > 0 || arr[a[t + 2]!]! > 0) {
+        tri[k++] = a[t]!;
+        tri[k++] = a[t + 1]!;
+        tri[k++] = a[t + 2]!;
+      }
     }
-    gCasca.setIndex(new THREE.BufferAttribute(Uint32Array.from(tri), 1));
+    idxCasca.clearUpdateRanges();
+    idxCasca.addUpdateRange(0, k);
+    idxCasca.needsUpdate = true;
+    gCasca.setDrawRange(0, k);
   }
 
   const cascas = [externa] as const;
@@ -493,7 +508,12 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
       if (!olhoMundo) {
         olhoValido = false;
         alvoDescarte = null;
-        if (g.getIndex() !== indiceCompleto) g.setIndex(indiceCompleto);
+        if (!idxPeleCompleto) {
+          (idxPele.array as Uint32Array).set(indiceCompleto);
+          idxPele.clearUpdateRanges();
+          idxPele.needsUpdate = true;
+          idxPeleCompleto = true;
+        }
         g.setDrawRange(0, Infinity);
         return;
       }
@@ -519,6 +539,7 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
       return { alvo, peso, envelope_mm: envelopeMm, envelope_visivel: simulada ? envelopeVisivel : false, pele_visivel: pele.visible };
     },
     descartar() {
+      // pele e casca têm cada uma um único buffer de índice (nunca trocado): o dispose libera ambos
       g.dispose();
       gCasca.dispose();
       matPele.dispose();

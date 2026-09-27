@@ -60,7 +60,7 @@ describe("cena simulada", () => {
     expect(c.cascas[0].morphTargetInfluences).toEqual([0.4]);
     expect(c.estado()).toMatchObject({ peso: 0.4, envelope_mm: 4.5, envelope_visivel: true, pele_visivel: true });
     // casca só sobre os triângulos deformados: os 6 (de 8) que contêm o vértice central
-    const tri = (c.cascas[0].geometry.getIndex()!.count ?? 0) / 3;
+    const tri = c.cascas[0].geometry.drawRange.count / 3;
     expect(tri).toBeGreaterThan(0);
     expect(tri).toBeLessThan(8);
     c.definir("mt__imp-a__dual_plane__manter", 0);
@@ -278,6 +278,27 @@ describe("latência: mesma geometria, menos trabalho", () => {
         }
       }
     }
+  });
+
+  it("pele e casca usam um único buffer de índice cada (nunca trocado); descartar libera os dois", () => {
+    const c = criarCenaSimulada(esferaComMorphs(), 4.5, () => true);
+    const g = c.pele.geometry, gc = c.cascas[0].geometry;
+    const idxPele = g.getIndex()!, idxCasca = gc.getIndex()!;
+    const completo = Array.from(idxPele.array);
+    c.definir(NOMES[0]!, 1);
+    c.atualizarVista(new THREE.Vector3(0, -150, 900));
+    c.definir(NOMES[1]!, 0.5);
+    c.atualizarVista(new THREE.Vector3(0, 0, -900));
+    expect(g.getIndex()).toBe(idxPele);
+    expect(gc.getIndex()).toBe(idxCasca);
+    c.atualizarVista(null);
+    expect(g.getIndex()).toBe(idxPele);
+    expect(Array.from(idxPele.array)).toEqual(completo);
+    // o renderer (WebGLGeometries) libera, no evento dispose, o índice ATUAL de cada geometria
+    const liberados: THREE.BufferAttribute[] = [];
+    for (const geo of [g, gc]) geo.addEventListener("dispose", (e) => liberados.push((e.target as THREE.BufferGeometry).getIndex()!));
+    c.descartar();
+    expect(liberados).toEqual([idxPele, idxCasca]);
   });
 
   it("cena: atualizarVista reduz o índice da pele, null volta ao completo; casca não muda", () => {
