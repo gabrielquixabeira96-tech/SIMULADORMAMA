@@ -3,6 +3,7 @@ import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs
 import { DECIMACAO_PADRAO, type Desenho } from "@simulador/contratos";
 import { z } from "zod";
 import { caminhoEmDataDir, isoComFuso } from "@/config/ambiente";
+import { torsoUtilizavel } from "@/config/demo";
 import { ClienteMesh } from "@/mesh/cliente";
 
 /**
@@ -39,6 +40,7 @@ export async function torsosElegiveis(): Promise<string[]> {
   for (const nome of nomes.sort()) {
     const obj = await stat(caminhoEmDataDir(`sinteticos/${nome}/torso.obj`)).catch(() => null);
     if (!obj?.isFile()) continue;
+    if (!(await torsoUtilizavel(nome))) continue; // modo demo (ADR 0018): só torsos gerados
     if (await lerGabarito(nome).then(() => true, () => false)) ok.push(nome);
   }
   return ok;

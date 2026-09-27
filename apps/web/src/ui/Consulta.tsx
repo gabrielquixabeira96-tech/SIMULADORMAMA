@@ -454,34 +454,42 @@ export function Consulta({ config }: { config: ConfigPublica }) {
 
         <section className="painel">
           <h3>2. Malha 3D</h3>
-          <form onSubmit={enviarMalha} className="linha-form">
-            <label>
-              Arquivos (OBJ + MTL + PNG/JPG, PLY ou ZIP)
-              <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
-            </label>
-            <label>
-              Unidade do arquivo
-              <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
-                <option value="desconhecida">desconhecida (inferir)</option>
-                <option value="m">metros (3D Scanner App)</option>
-                <option value="cm">centímetros</option>
-                <option value="mm">milímetros</option>
-              </select>
-            </label>
-            <button type="submit" disabled={!paciente || carregando}>
-              Enviar e processar
-            </button>
-          </form>
-          {!paciente && <p className="nota">Crie o atendimento para enviar ao serviço (recorte abaixo do pescoço + decimação 30–50 mil vértices).</p>}
-          <details>
-            <summary>Pré-visualizar arquivo local (sem enviar; não grava medidas)</summary>
-            <div className="linha-form">
-              <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
-              <button type="button" onClick={abrirLocal} disabled={carregando}>
-                Abrir no viewer
+          {config.demo ? (
+            <p className="nota" data-testid="upload-desligado-demo">
+              Demonstração: envio de malha e pré-visualização de arquivo local desligados. Use somente os torsos sintéticos abaixo.
+            </p>
+          ) : (
+          <>
+            <form onSubmit={enviarMalha} className="linha-form">
+              <label>
+                Arquivos (OBJ + MTL + PNG/JPG, PLY ou ZIP)
+                <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
+              </label>
+              <label>
+                Unidade do arquivo
+                <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+                  <option value="desconhecida">desconhecida (inferir)</option>
+                  <option value="m">metros (3D Scanner App)</option>
+                  <option value="cm">centímetros</option>
+                  <option value="mm">milímetros</option>
+                </select>
+              </label>
+              <button type="submit" disabled={!paciente || carregando}>
+                Enviar e processar
               </button>
-            </div>
-          </details>
+            </form>
+            {!paciente && <p className="nota">Crie o atendimento para enviar ao serviço (recorte abaixo do pescoço + decimação 30–50 mil vértices).</p>}
+            <details>
+              <summary>Pré-visualizar arquivo local (sem enviar; não grava medidas)</summary>
+              <div className="linha-form">
+                <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
+                <button type="button" onClick={abrirLocal} disabled={carregando}>
+                  Abrir no viewer
+                </button>
+              </div>
+            </details>
+          </>
+          )}
           {sinteticos.length > 0 && (
             <div className="linha-form">
               <span>Torsos sintéticos:</span>
@@ -613,7 +621,14 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     />
     {paciente && (
       <div className="paineis-atendimento">
-        <PainelAnamnese pacienteId={paciente.id} atendimentoId={atendimentoId} onRegistrada={(r) => setAtendimentoId(r.atendimentoId)} />
+        {config.demo ? (
+          <section className="painel" data-testid="anamnese-desligada-demo">
+            <h3>Anamnese</h3>
+            <p className="nota">Demonstração: anamnese em texto livre desligada (nenhum dado real entra nesta instância).</p>
+          </section>
+        ) : (
+          <PainelAnamnese pacienteId={paciente.id} atendimentoId={atendimentoId} onRegistrada={(r) => setAtendimentoId(r.atendimentoId)} />
+        )}
         <PainelRelatorio
           pacienteId={paciente.id}
           desenho={config.desenho}

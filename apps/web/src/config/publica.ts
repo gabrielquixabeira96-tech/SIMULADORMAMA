@@ -2,6 +2,7 @@ import type { CampoTepid, Desenho } from "@simulador/contratos";
 import { versaoSoftware } from "./ambiente";
 import { AVISO_FIXO } from "./aviso";
 import { carregarConfigSimulacaoUI, carregarTepidConfig } from "./arquivosConfig";
+import { demoAtiva } from "./demo";
 import { getDesenho } from "./desenho";
 import { recursosDoDesenho, type MapaRecursos } from "./recursos";
 
@@ -15,6 +16,8 @@ export interface ConfigPublica {
   aviso_fixo: string;
   envelope_rms_mm: number;
   volume_relativa_fator: number;
+  /** Modo demonstração sintética (ADR 0018): a UI esconde o upload e a anamnese em texto livre. */
+  demo: boolean;
   tepid: {
     versao: string;
     status: "nao_conferido" | "conferido";
@@ -35,6 +38,7 @@ export function configPublica(): ConfigPublica {
     aviso_fixo: AVISO_FIXO,
     envelope_rms_mm: sim.envelope_rms_mm,
     volume_relativa_fator: sim.volume_relativa_fator,
+    demo: demoAtiva(),
     tepid: {
       versao: tepid.versao,
       status: tepid.status,

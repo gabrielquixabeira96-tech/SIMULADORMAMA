@@ -3,6 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DECIMACAO_PADRAO, type Desenho, type MalhaMeta, type ModoRecorte, type UnidadeOrigem } from "@simulador/contratos";
 import { caminhoEmDataDir, usuarioAtual } from "@/config/ambiente";
+import { demoAtiva } from "@/config/demo";
 import { registrarAuditoria } from "@/db/auditoria";
 import { transacao } from "@/db/pool";
 import { inserirMalha, type Paciente } from "@/db/repositorio";
@@ -31,6 +32,8 @@ export async function registrarMalha(a: {
   desenho: Desenho;
   origem: "upload" | "sintetico";
 }): Promise<MalhaRegistrada> {
+  // modo demo sintética (ADR 0018): nenhuma malha não sintética entra, por nenhum caminho
+  if (demoAtiva() && (!a.sintetica || a.origem !== "sintetico")) throw new Error("modo demo sintética: só torsos sintéticos podem ser registrados");
   const malhaId = randomUUID();
   const malhaDir = `pacientes/${a.paciente.pseudonimo}/malhas/${malhaId}`;
   const absOriginal = caminhoEmDataDir(`${malhaDir}/original`);

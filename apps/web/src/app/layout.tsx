@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { versaoSoftware } from "@/config/ambiente";
+import { demoAtiva } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { AvisoFixo } from "@/ui/AvisoFixo";
 import "./globals.css";
@@ -16,8 +17,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body>
-        <AvisoFixo versao={versaoSoftware()} desenho={getDesenho()} />
-        <main className="conteudo">{children}</main>
+        <AvisoFixo versao={versaoSoftware()} desenho={getDesenho()} demo={demoAtiva()} />
+        <main className={demoAtiva() ? "conteudo conteudo-demo" : "conteudo"}>{children}</main>
       </body>
     </html>
   );

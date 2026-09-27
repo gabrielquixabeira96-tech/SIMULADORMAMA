@@ -20,6 +20,16 @@
  *    `/api/benchmark` e `/api/benchmark/arquivo` — qualquer outra rota → 403
  *    `rota_restrita_benchmark`, seja qual for o Host (inclusive `localhost`). A subida também
  *    recusa esse modo com `DATABASE_URL` definido ou `DATA_DIR/pacientes` existente (`config/subida.ts`).
+ * 5. Modo "demonstração sintética" (ADR 0018, v0.1.3): `DEMO_SINTETICA=1`, também só pela
+ *    configuração. A instância é dedicada, atestada na subida como contendo SÓ dado sintético
+ *    (`config/subida.ts`), e fecha as duas entradas de dado real: `POST /api/malhas` (upload) e
+ *    `POST /api/llm/anamnese` (texto livre) → 403 `desligado_na_demo`. Nesse modo o "benchmark na
+ *    rede" (item 4) NÃO se aplica: o app inteiro e o /benchmark atendem no host público de
+ *    `APP_HOSTS_PERMITIDOS`, porque a restrição do item 4 protege dado de paciente e aqui não há
+ *    nenhum. Token, Host, Origin e Content-Type continuam valendo em todas as rotas.
+ * 6. Proxy TLS (ADR 0018): `X-Forwarded-Proto`/`X-Forwarded-Host` só são levados em conta com
+ *    `DEMO_SINTETICA=1` ou `APP_CONFIAR_PROXY_TLS=1`; no modo local padrão são ignorados. O host
+ *    encaminhado também tem de estar permitido e passa a ser o host comparado com o `Origin`.
  */
 
 export const COOKIE_TOKEN = "simulador_token";
@@ -49,6 +59,8 @@ export interface EntradaRequisicao {
     APP_HOSTS_PERMITIDOS?: string | undefined;
     NODE_ENV?: string | undefined;
     BENCHMARK_HABILITADO?: string | undefined;
+    DEMO_SINTETICA?: string | undefined;
+    APP_CONFIAR_PROXY_TLS?: string | undefined;
   };
 }
 
@@ -81,9 +93,56 @@ export function hostsForaDoLoopback(extras: string | undefined): string[] {
     .filter((n) => n && !HOSTS_LOOPBACK.has(n));
 }
 
-/** A instância está no modo "benchmark na rede"? Só pela configuração (env), nunca pela requisição. */
-export function modoBenchmarkNaRede(env: { BENCHMARK_HABILITADO?: string | undefined; APP_HOSTS_PERMITIDOS?: string | undefined }): boolean {
+/** Modo "demonstração sintética" (ADR 0018)? Só pela configuração; qualquer valor diferente de "1" = desligado. */
+export function modoDemoSintetica(env: { DEMO_SINTETICA?: string | undefined }): boolean {
+  return env.DEMO_SINTETICA === "1";
+}
+
+/**
+ * Rotas fechadas no modo demo (qualquer método mutante): são as entradas de dado real — o upload
+ * de malha e a anamnese em texto livre (ADR 0018).
+ */
+export const ROTAS_FECHADAS_NA_DEMO: ReadonlySet<string> = new Set(["/api/malhas", "/api/llm/anamnese"]);
+export const CODIGO_DESLIGADO_NA_DEMO = "desligado_na_demo";
+
+/** Confia em `X-Forwarded-Proto`/`X-Forwarded-Host`? Só no modo demo ou com `APP_CONFIAR_PROXY_TLS=1`. */
+export function confiarProxyTls(env: { DEMO_SINTETICA?: string | undefined; APP_CONFIAR_PROXY_TLS?: string | undefined }): boolean {
+  return modoDemoSintetica(env) || env.APP_CONFIAR_PROXY_TLS === "1";
+}
+
+/**
+ * A instância está no modo "benchmark na rede"? Só pela configuração (env), nunca pela requisição.
+ * No modo demo sintética, não: a demo já é atestada sem dado de paciente e precisa do app inteiro.
+ */
+export function modoBenchmarkNaRede(env: { BENCHMARK_HABILITADO?: string | undefined; APP_HOSTS_PERMITIDOS?: string | undefined; DEMO_SINTETICA?: string | undefined }): boolean {
+  if (modoDemoSintetica(env)) return false;
   return env.BENCHMARK_HABILITADO === "1" && hostsForaDoLoopback(env.APP_HOSTS_PERMITIDOS).length > 0;
+}
+
+/** Primeiro valor de um cabeçalho encaminhado (`a, b` → `a`), em minúsculas; vazio → null. */
+function primeiroValor(v: string | null): string | null {
+  const x = (v ?? "").split(",")[0]!.trim().toLowerCase();
+  return x ? x : null;
+}
+
+/**
+ * Protocolo e host ORIGINAIS da requisição (o que o navegador vê), para o `Location` do
+ * redirecionamento do `?token=` e o `Secure` do cookie. Sem confiança no proxy: o protocolo da URL
+ * e o `Host` (comportamento da v0.1.2). Com confiança: `X-Forwarded-Proto` (só http/https) e
+ * `X-Forwarded-Host`, quando presentes.
+ */
+export function origemOriginal(a: {
+  protocoloUrl: string;
+  host: string;
+  xForwardedProto: string | null;
+  xForwardedHost: string | null;
+  confiar: boolean;
+}): { protocolo: "http:" | "https:"; host: string } {
+  const doUrl = a.protocoloUrl === "https:" ? "https:" : "http:";
+  if (!a.confiar) return { protocolo: doUrl, host: a.host };
+  const xfp = primeiroValor(a.xForwardedProto);
+  const protocolo = xfp === "https" ? "https:" : xfp === "http" ? "http:" : doUrl;
+  return { protocolo, host: primeiroValor(a.xForwardedHost) ?? a.host };
 }
 
 export function hostPermitido(host: string, extras: string | undefined): boolean {
@@ -107,9 +166,21 @@ export type Autenticacao = "desligada" | "cabecalho" | "cookie" | "param";
  * `param` = token veio em `?token=`: o proxy grava o cookie e redireciona sem o parâmetro.
  */
 export function avaliarRequisicao(r: EntradaRequisicao, parametroToken: string | null = null): { ok: true; autenticacao: Autenticacao } | { ok: false; recusa: Recusa } {
-  const host = r.cabecalho("host") ?? r.hostUrl;
-  if (!host || !hostPermitido(host, r.env.APP_HOSTS_PERMITIDOS)) {
+  const hostCabecalho = r.cabecalho("host") ?? r.hostUrl;
+  if (!hostCabecalho || !hostPermitido(hostCabecalho, r.env.APP_HOSTS_PERMITIDOS)) {
     return { ok: false, recusa: { status: 403, codigo: "host_nao_permitido", mensagem: "host não permitido (o app só atende em loopback)" } };
+  }
+  // Atrás de proxy TLS confiável, o host público (X-Forwarded-Host) também tem de ser permitido e
+  // é ele que o navegador põe no Origin.
+  let host = hostCabecalho;
+  if (confiarProxyTls(r.env)) {
+    const encaminhado = primeiroValor(r.cabecalho("x-forwarded-host"));
+    if (encaminhado !== null) {
+      if (!hostPermitido(encaminhado, r.env.APP_HOSTS_PERMITIDOS)) {
+        return { ok: false, recusa: { status: 403, codigo: "host_nao_permitido", mensagem: "host encaminhado não permitido" } };
+      }
+      host = encaminhado;
+    }
   }
   if (modoBenchmarkNaRede(r.env) && !ROTAS_BENCHMARK_NA_REDE.has(r.caminho)) {
     return { ok: false, recusa: { status: 403, codigo: "rota_restrita_benchmark", mensagem: "instância de benchmark na rede: só /benchmark e /api/benchmark são atendidas" } };
@@ -132,6 +203,10 @@ export function avaliarRequisicao(r: EntradaRequisicao, parametroToken: string |
 
   // ---- rotas mutantes da API
   const metodo = r.metodo.toUpperCase();
+  // modo demo: entradas de dado real fechadas (antes do Content-Type: o upload multipart também cai aqui)
+  if (modoDemoSintetica(r.env) && METODOS_MUTANTES.has(metodo) && ROTAS_FECHADAS_NA_DEMO.has(r.caminho.replace(/\/+$/, "") || "/")) {
+    return { ok: false, recusa: { status: 403, codigo: CODIGO_DESLIGADO_NA_DEMO, mensagem: "desligado na demonstração sintética: só torsos sintéticos, sem upload de malha nem anamnese em texto livre" } };
+  }
   if (r.caminho.startsWith("/api/") && METODOS_MUTANTES.has(metodo)) {
     const midia = tipoDeMidia(r.cabecalho("content-type"));
     const multipartOk = midia === "multipart/form-data" && ROTAS_MULTIPART.has(r.caminho);

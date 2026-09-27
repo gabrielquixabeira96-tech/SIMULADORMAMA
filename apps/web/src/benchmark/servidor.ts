@@ -4,6 +4,7 @@ import { caminhoEmDataDir } from "@/config/ambiente";
 import { getDesenho } from "@/config/desenho";
 import { redigirPrevistoManifest } from "@/malhas/arquivos";
 import { ClienteMesh } from "@/mesh/cliente";
+import { modoDemoSintetica } from "@/seguranca/requisicao";
 
 /**
  * Página /benchmark (plano A14): mede a latência de interação da simulação no hardware-alvo
@@ -18,8 +19,9 @@ export const TORSO_BENCHMARK = "t01_simetrico_300";
 export const IMPLANTES_BENCHMARK = ["motiva-rsd-300", "polytech-21631-255"] as const;
 const DIR = `benchmark/${TORSO_BENCHMARK}`;
 
+/** `BENCHMARK_HABILITADO=1`, ou o modo demo sintética (ADR 0018), que liga o /benchmark junto com o resto do app. */
 export function benchmarkHabilitado(env: Readonly<Record<string, string | undefined>> = process.env): boolean {
-  return env.BENCHMARK_HABILITADO === "1";
+  return env.BENCHMARK_HABILITADO === "1" || modoDemoSintetica(env);
 }
 
 /** Nomes (relativos à pasta do benchmark) que a rota de arquivo aceita: só os 4 .glb de morphs. */

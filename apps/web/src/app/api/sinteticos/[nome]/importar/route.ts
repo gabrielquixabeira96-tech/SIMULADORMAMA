@@ -3,6 +3,7 @@ import { uuidSchema } from "@simulador/contratos";
 import { z } from "zod";
 import { erro, json, lerJson, tratarErro } from "@/api/respostas";
 import { caminhoEmDataDir } from "@/config/ambiente";
+import { torsoUtilizavel } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { recursoAtivoEm } from "@/config/recursos";
 import { pacientePorId } from "@/db/repositorio";
@@ -33,6 +34,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
     const desenho = getDesenho();
     const { nome } = await ctx.params;
     if (!/^[a-z0-9_]+$/.test(nome)) return erro(400, "nome_invalido", "nome de torso inválido");
+    // modo demo (ADR 0018): só torsos gerados pelo services/mesh
+    if (!(await torsoUtilizavel(nome))) return erro(404, "torso_nao_encontrado", "torso sintético não encontrado");
     const corpo = corpoSchema.parse(await lerJson(req));
     const paciente = await pacientePorId(corpo.paciente_id);
     if (!paciente) return erro(404, "paciente_nao_encontrado", "paciente não encontrado");

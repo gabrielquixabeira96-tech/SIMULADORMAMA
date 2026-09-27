@@ -22,6 +22,15 @@ const executablePath = process.env.PW_CHROMIUM_PATH || (existsSync(CHROMIUM_LOCA
 
 const DB_TESTE = process.env.DATABASE_URL_TEST || "postgres://simulador:simulador@127.0.0.1:5432/simulador_test";
 const MESH_PORTA = Number(process.env.E2E_MESH_PORT || 8799);
+// Banco PRÓPRIO do servidor em modo demo sintética (ADR 0018): a subida da demo recusa o banco de
+// teste compartilhado (tem malhas não sintéticas dos outros testes). Nome derivado do de teste
+// (<nome>_e2edemo), criado e marcado aqui e apagado no teardown.
+const DB_DEMO = (() => {
+  const u = new URL(DB_TESTE);
+  u.pathname = `${u.pathname.replace(/^\//, "")}_e2edemo`;
+  return u.toString();
+})();
+process.env.E2E_DATABASE_URL_DEMO = DB_DEMO;
 const MESH_URL = `http://127.0.0.1:${MESH_PORTA}`;
 
 // Preparação única (o config também é carregado pelos workers; o env marca que já foi feita).
@@ -34,6 +43,9 @@ if (!process.env.E2E_DATA_DIR) {
   // Postgres de teste com as migrations (idempotente; ADR 0007).
   execSync("bash scripts/db.sh start criar", { cwd: RAIZ, stdio: "ignore" });
   execSync("node --experimental-strip-types --no-warnings scripts/migrar.ts --teste", { cwd: AQUI, stdio: "ignore", env: { ...process.env, DATABASE_URL_TEST: DB_TESTE } });
+  // banco da demo: criado pelo db.sh (superusuário), migrado e marcado (só se vazio) pelo migrar.ts
+  execSync("bash scripts/db.sh criar", { cwd: RAIZ, stdio: "ignore", env: { ...process.env, DB_NAME_TEST: new URL(DB_DEMO).pathname.slice(1) } });
+  execSync("node --experimental-strip-types --no-warnings scripts/migrar.ts --teste --marcar-demo", { cwd: AQUI, stdio: "ignore", env: { ...process.env, DATABASE_URL_TEST: DB_DEMO } });
 }
 const DATA_DIR_E2E = process.env.E2E_DATA_DIR;
 process.env.E2E_MESH_URL = MESH_URL;
@@ -43,7 +55,10 @@ process.env.E2E_APP_TOKEN ??= randomBytes(24).toString("hex");
 const TOKEN = process.env.E2E_APP_TOKEN;
 
 // Portas sobrescrevíveis (E2E_PORTA_A/B) para rodar worktrees em paralelo sem colisão.
-const PORTAS = { A: Number(process.env.E2E_PORTA_A || 3101), B: Number(process.env.E2E_PORTA_B || 3102) } as const;
+const PORTAS = { A: Number(process.env.E2E_PORTA_A || 3101), B: Number(process.env.E2E_PORTA_B || 3102), demo: Number(process.env.E2E_PORTA_DEMO || 3103) } as const;
+/** Host "público" simulado do servidor demo (.invalid: nunca resolve). */
+const HOST_PUBLICO_DEMO = "demo-e2e.invalid";
+process.env.E2E_HOST_PUBLICO_DEMO = HOST_PUBLICO_DEMO;
 const next = (desenho: "A" | "B") => ({
   command: `pnpm exec next start -H 127.0.0.1 -p ${PORTAS[desenho]}`,
   url: `http://127.0.0.1:${PORTAS[desenho]}/api/config`,
@@ -67,6 +82,33 @@ const next = (desenho: "A" | "B") => ({
   },
 });
 
+/**
+ * Servidor em modo demonstração sintética (ADR 0018): desenho B, LLM em mock, banco próprio marcado,
+ * mesmo DATA_DIR e mesmo services/mesh do e2e (a subida confere DATA_DIR/pacientes, vazio nesse
+ * momento). Sem BENCHMARK_HABILITADO: o modo demo liga o /benchmark sozinho. Só roda e2e/demo.spec.ts.
+ */
+const nextDemo = {
+  command: `pnpm exec next start -H 127.0.0.1 -p ${PORTAS.demo}`,
+  url: `http://127.0.0.1:${PORTAS.demo}/api/config`,
+  reuseExistingServer: false,
+  timeout: 120_000,
+  env: {
+    DESENHO: "B",
+    DEMO_SINTETICA: "1",
+    LLM_MODO: "mock",
+    ANTHROPIC_API_KEY: "",
+    BENCHMARK_HABILITADO: "",
+    APP_HOSTS_PERMITIDOS: HOST_PUBLICO_DEMO,
+    MESH_SERVICE_URL: MESH_URL,
+    MESH_SERVICE_TIMEOUT_MS: "300000",
+    DATABASE_URL: DB_DEMO,
+    DATA_DIR: DATA_DIR_E2E,
+    USUARIO_LOCAL_ID: "e2e-demo",
+    LOG_LEVEL: "warn",
+    APP_TOKEN_LOCAL: TOKEN,
+  },
+};
+
 export default defineConfig({
   testDir: "./e2e",
   // apaga o DATA_DIR temporário (/tmp/simulador-e2e-*) no fim da execução
@@ -82,8 +124,9 @@ export default defineConfig({
     ...(executablePath ? { launchOptions: { executablePath } } : {}),
   },
   projects: [
-    { name: "desenho-A", use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.A}` } },
-    { name: "desenho-B", use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.B}` } },
+    { name: "desenho-A", testIgnore: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.A}` } },
+    { name: "desenho-B", testIgnore: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.B}` } },
+    { name: "demo", testMatch: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.demo}` } },
   ],
   webServer: [
     {
@@ -95,5 +138,6 @@ export default defineConfig({
     },
     next("A"),
     next("B"),
+    nextDemo,
   ],
 });

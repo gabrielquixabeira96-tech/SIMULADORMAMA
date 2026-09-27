@@ -36,6 +36,19 @@ body {
 }
 .aviso-meta { color: var(--suave); font-size: 0.8rem; }
 .conteudo { padding: 3.25rem 1rem 2rem; max-width: 1500px; margin: 0 auto; }
+/* Modo demonstração sintética (ADR 0018): faixa acima do aviso, na mesma barra fixa. */
+.aviso-fixo-demo { flex-wrap: wrap; padding-top: 0; }
+.faixa-demo {
+  flex-basis: 100%;
+  margin: 0 -1rem;
+  padding: 0.35rem 1rem;
+  background: #b42318;
+  color: #ffffff;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.conteudo-demo { padding-top: 5.25rem; }
 
 .cabecalho h1 { font-size: 1.3rem; margin: 0.5rem 0 0.25rem; }
 .nota { color: var(--suave); font-size: 0.85rem; margin: 0.35rem 0; }

@@ -2,6 +2,7 @@ import { uuidSchema } from "@simulador/contratos";
 import { z } from "zod";
 import { json, lerJson } from "@/api/respostas";
 import { usuarioAtual } from "@/config/ambiente";
+import { demoAtiva, desligadoNaDemo } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { registrarAuditoria } from "@/db/auditoria";
 import { transacao } from "@/db/pool";
@@ -26,6 +27,8 @@ const corpoSchema = z.strictObject({
  * em atendimentos.anamnese. Auditado. Funciona em mock sem ANTHROPIC_API_KEY.
  */
 export async function POST(req: Request) {
+  // modo demo sintética (ADR 0018): anamnese em texto livre fechada (o proxy já recusa; defesa em profundidade)
+  if (demoAtiva()) return desligadoNaDemo();
   try {
     const desenho = getDesenho();
     const corpo = corpoSchema.parse(await lerJson(req));

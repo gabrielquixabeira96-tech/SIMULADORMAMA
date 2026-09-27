@@ -94,5 +94,12 @@ describe("aviso fixo", () => {
   it("exibe 'Ilustração, não previsão de resultado'", () => {
     render(<AvisoFixo versao="0.0.1" desenho="B" />);
     expect(screen.getByTestId("aviso-fixo").textContent).toContain("Ilustração, não previsão de resultado");
+    expect(screen.queryByTestId("faixa-demo")).toBeNull(); // sem DEMO_SINTETICA: nada muda
+  });
+
+  it("modo demo sintética (ADR 0018): faixa 'DEMONSTRAÇÃO' junto do aviso", () => {
+    render(<AvisoFixo versao="0.1.2" desenho="B" demo />);
+    expect(screen.getByTestId("faixa-demo").textContent).toBe("DEMONSTRAÇÃO — dados sintéticos, não é previsão clínica");
+    expect(screen.getByTestId("aviso-fixo").textContent).toContain("Ilustração, não previsão de resultado");
   });
 });
