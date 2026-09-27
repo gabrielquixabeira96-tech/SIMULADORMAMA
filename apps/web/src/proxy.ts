@@ -16,7 +16,7 @@ export function proxy(req: NextRequest): NextResponse {
       cabecalho: (n) => req.headers.get(n),
       cookie: (n) => req.cookies.get(n)?.value ?? null,
       hostUrl: req.nextUrl.host,
-      env: { APP_TOKEN_LOCAL: process.env.APP_TOKEN_LOCAL, APP_HOSTS_PERMITIDOS: process.env.APP_HOSTS_PERMITIDOS, NODE_ENV: process.env.NODE_ENV },
+      env: { APP_TOKEN_LOCAL: process.env.APP_TOKEN_LOCAL, APP_HOSTS_PERMITIDOS: process.env.APP_HOSTS_PERMITIDOS, NODE_ENV: process.env.NODE_ENV, BENCHMARK_HABILITADO: process.env.BENCHMARK_HABILITADO },
     },
     parametro,
   );

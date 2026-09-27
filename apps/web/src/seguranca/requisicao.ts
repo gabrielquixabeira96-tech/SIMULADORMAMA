@@ -14,6 +14,11 @@
  *    próprio app. Sem `Origin`, só passa quem se autenticou pelo cabeçalho `Authorization`
  *    (cliente não-navegador; um navegador sempre manda `Origin` em POST, e um site de terceiros
  *    não consegue pôr `Authorization` sem CORS, que o app não habilita).
+ * 4. Benchmark na rede local (ADR 0003, revisão v0.1.2): com `BENCHMARK_HABILITADO=1`, uma
+ *    requisição por host FORA do loopback (nome de `APP_HOSTS_PERMITIDOS`) só alcança
+ *    `/benchmark`, `/api/benchmark*` e `/_next/*`; qualquer outra rota (pacientes, malhas, PDF…)
+ *    → 403 `rota_restrita_benchmark`. A subida também recusa essa combinação se `DATA_DIR/pacientes`
+ *    existir (`config/subida.ts`).
  */
 
 export const COOKIE_TOKEN = "simulador_token";
@@ -42,6 +47,7 @@ export interface EntradaRequisicao {
     APP_TOKEN_LOCAL?: string | undefined;
     APP_HOSTS_PERMITIDOS?: string | undefined;
     NODE_ENV?: string | undefined;
+    BENCHMARK_HABILITADO?: string | undefined;
   };
 }
 
@@ -58,6 +64,24 @@ function nomeDoHost(host: string): string {
   if (h.startsWith("[")) return h.slice(0, h.indexOf("]") + 1);
   const i = h.lastIndexOf(":");
   return i >= 0 ? h.slice(0, i) : h;
+}
+
+/** Host (com ou sem porta) é de loopback? */
+export function hostEhLoopback(host: string): boolean {
+  return HOSTS_LOOPBACK.has(nomeDoHost(host));
+}
+
+/** Rotas alcançáveis fora do loopback quando o benchmark está ligado (nenhuma toca dado de paciente). */
+export function rotaDoBenchmark(caminho: string): boolean {
+  return caminho === "/benchmark" || caminho === "/api/benchmark" || caminho.startsWith("/api/benchmark/") || caminho.startsWith("/_next/");
+}
+
+/** Nomes extras de `APP_HOSTS_PERMITIDOS` que NÃO são loopback (exposição na rede). */
+export function hostsForaDoLoopback(extras: string | undefined): string[] {
+  return (extras ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((n) => n && !HOSTS_LOOPBACK.has(n));
 }
 
 export function hostPermitido(host: string, extras: string | undefined): boolean {
@@ -84,6 +108,9 @@ export function avaliarRequisicao(r: EntradaRequisicao, parametroToken: string |
   const host = r.cabecalho("host") ?? r.hostUrl;
   if (!host || !hostPermitido(host, r.env.APP_HOSTS_PERMITIDOS)) {
     return { ok: false, recusa: { status: 403, codigo: "host_nao_permitido", mensagem: "host não permitido (o app só atende em loopback)" } };
+  }
+  if (r.env.BENCHMARK_HABILITADO === "1" && !hostEhLoopback(host) && !rotaDoBenchmark(r.caminho)) {
+    return { ok: false, recusa: { status: 403, codigo: "rota_restrita_benchmark", mensagem: "fora do loopback, com o benchmark ligado, só as rotas /benchmark são atendidas" } };
   }
 
   // ---- token local

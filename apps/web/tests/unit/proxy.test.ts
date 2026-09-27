@@ -7,6 +7,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { proxy } from "@/proxy";
+import { verificarBenchmarkNaRede } from "@/config/subida";
 import { avaliarRequisicao, tokenIgual } from "@/seguranca/requisicao";
 
 const TOKEN = "tok-teste-0123456789abcdef";
@@ -77,6 +78,33 @@ describe("proxy com APP_TOKEN_LOCAL", () => {
     vi.stubEnv("APP_HOSTS_PERMITIDOS", "consultorio.local");
     expect(passou(proxy(req("/api/config", { headers: { host: "consultorio.local:3000", authorization: `Bearer ${TOKEN}` } })))).toBe(true);
     expect(passou(proxy(req("/api/config", { headers: { host: "localhost:3000", authorization: `Bearer ${TOKEN}` } })))).toBe(true);
+  });
+
+  it("benchmark ligado + host fora do loopback: só /benchmark e /api/benchmark*; rotas de paciente → 403", async () => {
+    vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "192.168.0.10");
+    vi.stubEnv("BENCHMARK_HABILITADO", "1");
+    const lan = (c: string, method = "GET") =>
+      proxy(req(c, { method, headers: { host: "192.168.0.10:3000", authorization: `Bearer ${TOKEN}`, ...(method === "POST" ? { "content-type": "application/json", origin: "http://192.168.0.10:3000" } : {}) } }));
+    for (const c of ["/benchmark", "/api/benchmark/arquivo?nome=x"]) expect(passou(lan(c))).toBe(true);
+    expect(passou(lan("/api/benchmark", "POST"))).toBe(true);
+    for (const c of ["/", "/api/pacientes", "/api/malhas/1/arquivo?nome=processada.glb", "/api/pdf", "/pacientes/P-ABC123", "/benchmarkx"]) {
+      const r = lan(c);
+      expect(r.status, c).toBe(403);
+      expect(await codigo(r)).toBe("rota_restrita_benchmark");
+    }
+    // no loopback a mesma instância continua normal; sem o benchmark, o host extra também
+    expect(passou(proxy(req("/api/pacientes", { headers: { authorization: `Bearer ${TOKEN}` } })))).toBe(true);
+    vi.stubEnv("BENCHMARK_HABILITADO", "0");
+    expect(passou(lan("/api/pacientes"))).toBe(true);
+  });
+
+  it("subida recusa benchmark exposto na rede quando DATA_DIR tem pacientes/", () => {
+    const expor = { BENCHMARK_HABILITADO: "1", APP_HOSTS_PERMITIDOS: "localhost, 192.168.0.10" };
+    expect(() => verificarBenchmarkNaRede(expor, () => true)).toThrow(/DATA_DIR sem pacientes/);
+    expect(() => verificarBenchmarkNaRede(expor, () => false)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, APP_HOSTS_PERMITIDOS: "localhost,127.0.0.1" }, () => true)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, BENCHMARK_HABILITADO: "" }, () => true)).not.toThrow();
   });
 
   it("GET não exige Content-Type nem Origin", () => {

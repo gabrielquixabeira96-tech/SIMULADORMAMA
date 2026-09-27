@@ -46,3 +46,15 @@ A revisão de código da v0.1.0 mostrou que o item 7 ("rota autenticada") não e
 **Alternativas**: login com usuário e senha (NextAuth/Auth.js) — maior superfície e sem ganho real para um único usuário local; adiado para o SaaS (fase 3+, com Supabase Auth). mTLS local — atrito desnecessário no consultório. Só checar `Origin` sem token — não protege contra outros usuários/processos da mesma máquina nem contra extensão/cliente que forje `Origin`.
 
 **Consequências**: o médico abre o app uma vez com `?token=` (o README mostra como); qualquer cliente de script precisa do cabeçalho `Authorization`. A troca do token invalida o cookie. Testes: `tests/unit/proxy.test.ts` (reproduz o achado: `POST` cross-origin `text/plain` → 401/415/403, nunca 201) e `e2e/seguranca.spec.ts` (contra o `next start` real).
+
+## Revisão v0.1.2 (2026-09-27) — exceção controlada: benchmark no iPad pela rede local
+
+A medição de latência no hardware-alvo (página `/benchmark`, plano A14) exige que o iPad alcance a app pela rede local, o que contraria o item 1 da revisão v0.1.1 ("só loopback") e trafega em HTTP sem TLS. A orientação anterior do `.env.example` mandava apenas "escutar fora do loopback durante a medição", sem separar a instância: na instância do consultório isso exporia as rotas de paciente na LAN (protegidas só pelo token, em texto claro). Decisão:
+
+1. **Só numa instância separada, dedicada ao benchmark**: `DATA_DIR` próprio sem `pacientes/` (vazio ou só `sinteticos/` e `benchmark/`), `BENCHMARK_HABILITADO=1`, `APP_HOSTS_PERMITIDOS=<ip-da-máquina>`, `next start -H <ip-da-máquina>`, `APP_TOKEN_LOCAL` forte e exclusivo dessa instância, rede confiável (nunca Wi-Fi público/de convidados), e a instância é desligada (e o `DATA_DIR` temporário apagado) logo após baixar o JSON. **Nunca** na instância com dados de pacientes, que continua só em loopback.
+2. **Imposto pelo servidor, não só documentado**:
+   - a subida (`config/subida.ts`, `verificarBenchmarkNaRede`) recusa `BENCHMARK_HABILITADO=1` com algum host fora do loopback em `APP_HOSTS_PERMITIDOS` se `DATA_DIR/pacientes` existir;
+   - o proxy (`seguranca/requisicao.ts`), com `BENCHMARK_HABILITADO=1`, só atende `/benchmark`, `/api/benchmark*` e `/_next/*` a requisições cujo `Host` não é loopback; qualquer outra rota (pacientes, malhas, PDF, página inicial…) → `403 rota_restrita_benchmark`, mesmo com token válido. Isso cobre também um `pacientes/` criado depois da subida.
+3. Continua valendo todo o resto da revisão v0.1.1 (token obrigatório em `next start`, Origin/Content-Type nas rotas mutantes, cabeçalhos). O benchmark usa só o torso sintético e não toca banco.
+
+**Consequências**: a exceção não altera a instância clínica; o risco residual (token e JSON sintético em HTTP na LAN confiável, por minutos) não envolve dado de paciente. Testes: `tests/unit/proxy.test.ts` (rotas restritas fora do loopback com o benchmark ligado; recusa de subida com `pacientes/`). Quando houver TLS local (ou o SaaS), revisar.
