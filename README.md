@@ -65,7 +65,8 @@ pnpm --filter web typecheck                 # next typegen + tsc
 pnpm --filter web test                      # Vitest: unit, API A/B, banco real, UI, integração com o services/mesh real
                                             # (falha sem Postgres; SEM_DB=1 pula os testes de banco)
 pnpm --filter @simulador/contratos test     # paridade zod × config/schemas
-pnpm --filter web test:e2e                  # build de teste + Playwright (sobe services/mesh :8799, Next A :3101 e B :3102, Postgres)
+pnpm --filter web test:e2e                  # build de teste + Playwright (sobe services/mesh :8799, Next A :3101, B :3102 e
+                                            # demo sintética :3103 com banco próprio <teste>_e2edemo, Postgres)
 bash scripts/mesh.sh test                   # ruff + pytest do services/mesh
 pnpm --filter web build                     # build de produção
 
@@ -75,6 +76,14 @@ bash scripts/licencas.sh                    # regenera THIRD_PARTY_LICENSES.md (
 python3 scripts/checar_proibidos.py         # nomes de pacote proibidos (ADR 0009) em manifestos, lockfiles e venv
 python3 scripts/validar_config.py           # configs e registros contra config/schemas
 ```
+
+## Demonstração sintética na rede (experimental)
+
+`bash scripts/demo_sandbox.sh preparar|subir|parar` sobe a pilha inteira numa máquina Linux limpa
+(alvo: Vercel Sandbox em `gru1`) com `DEMO_SINTETICA=1`: só torsos sintéticos, upload e anamnese
+fechados, LLM em mock, desenho B e faixa "DEMONSTRAÇÃO" em todas as páginas. Passo a passo e riscos
+em [docs/deploy-demo.md](docs/deploy-demo.md); decisão no [ADR 0018](docs/adr/0018-demo-sintetica-na-rede.md).
+Nunca com dado real.
 
 ## Mapa do repositório
 

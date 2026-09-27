@@ -1,0 +1,331 @@
+#!/usr/bin/env bash
+# Demonstracao sintetica (ADR 0018): sobe a pilha inteira (Next + services/mesh + Postgres local +
+# DATA_DIR proprio) numa maquina Linux limpa -- alvo: Vercel Sandbox (Amazon Linux 2023, node22,
+# python3.13) -- so com torsos sinteticos, DEMO_SINTETICA=1, DESENHO=B e LLM em mock.
+# Documentacao e riscos: docs/deploy-demo.md. NUNCA usar com dado real.
+#
+# Uso: bash scripts/demo_sandbox.sh <comando>
+#   preparar       instala dependencias (pacotes do sistema so se faltarem), pnpm install, venv do
+#                  services/mesh, cluster Postgres proprio + banco marcado como demo, torsos e
+#                  morphs sinteticos, next build
+#   subir          sobe Postgres, mesh (127.0.0.1) e web (0.0.0.0:DEMO_PORTA) com DEMO_SINTETICA=1;
+#                  na primeira vez gera APP_TOKEN_LOCAL aleatorio e o imprime UMA vez
+#   parar          para web, mesh e Postgres (o estado fica em DEMO_DIR)
+#   status         processos e /api/config (espera 401 sem token)
+#   novo-token     troca o APP_TOKEN_LOCAL (imprime uma vez; rode 'parar' e 'subir' depois)
+#   recriar-banco  apaga banco e dados de pacientes sinteticos da demo e recria o banco marcado
+#   apagar         para tudo e apaga DEMO_DIR (banco, DATA_DIR, logs, token)
+#
+# Variaveis (opcionais, salvo DEMO_HOST_PUBLICO em 'subir'):
+#   DEMO_HOST_PUBLICO  host publico da porta exposta (ex.: sb-xxxx.vercel.run); vai para
+#                      APP_HOSTS_PERMITIDOS. Obrigatorio para escutar em 0.0.0.0.
+#   DEMO_SO_LOOPBACK=1 escuta so em 127.0.0.1 e dispensa DEMO_HOST_PUBLICO (teste local)
+#   DEMO_DIR           estado da demo (padrao: $HOME/simulador-demo; FORA do repositorio)
+#   DEMO_PG_DIR        cluster Postgres (padrao: $DEMO_DIR/pg)
+#   DEMO_PORTA (3000)  DEMO_PG_PORTA (5433)  DEMO_MESH_PORTA (8765)  DEMO_DESENHO (B)
+#   DEMO_SEM_INSTALAR=1  nao tenta instalar pacotes do sistema (dnf/apt)
+set -euo pipefail
+RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DEMO_DIR="${DEMO_DIR:-$HOME/simulador-demo}"
+PG_DIR="${DEMO_PG_DIR:-$DEMO_DIR/pg}"
+PG_SOCK="$PG_DIR/sock"
+PG_DADOS="$PG_DIR/dados"
+DATA_DIR_DEMO="$DEMO_DIR/data"
+LOGS="$DEMO_DIR/logs"
+RUN="$DEMO_DIR/run"
+ENV_DEMO="$DEMO_DIR/demo.env"
+PORTA="${DEMO_PORTA:-3000}"
+PG_PORTA="${DEMO_PG_PORTA:-5433}"
+MESH_PORTA="${DEMO_MESH_PORTA:-8765}"
+DESENHO_DEMO="${DEMO_DESENHO:-B}"
+DB_NOME="simulador_demo"
+DB_ROLE="simulador_demo"
+TORSOS=(t01_simetrico_300 t02_assimetrico t03_pequeno_ptose)
+VENV="$RAIZ/services/mesh/.venv"
+export NEXT_TELEMETRY_DISABLED=1
+
+msg()  { printf '\033[1m[demo]\033[0m %s\n' "$*"; }
+erro() { printf '\033[31m[demo] ERRO:\033[0m %s\n' "$*" >&2; exit 1; }
+tem()  { command -v "$1" >/dev/null 2>&1; }
+sudo_() { if [[ "$(id -u)" -eq 0 ]]; then "$@"; elif tem sudo; then sudo "$@"; else return 1; fi; }
+
+# Seguranca do estado: DEMO_DIR nunca dentro do repositorio (o .gitignore nao cobre tudo nele).
+case "$(realpath -m "$DEMO_DIR")/" in "$RAIZ"/*) erro "DEMO_DIR ($DEMO_DIR) nao pode ficar dentro do repositorio";; esac
+
+# ------------------------------------------------------------------ ferramentas
+pg_bin() {
+  local d cands=("${PG_BIN:-}")
+  tem initdb && cands+=("$(dirname "$(command -v initdb)")")
+  cands+=(/usr/lib/postgresql/17/bin /usr/lib/postgresql/16/bin /usr/lib/postgresql/15/bin /usr/pgsql-16/bin /usr/bin)
+  for d in "${cands[@]}"; do [[ -n "$d" && -x "$d/initdb" && -x "$d/pg_ctl" && -x "$d/psql" ]] && { echo "$d"; return 0; }; done
+  return 1
+}
+
+python_ok() {
+  local p
+  for p in python3.13 python3.12 python3.11 python3; do
+    tem "$p" && "$p" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null && { command -v "$p"; return 0; }
+  done
+  return 1
+}
+
+instalar_sistema() {
+  [[ "${DEMO_SEM_INSTALAR:-0}" == "1" ]] && return 0
+  local falta=0
+  pg_bin >/dev/null || falta=1
+  python_ok >/dev/null || falta=1
+  for b in openssl curl gcc g++; do tem "$b" || falta=1; done
+  [[ $falta -eq 0 ]] && { msg "pacotes do sistema ja presentes"; return 0; }
+  if tem dnf; then
+    msg "instalando pacotes (dnf: Postgres 16, compiladores, Python)"
+    sudo_ dnf install -y -q postgresql16-server postgresql16 gcc gcc-c++ make openssl curl-minimal tar gzip || sudo_ dnf install -y -q postgresql16-server postgresql16 gcc gcc-c++ make openssl tar gzip
+    python_ok >/dev/null || sudo_ dnf install -y -q python3.13 python3.13-devel || sudo_ dnf install -y -q python3.11 python3.11-devel || true
+    # cabecalhos do Python para compilar pygeodesic/fast-simplification se nao houver wheel
+    local py; py="$(python_ok || true)"; [[ -n "$py" ]] && sudo_ dnf install -y -q "$(basename "$py")-devel" 2>/dev/null || true
+  elif tem apt-get; then
+    msg "instalando pacotes (apt: Postgres, compiladores, Python)"
+    sudo_ apt-get update -qq
+    sudo_ apt-get install -y -qq postgresql postgresql-contrib build-essential python3 python3-venv python3-dev openssl curl
+  else
+    erro "sem dnf nem apt-get: instale Postgres >= 15, Python >= 3.11, gcc/g++, openssl e curl"
+  fi
+}
+
+pnpm_() {
+  if tem pnpm; then pnpm "$@"
+  else
+    local v; v="$(sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' "$RAIZ/package.json")"
+    npx -y "pnpm@${v:-10}" "$@"
+  fi
+}
+
+# Usuario dono do cluster: o proprio usuario; como root, 'postgres' (initdb recusa root).
+PG_USER="$(id -un)"
+if [[ "$(id -u)" -eq 0 ]]; then PG_USER="${DEMO_PG_USER:-postgres}"; fi
+como_pg() { if [[ "$(id -u)" -eq 0 ]]; then runuser -u "$PG_USER" -- "$@"; else "$@"; fi; }
+psql_admin() { como_pg "$PGBIN/psql" -h "$PG_SOCK" -p "$PG_PORTA" -U postgres -d postgres -v ON_ERROR_STOP=1 -tAc "$1"; }
+pg_pronto() { [[ -n "${PGBIN:-}" ]] && "$PGBIN/pg_isready" -h 127.0.0.1 -p "$PG_PORTA" >/dev/null 2>&1; }
+
+pg_start() {
+  PGBIN="$(pg_bin)" || erro "Postgres nao encontrado (rode 'preparar')"
+  if pg_pronto; then return 0; fi
+  como_pg "$PGBIN/pg_ctl" -D "$PG_DADOS" -l "$PG_DIR/postgres.log" -w -t 60 \
+    -o "-p $PG_PORTA -c listen_addresses=127.0.0.1 -k $PG_SOCK" start </dev/null >/dev/null 2>>"$LOGS/pg_ctl.log" \
+    || { tail -n 30 "$PG_DIR/postgres.log" >&2 || true; erro "Postgres nao subiu"; }
+}
+
+pg_stop() {
+  PGBIN="$(pg_bin 2>/dev/null)" || return 0
+  [[ -d "$PG_DADOS" ]] && como_pg "$PGBIN/pg_ctl" -D "$PG_DADOS" -m fast stop >/dev/null 2>&1 || true
+}
+
+pg_cluster() {
+  PGBIN="$(pg_bin)" || erro "Postgres nao encontrado depois da instalacao"
+  local maior; maior="$("$PGBIN/postgres" --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')"
+  [[ "$maior" -ge 15 ]] || erro "Postgres $maior < 15 (ADR 0007)"
+  if [[ ! -f "$PG_DADOS/PG_VERSION" ]]; then
+    msg "criando cluster Postgres $maior em $PG_DADOS (porta $PG_PORTA, so 127.0.0.1)"
+    mkdir -p "$PG_DIR"
+    [[ "$(id -u)" -eq 0 ]] && chown "$PG_USER" "$PG_DIR"
+    como_pg mkdir -p "$PG_DADOS" "$PG_SOCK"
+    como_pg chmod 700 "$PG_DADOS" "$PG_SOCK"
+    como_pg test -w "$PG_DADOS" || erro "o usuario $PG_USER nao escreve em $PG_DADOS (como root, aponte DEMO_PG_DIR para um caminho acessivel a ele)"
+    # socket local (pasta 0700 do dono do cluster): trust; TCP em 127.0.0.1: senha (scram)
+    como_pg "$PGBIN/initdb" -D "$PG_DADOS" -U postgres -E UTF8 --auth-local=trust --auth-host=scram-sha-256 >/dev/null
+  fi
+  pg_start
+}
+
+carregar_env() {
+  [[ -f "$ENV_DEMO" ]] || erro "falta $ENV_DEMO (rode 'preparar')"
+  set -a; # shellcheck disable=SC1090
+  source "$ENV_DEMO"; set +a
+}
+
+escrever_var() { # escrever_var CHAVE VALOR -> substitui ou acrescenta em $ENV_DEMO
+  local k="$1" v="$2" tmp; tmp="$(mktemp "$DEMO_DIR/.env.XXXXXX")"
+  { grep -v "^$k=" "$ENV_DEMO" 2>/dev/null || true; printf '%s=%s\n' "$k" "$v"; } > "$tmp"
+  chmod 600 "$tmp"; mv "$tmp" "$ENV_DEMO"
+}
+
+banco() {
+  local senha
+  if [[ -f "$ENV_DEMO" ]] && grep -q '^DATABASE_URL=' "$ENV_DEMO"; then
+    senha="$(sed -n 's#^DATABASE_URL=postgres://[^:]*:\([^@]*\)@.*#\1#p' "$ENV_DEMO")"
+  else
+    senha="$(openssl rand -hex 16)"
+  fi
+  if [[ "$(psql_admin "select 1 from pg_roles where rolname='$DB_ROLE'")" != "1" ]]; then
+    psql_admin "create role $DB_ROLE login password '$senha'" >/dev/null
+  else
+    psql_admin "alter role $DB_ROLE password '$senha'" >/dev/null
+  fi
+  if [[ "$(psql_admin "select 1 from pg_database where datname='$DB_NOME'")" != "1" ]]; then
+    psql_admin "create database $DB_NOME owner $DB_ROLE encoding 'UTF8'" >/dev/null
+    msg "banco $DB_NOME criado"
+  fi
+  escrever_var DATABASE_URL "postgres://$DB_ROLE:$senha@127.0.0.1:$PG_PORTA/$DB_NOME"
+  # migrations + marca de demo (so em banco vazio; a subida exige a marca)
+  ( cd "$RAIZ/apps/web" && DATABASE_URL_TEST="postgres://$DB_ROLE:$senha@127.0.0.1:$PG_PORTA/$DB_NOME" \
+      node --experimental-strip-types --no-warnings scripts/migrar.ts --teste --marcar-demo )
+}
+
+env_base() {
+  mkdir -p "$DEMO_DIR" "$LOGS" "$RUN" "$DATA_DIR_DEMO"
+  chmod 700 "$DEMO_DIR"
+  [[ -f "$ENV_DEMO" ]] || { : > "$ENV_DEMO"; chmod 600 "$ENV_DEMO"; }
+  escrever_var DEMO_SINTETICA 1
+  escrever_var DESENHO "$DESENHO_DEMO"
+  escrever_var LLM_MODO mock
+  escrever_var ANTHROPIC_API_KEY ""
+  escrever_var DATA_DIR "$DATA_DIR_DEMO"
+  escrever_var MESH_SERVICE_URL "http://127.0.0.1:$MESH_PORTA"
+  escrever_var USUARIO_LOCAL_ID demo
+  escrever_var LOG_LEVEL info
+}
+
+# ------------------------------------------------------------------ comandos
+cmd_preparar() {
+  instalar_sistema
+  tem node || erro "node ausente (o sandbox usa o runtime node22)"
+  [[ "$(node -p 'process.versions.node.split(".")[0]')" == "22" ]] || erro "node $(node -v): o projeto exige Node 22 (package.json engines)"
+  msg "pnpm install"
+  ( cd "$RAIZ" && pnpm_ install --frozen-lockfile )
+
+  local py; py="$(python_ok)" || erro "Python >= 3.11 nao encontrado"
+  if [[ ! -x "$VENV/bin/python" ]]; then
+    msg "venv do services/mesh com $py"
+    "$py" -m venv "$VENV"
+  fi
+  "$VENV/bin/python" -m pip install -q --upgrade pip
+  "$VENV/bin/python" -m pip install -q -e "$RAIZ/services/mesh"
+  "$VENV/bin/python" -c 'import numpy, scipy, trimesh, rtree, fast_simplification, pygeodesic, fastapi, uvicorn' \
+    || erro "dependencias do services/mesh nao importam (pygeodesic sem wheel? instale gcc-c++ e python3-devel)"
+
+  env_base
+  pg_cluster
+  banco
+
+  msg "torsos sinteticos e morphs em $DATA_DIR_DEMO/sinteticos"
+  for t in "${TORSOS[@]}"; do
+    [[ -f "$DATA_DIR_DEMO/sinteticos/$t/parametros.json" ]] \
+      || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli torso --preset "$t" --saida "$DATA_DIR_DEMO/sinteticos" >/dev/null )
+    compgen -G "$DATA_DIR_DEMO/sinteticos/$t/morphs/*.glb" >/dev/null \
+      || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli morphs --sintetico "$DATA_DIR_DEMO/sinteticos/$t" --catalogo tests/fixtures/catalogo_teste.json >/dev/null )
+  done
+
+  msg "next build (sem ganchos de teste)"
+  ( unset NEXT_PUBLIC_GANCHOS_TESTE; cd "$RAIZ/apps/web" && pnpm_ exec next build >"$LOGS/build.log" 2>&1 ) \
+    || { tail -n 40 "$LOGS/build.log" >&2; erro "next build falhou (log em $LOGS/build.log)"; }
+  msg "pronto. Agora: DEMO_HOST_PUBLICO=<host da porta $PORTA> bash scripts/demo_sandbox.sh subir"
+}
+
+vivo() { [[ -f "$RUN/$1.pid" ]] && kill -0 "$(cat "$RUN/$1.pid")" 2>/dev/null; }
+
+esperar() { # esperar URL CODIGOS PROCESSO SEGUNDOS
+  local c
+  for _ in $(seq 1 "$4"); do
+    c="$(curl -s -o /dev/null -w '%{http_code}' "$1" || true)"
+    [[ " $2 " == *" $c "* ]] && return 0
+    vivo "$3" || return 1
+    sleep 1
+  done
+  return 1
+}
+
+cmd_subir() {
+  carregar_env
+  local host_escuta="0.0.0.0"
+  if [[ "${DEMO_SO_LOOPBACK:-0}" == "1" ]]; then
+    host_escuta="127.0.0.1"; escrever_var APP_HOSTS_PERMITIDOS ""
+  else
+    [[ -n "${DEMO_HOST_PUBLICO:-}" ]] || erro "defina DEMO_HOST_PUBLICO=<host publico da porta $PORTA> (ou DEMO_SO_LOOPBACK=1 para teste local)"
+    [[ "$DEMO_HOST_PUBLICO" =~ ^[A-Za-z0-9.-]+$ ]] || erro "DEMO_HOST_PUBLICO invalido: '$DEMO_HOST_PUBLICO' (so o nome, sem https:// nem barra)"
+    escrever_var APP_HOSTS_PERMITIDOS "$DEMO_HOST_PUBLICO"
+  fi
+  local novo=0
+  if ! grep -qE '^APP_TOKEN_LOCAL=[0-9a-f]{64}$' "$ENV_DEMO"; then escrever_var APP_TOKEN_LOCAL "$(openssl rand -hex 32)"; novo=1; fi
+  [[ -f "$RAIZ/.env" ]] && msg "AVISO: $RAIZ/.env existe; as variaveis da demo tem precedencia, mas confira que nao ha segredo nele"
+  carregar_env
+  pg_start
+
+  if ! vivo mesh; then
+    # so o comando vai para segundo plano (o $! e o pid do processo, nao de um subshell)
+    ( cd "$RAIZ/services/mesh" || exit 1
+      DATA_DIR="$DATA_DIR" nohup "$VENV/bin/python" -m mesh.servidor --host 127.0.0.1 --port "$MESH_PORTA" </dev/null >>"$LOGS/mesh.log" 2>&1 &
+      echo $! > "$RUN/mesh.pid" )
+    esperar "http://127.0.0.1:$MESH_PORTA/saude" "200" mesh 120 || { tail -n 30 "$LOGS/mesh.log" >&2; erro "services/mesh nao subiu"; }
+    msg "services/mesh em 127.0.0.1:$MESH_PORTA"
+  fi
+  if ! vivo web; then
+    ( cd "$RAIZ/apps/web" || exit 1
+      NODE_ENV=production nohup node node_modules/next/dist/bin/next start -H "$host_escuta" -p "$PORTA" </dev/null >>"$LOGS/web.log" 2>&1 &
+      echo $! > "$RUN/web.pid" )
+    # 401 = no ar e exigindo token (a subida recusada encerra o processo)
+    esperar "http://127.0.0.1:$PORTA/api/config" "401" web 120 || { tail -n 30 "$LOGS/web.log" >&2; erro "web nao subiu (subida recusada? veja $LOGS/web.log)"; }
+    msg "web em $host_escuta:$PORTA (DEMO_SINTETICA=1, desenho $DESENHO, LLM mock)"
+  fi
+  local base="http://127.0.0.1:$PORTA"
+  [[ -n "${DEMO_HOST_PUBLICO:-}" && "${DEMO_SO_LOOPBACK:-0}" != "1" ]] && base="https://$DEMO_HOST_PUBLICO"
+  if [[ $novo -eq 1 ]]; then
+    msg "TOKEN (impresso so desta vez; guarde fora do chat/log e nao compartilhe):"
+    printf '\n    %s/?token=%s\n\n' "$base" "$APP_TOKEN_LOCAL"
+  else
+    msg "abra $base/?token=<token ja impresso> (ou leia APP_TOKEN_LOCAL em $ENV_DEMO)"
+  fi
+  msg "ENCERRE apos o teste: bash scripts/demo_sandbox.sh parar (e pare o sandbox)"
+}
+
+parar_proc() {
+  if vivo "$1"; then
+    local pid; pid="$(cat "$RUN/$1.pid")"
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+    kill -9 "$pid" 2>/dev/null || true
+    msg "$1 parado"
+  fi
+  rm -f "$RUN/$1.pid"
+}
+
+cmd_parar() { parar_proc web; parar_proc mesh; pg_stop; msg "Postgres parado"; }
+
+cmd_status() {
+  for p in web mesh; do vivo "$p" && msg "$p: no ar (pid $(cat "$RUN/$p.pid"))" || msg "$p: parado"; done
+  PGBIN="$(pg_bin 2>/dev/null || true)"; pg_pronto && msg "postgres: no ar (127.0.0.1:$PG_PORTA)" || msg "postgres: parado"
+  msg "GET /api/config sem token -> $(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORTA/api/config" || true) (esperado 401)"
+}
+
+cmd_novo_token() {
+  [[ -f "$ENV_DEMO" ]] || erro "falta $ENV_DEMO (rode 'preparar')"
+  local t; t="$(openssl rand -hex 32)"
+  escrever_var APP_TOKEN_LOCAL "$t"
+  msg "novo token (impresso so desta vez): $t"
+  msg "rode 'parar' e 'subir' para valer; o cookie antigo deixa de funcionar"
+}
+
+cmd_recriar_banco() {
+  carregar_env
+  parar_proc web
+  pg_start
+  psql_admin "drop database if exists $DB_NOME with (force)" >/dev/null
+  rm -rf "${DATA_DIR:?}/pacientes" "$DATA_DIR/validacao" "$DATA_DIR/benchmark"
+  banco
+  msg "banco e dados da demo recriados (torsos sinteticos mantidos); rode 'subir'"
+}
+
+cmd_apagar() {
+  cmd_parar || true
+  if [[ -d "$DEMO_DIR" ]]; then rm -rf "$DEMO_DIR"; msg "$DEMO_DIR apagado"; fi
+  if [[ -d "$PG_DIR" ]]; then rm -rf "$PG_DIR"; msg "$PG_DIR apagado"; fi
+}
+
+case "${1:-}" in
+  preparar) cmd_preparar ;;
+  subir) cmd_subir ;;
+  parar) cmd_parar ;;
+  status) cmd_status ;;
+  novo-token) cmd_novo_token ;;
+  recriar-banco) cmd_recriar_banco ;;
+  apagar) cmd_apagar ;;
+  *) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

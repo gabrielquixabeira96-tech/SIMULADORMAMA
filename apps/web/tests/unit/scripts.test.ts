@@ -156,3 +156,33 @@ describe("scripts/registro_validacao.py grava git describe --dirty (item 7)", ()
     for (const ruim of ["", "HEAD", "18227b1 -dirty", "xyz1234"]) expect(re.test(ruim), ruim).toBe(false);
   });
 });
+
+describe("scripts/demo_sandbox.sh (ADR 0018): guardas que não sobem nada", () => {
+  const script = join(RAIZ, "scripts/demo_sandbox.sh");
+  const rodar = (args: string[], env: Record<string, string>) => spawnSync("bash", [script, ...args], { env: { ...process.env, DEMO_HOST_PUBLICO: "", DEMO_SO_LOOPBACK: "", ...env }, encoding: "utf8" });
+
+  it("sintaxe válida; sem comando mostra o uso e sai 2", () => {
+    expect(spawnSync("bash", ["-n", script]).status).toBe(0);
+    const r = rodar([], { DEMO_DIR: novoTmp("simulador-demo-") });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toContain("preparar");
+  });
+
+  it("recusa DEMO_DIR dentro do repositório (estado da demo nunca no repo)", () => {
+    const r = rodar(["status"], { DEMO_DIR: join(RAIZ, "data/demo") });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao pode ficar dentro do repositorio/);
+  });
+
+  it("subir exige DEMO_HOST_PUBLICO (nome puro) para escutar em 0.0.0.0", () => {
+    const d = novoTmp("simulador-demo-");
+    writeFileSync(join(d, "demo.env"), "DEMO_SINTETICA=1\n", { mode: 0o600 });
+    const sem = rodar(["subir"], { DEMO_DIR: d });
+    expect(sem.status).not.toBe(0);
+    expect(sem.stderr).toMatch(/defina DEMO_HOST_PUBLICO/);
+    const url = rodar(["subir"], { DEMO_DIR: d, DEMO_HOST_PUBLICO: "https://sb-x.vercel.run/" });
+    expect(url.status).not.toBe(0);
+    expect(url.stderr).toMatch(/DEMO_HOST_PUBLICO invalido/);
+    expect(readFileSync(join(d, "demo.env"), "utf8")).not.toMatch(/APP_TOKEN_LOCAL/); // nenhum token gerado antes das guardas
+  });
+});
