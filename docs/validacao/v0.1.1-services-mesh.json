@@ -1,0 +1,204 @@
+{
+  "esquema": "validacao_componente/services-mesh",
+  "resumo": {
+    "versao_software": "0.1.1",
+    "marco0_erro_max_gabarito_mm": 0.09,
+    "aprovado_marco0": true,
+    "bland_altman_pipeline": {
+      "n": 126,
+      "vies_mm": 0.0067,
+      "dp_mm": 0.0356,
+      "loa_inferior_mm": -0.063,
+      "loa_superior_mm": 0.0764,
+      "dentro_de_2mm": true,
+      "erro_abs_max_mm": 0.09
+    },
+    "volume_erro_max_pct": 4.7,
+    "por_torso": {
+      "t01_simetrico_300": {
+        "decimada": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 40525,
+          "volume_erro_pct": {
+            "dir": -4.7,
+            "esq": -3.7
+          }
+        },
+        "processar_denso_m": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 41263,
+          "volume_erro_pct": {
+            "dir": -3.8,
+            "esq": -3.3
+          }
+        },
+        "reescala_regua": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 40525,
+          "volume_erro_pct": {
+            "dir": -4.7,
+            "esq": -3.7
+          }
+        }
+      },
+      "t02_assimetrico": {
+        "decimada": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 40574,
+          "volume_erro_pct": {
+            "dir": -4.0,
+            "esq": -3.5
+          }
+        },
+        "processar_denso_m": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 41124,
+          "volume_erro_pct": {
+            "dir": -3.4,
+            "esq": -2.5
+          }
+        },
+        "reescala_regua": {
+          "erro_max_mm": 0.09,
+          "n_vertices": 40574,
+          "volume_erro_pct": {
+            "dir": -4.0,
+            "esq": -3.5
+          }
+        }
+      },
+      "t03_pequeno_ptose": {
+        "decimada": {
+          "erro_max_mm": 0.05,
+          "n_vertices": 40660,
+          "volume_erro_pct": {
+            "dir": -3.1,
+            "esq": -3.3
+          }
+        },
+        "processar_denso_m": {
+          "erro_max_mm": 0.06,
+          "n_vertices": 41207,
+          "volume_erro_pct": {
+            "dir": -3.2,
+            "esq": -3.2
+          }
+        },
+        "reescala_regua": {
+          "erro_max_mm": 0.05,
+          "n_vertices": 40662,
+          "volume_erro_pct": {
+            "dir": -3.1,
+            "esq": -3.3
+          }
+        }
+      }
+    }
+  },
+  "bland_altman_pipeline": {
+    "n": 126,
+    "vies_mm": 0.0067,
+    "dp_mm": 0.0356,
+    "loa_inferior_mm": -0.063,
+    "loa_superior_mm": 0.0764,
+    "dentro_de_2mm": true,
+    "erro_abs_max_mm": 0.09
+  },
+  "marco2": {
+    "monotonicidade": true,
+    "series": {
+      "t01_simetrico_300:subglandular:manter": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t01_simetrico_300:subglandular:rebaixar": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t01_simetrico_300:dual_plane:manter": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ],
+      "t01_simetrico_300:dual_plane:rebaixar": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ],
+      "t02_assimetrico:subglandular:manter": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t02_assimetrico:subglandular:rebaixar": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t02_assimetrico:dual_plane:manter": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ],
+      "t02_assimetrico:dual_plane:rebaixar": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ],
+      "t03_pequeno_ptose:subglandular:manter": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t03_pequeno_ptose:subglandular:rebaixar": [
+        26.77,
+        29.07,
+        30.6,
+        32.13
+      ],
+      "t03_pequeno_ptose:dual_plane:manter": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ],
+      "t03_pequeno_ptose:dual_plane:rebaixar": [
+        22.4,
+        24.32,
+        25.6,
+        26.88
+      ]
+    },
+    "simetria_max_mm": 0.0,
+    "imf_manter_max_mm": 0.0,
+    "imf_rebaixar_erro_max_mm": 0.0,
+    "precomputo": {
+      "t01_simetrico_300": {
+        "targets": 72,
+        "s": 3.99,
+        "mb": 34.9
+      },
+      "t02_assimetrico": {
+        "targets": 72,
+        "s": 3.99,
+        "mb": 33.3
+      },
+      "t03_pequeno_ptose": {
+        "targets": 72,
+        "s": 3.72,
+        "mb": 31.6
+      }
+    }
+  }
+}

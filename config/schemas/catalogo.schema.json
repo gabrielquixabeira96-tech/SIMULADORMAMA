@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/catalogo.schema.json",
+  "title": "catalogo/1.1",
+  "description": "Arquivo de catalogo de implantes por fabricante em config/catalogo/*.json (docs/contratos.md secao 11). Dimensoes em mm e mL. catalogo/1.1 (ADR 0015) acrescenta base_forma de forma aditiva: arquivos 1.0 continuam validos.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "fabricante", "documento", "nota_geral", "implantes"],
+  "properties": {
+    "esquema": { "enum": ["catalogo/1.0", "catalogo/1.1"] },
+    "fabricante": { "type": "string", "minLength": 1 },
+    "documento": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["titulo", "url", "data_acesso"],
+      "properties": {
+        "titulo": { "type": "string" },
+        "url": { "type": ["string", "null"] },
+        "ano": { "type": ["integer", "null"] },
+        "data_acesso": { "type": "string", "format": "date" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "nota_geral": { "const": "conferir versão vigente e registro ANVISA com o fabricante" },
+    "implantes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/implante" } }
+  },
+  "if": { "required": ["esquema"], "properties": { "esquema": { "const": "catalogo/1.1" } } },
+  "then": { "description": "catalogo/1.1: todo implante declara base_forma", "properties": { "implantes": { "items": { "required": ["base_forma"] } } } },
+  "$defs": {
+    "implante": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fabricante", "linha", "modelo", "referencia_fabricante", "forma", "perfil", "perfil_fabricante", "superficie", "superficie_fabricante", "base_mm", "altura_mm", "projecao_mm", "volume_ml", "coesividade", "gel", "registro_anvisa", "fonte", "verificado", "nota", "exemplo_nao_clinico"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+        "fabricante": { "type": "string", "minLength": 1 },
+        "linha": { "type": ["string", "null"] },
+        "modelo": { "type": "string", "minLength": 1 },
+        "referencia_fabricante": { "type": ["string", "null"] },
+        "forma": { "enum": ["redonda", "anatomica"], "description": "perfil sagital: redonda = cupula simetrica; anatomica = polo inferior mais cheio" },
+        "base_forma": { "enum": ["circular", "oval"], "description": "pegada na parede (ADR 0015): circular => altura_mm = base_mm; oval => altura_mm != base_mm (ex.: Polytech 4Two AO). Opcional em 1.0 (ausente = inferida: altura_mm = base_mm -> circular, senao oval); obrigatorio em 1.1" },
+        "perfil": { "enum": ["baixo", "baixo_moderado", "moderado", "moderado_alto", "alto", "extra_alto", "outro"] },
+        "perfil_fabricante": { "type": ["string", "null"] },
+        "superficie": { "enum": ["lisa", "microtexturizada", "macrotexturizada", "nanotexturizada", "poliuretano", "outra"] },
+        "superficie_fabricante": { "type": ["string", "null"] },
+        "base_mm": { "type": "number", "minimum": 60, "maximum": 200 },
+        "altura_mm": { "type": "number", "minimum": 60, "maximum": 200 },
+        "projecao_mm": { "type": "number", "minimum": 10, "maximum": 90 },
+        "volume_ml": { "type": "number", "minimum": 50, "maximum": 1200 },
+        "coesividade": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nivel", "descricao_fabricante", "escala"],
+          "properties": {
+            "nivel": { "type": ["integer", "null"], "minimum": 1, "maximum": 3 },
+            "descricao_fabricante": { "type": ["string", "null"] },
+            "escala": { "enum": ["fabricante", "desconhecida"] }
+          }
+        },
+        "gel": { "enum": ["silicone", "salina", "outro"] },
+        "registro_anvisa": { "type": ["string", "null"], "pattern": "^[0-9]{11,13}$" },
+        "fonte": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url", "pagina", "documento"],
+          "properties": {
+            "url": { "type": ["string", "null"] },
+            "pagina": { "type": ["integer", "null"], "minimum": 1, "description": "pagina do PDF (indice fisico, 1 = primeira), nao o numero impresso" },
+            "documento": { "type": "string" }
+          }
+        },
+        "verificado": { "const": false },
+        "nota": { "type": "string", "pattern": "conferir versão vigente e registro ANVISA com o fabricante" },
+        "exemplo_nao_clinico": { "type": "boolean" }
+      },
+      "allOf": [
+        { "if": { "properties": { "forma": { "const": "redonda" } } }, "then": { "description": "redonda: base circular e altura_mm igual a base_mm (verificado por teste, nao pelo esquema)" } },
+        { "if": { "required": ["base_forma"], "properties": { "base_forma": { "const": "oval" } } }, "then": { "description": "oval: altura_mm diferente de base_mm (verificado por teste, nao pelo esquema)" } }
+      ]
+    }
+  }
+}

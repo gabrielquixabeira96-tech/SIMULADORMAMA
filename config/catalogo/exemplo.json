@@ -1,0 +1,60 @@
+{
+  "esquema": "catalogo/1.0",
+  "fabricante": "Exemplo",
+  "documento": {
+    "titulo": "Seed de exemplo, nao clinica, para testes de esquema e de UI",
+    "url": null,
+    "ano": null,
+    "data_acesso": "2026-09-26",
+    "sha256": null
+  },
+  "nota_geral": "conferir versão vigente e registro ANVISA com o fabricante",
+  "implantes": [
+    {
+      "id": "exemplo-redondo-moderado-300",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Redondo Moderado",
+      "referencia_fabricante": null,
+      "forma": "redonda",
+      "perfil": "moderado",
+      "perfil_fabricante": null,
+      "superficie": "lisa",
+      "superficie_fabricante": null,
+      "base_mm": 116.0,
+      "altura_mm": 116.0,
+      "projecao_mm": 38.0,
+      "volume_ml": 300.0,
+      "coesividade": { "nivel": null, "descricao_fabricante": null, "escala": "desconhecida" },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": { "url": null, "pagina": null, "documento": "seed sintetica; valores inventados para teste" },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    },
+    {
+      "id": "exemplo-anatomico-alto-350",
+      "fabricante": "Exemplo",
+      "linha": "Teste",
+      "modelo": "Anatomico Alto",
+      "referencia_fabricante": null,
+      "forma": "anatomica",
+      "perfil": "alto",
+      "perfil_fabricante": null,
+      "superficie": "microtexturizada",
+      "superficie_fabricante": null,
+      "base_mm": 120.0,
+      "altura_mm": 130.0,
+      "projecao_mm": 47.0,
+      "volume_ml": 350.0,
+      "coesividade": { "nivel": 3, "descricao_fabricante": null, "escala": "desconhecida" },
+      "gel": "silicone",
+      "registro_anvisa": null,
+      "fonte": { "url": null, "pagina": null, "documento": "seed sintetica; valores inventados para teste" },
+      "verificado": false,
+      "nota": "EXEMPLO NÃO CLÍNICO — valores inventados; conferir versão vigente e registro ANVISA com o fabricante",
+      "exemplo_nao_clinico": true
+    }
+  ]
+}

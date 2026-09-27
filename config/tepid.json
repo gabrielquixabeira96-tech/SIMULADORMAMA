@@ -1,0 +1,96 @@
+{
+  "esquema": "tepid_config/1.0",
+  "versao": "1.0",
+  "status": "nao_conferido",
+  "nota": "CONFERIR NO TEXTO ORIGINAL. Todos os limiares, tabelas e ajustes abaixo foram preenchidos de memoria como placeholders e NAO sao verdade clinica. Antes de qualquer uso clinico, conferir cada valor em Tebbetts & Adams (TEPID, PRS 2002) e Tebbetts & Adams (High Five, PRS 2005), registrar a pagina em fonte_pagina e mudar conferir_no_texto_original para false. Unidade: mm (o texto original usa cm).",
+  "fonte": {
+    "referencia": "Tebbetts JB, Adams WP. Five critical decisions in breast augmentation using five measurements in 5 minutes: the high five decision support process. Plast Reconstr Surg. 2005; e Tebbetts JB. A system for breast implant selection based on patient tissue characteristics and implant-soft tissue dynamics (TEPID). Plast Reconstr Surg. 2002;109(4):1396-1409",
+    "doi": "10.1097/00006534-200204010-00030",
+    "nota": "conferir no texto original"
+  },
+  "campos": {
+    "base_mm": { "rotulo": "Largura da base mamaria", "unidade": "mm", "min": 80, "max": 200, "por_lado": true, "obrigatorio": true },
+    "apss_mm": { "rotulo": "APSS (anterior pull skin stretch)", "unidade": "mm", "min": 5, "max": 60, "por_lado": true, "obrigatorio": true },
+    "pinca_polo_superior_mm": { "rotulo": "Pincamento do polo superior", "unidade": "mm", "min": 3, "max": 80, "por_lado": true, "obrigatorio": true },
+    "pinca_sulco_mm": { "rotulo": "Pincamento no sulco inframamario", "unidade": "mm", "min": 1, "max": 40, "por_lado": true, "obrigatorio": true },
+    "n_imf_estirado_mm": { "rotulo": "N-IMF sob estiramento maximo", "unidade": "mm", "min": 30, "max": 160, "por_lado": true, "obrigatorio": true }
+  },
+  "regras": [
+    {
+      "id": "plano_pinca_polo_superior",
+      "campo": "pinca_polo_superior_mm",
+      "operador": "<",
+      "limiar_mm": 20,
+      "alerta": "Pincamento do polo superior abaixo do limiar configurado: considerar plano dual/submuscular.",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "cobertura_sulco_pinca_fina",
+      "campo": "pinca_sulco_mm",
+      "operador": "<",
+      "limiar_mm": 5,
+      "alerta": "Pincamento no sulco abaixo do limiar configurado: cobertura de tecido mole reduzida no polo inferior.",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "apss_baixo",
+      "campo": "apss_mm",
+      "operador": "<",
+      "limiar_mm": 20,
+      "alerta": "APSS abaixo do limiar configurado: envelope cutaneo pouco complacente; ajuste de volume para baixo (ver tabela ajuste_apss).",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "apss_alto",
+      "campo": "apss_mm",
+      "operador": ">",
+      "limiar_mm": 30,
+      "alerta": "APSS acima do limiar configurado: envelope cutaneo complacente; ajuste de volume para cima (ver tabela ajuste_apss).",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    }
+  ],
+  "tabelas": [
+    {
+      "id": "volume_inicial_por_base",
+      "descricao": "Volume inicial sugerido a partir da largura da base (placeholder; conferir).",
+      "entrada": "base_mm",
+      "saida": "volume_ml",
+      "pontos": [[105, 200], [110, 250], [115, 275], [120, 300], [125, 325], [130, 350], [135, 375], [140, 400]],
+      "interpolar": "linear",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "ajuste_apss",
+      "descricao": "Ajuste de volume pelo APSS (placeholder; conferir).",
+      "entrada": "apss_mm",
+      "saida": "delta_volume_ml",
+      "faixas": [{ "ate": 20, "valor": -30 }, { "ate": 30, "valor": 0 }, { "acima": 30, "valor": 30 }],
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "ajuste_n_imf_estirado",
+      "descricao": "Ajuste de volume pelo N-IMF sob estiramento (placeholder; conferir).",
+      "entrada": "n_imf_estirado_mm",
+      "saida": "delta_volume_ml",
+      "faixas": [{ "ate": 70, "valor": 0 }, { "ate": 80, "valor": 30 }, { "acima": 80, "valor": 60 }],
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    },
+    {
+      "id": "n_imf_alvo_por_volume",
+      "descricao": "Posicao alvo do novo sulco (N-IMF) em funcao do volume do implante (placeholder; conferir).",
+      "entrada": "volume_ml",
+      "saida": "n_imf_mm",
+      "pontos": [[200, 70], [250, 75], [300, 80], [350, 85], [400, 90]],
+      "interpolar": "linear",
+      "conferir_no_texto_original": true,
+      "fonte_pagina": null
+    }
+  ]
+}

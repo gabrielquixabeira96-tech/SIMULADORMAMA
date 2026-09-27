@@ -1,0 +1,45 @@
+{
+  "esquema": "torsos_presets/1.0",
+  "nota": "Fixtures obrigatorias do Marco 0 (docs/contratos.md secao 4.4). Cada item e um torso_parametros/1.0 completo. Gerar com: python -m mesh.cli torso --preset <nome> --saida data/sinteticos",
+  "presets": [
+    {
+      "esquema": "torso_parametros/1.0",
+      "nome": "t01_simetrico_300",
+      "semente": 42,
+      "largura_toracica_mm": 300,
+      "altura_torso_mm": 450,
+      "profundidade_toracica_mm": 200,
+      "volume_ml": { "dir": 300, "esq": 300 },
+      "ptose": { "dir": 0.0, "esq": 0.0 },
+      "n_imf_mm": { "dir": 70, "esq": 70 },
+      "assimetria": { "delta_altura_mamilo_mm": 0, "delta_lateral_mamilo_mm": 0 },
+      "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 }
+    },
+    {
+      "esquema": "torso_parametros/1.0",
+      "nome": "t02_assimetrico",
+      "semente": 43,
+      "largura_toracica_mm": 320,
+      "altura_torso_mm": 450,
+      "profundidade_toracica_mm": 210,
+      "volume_ml": { "dir": 350, "esq": 280 },
+      "ptose": { "dir": 0.3, "esq": 0.2 },
+      "n_imf_mm": { "dir": 75, "esq": 68 },
+      "assimetria": { "delta_altura_mamilo_mm": 8, "delta_lateral_mamilo_mm": 5 },
+      "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 }
+    },
+    {
+      "esquema": "torso_parametros/1.0",
+      "nome": "t03_pequeno_ptose",
+      "semente": 44,
+      "largura_toracica_mm": 280,
+      "altura_torso_mm": 450,
+      "profundidade_toracica_mm": 190,
+      "volume_ml": { "dir": 180, "esq": 180 },
+      "ptose": { "dir": 0.6, "esq": 0.6 },
+      "n_imf_mm": { "dir": 90, "esq": 90 },
+      "assimetria": { "delta_altura_mamilo_mm": 0, "delta_lateral_mamilo_mm": 0 },
+      "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 }
+    }
+  ]
+}

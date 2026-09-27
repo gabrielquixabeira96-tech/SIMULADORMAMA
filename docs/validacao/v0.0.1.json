@@ -1,0 +1,42 @@
+{
+  "esquema": "validacao/1.0",
+  "versao_software": "0.0.1",
+  "data": "2026-09-26",
+  "commit": null,
+  "desenho_testado": [],
+  "ambiente": {
+    "os": "linux",
+    "node": "22.22.2",
+    "python": "3.11.15",
+    "navegador": null
+  },
+  "parametros": {
+    "torsos": [],
+    "decimacao_alvo_vertices": null,
+    "geodesica": null,
+    "config_tepid": "1.0",
+    "config_simulacao": "1.0"
+  },
+  "resultados": {
+    "marco0_erro_max_gabarito_mm": null,
+    "marco1_bland_altman": {
+      "n": null,
+      "vies_mm": null,
+      "dp_mm": null,
+      "loa_mm": [
+        null,
+        null
+      ],
+      "criterio_2mm": null
+    },
+    "marco2_latencia_p95_ms": null,
+    "marco2_monotonicidade": null,
+    "marco2_simetria_max_mm": null,
+    "testes": {
+      "web_unit": null,
+      "web_e2e": null,
+      "python": null
+    }
+  },
+  "status": "sem_testes"
+}

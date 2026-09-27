@@ -1,0 +1,359 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/validacao.schema.json",
+  "title": "validacao/1.0",
+  "description": "Sidecar JSON do registro de validacao docs/validacao/v<versao>.json (docs/contratos.md secao 15; art. 5 da RDC 657/2022).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "esquema",
+    "versao_software",
+    "data",
+    "commit",
+    "desenho_testado",
+    "ambiente",
+    "parametros",
+    "resultados",
+    "status"
+  ],
+  "properties": {
+    "esquema": {
+      "const": "validacao/1.0"
+    },
+    "versao_software": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "data": {
+      "type": "string",
+      "format": "date"
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "git describe --always --dirty do commit validado (hash curto, ou <tag>-<n>-g<hash>; sufixo -dirty = arvore com alteracao nao commitada)",
+      "pattern": "^(?:[0-9A-Za-z._-]+-[0-9]+-g)?[a-f0-9]{7,40}(?:-dirty)?$"
+    },
+    "arvore_suja": {
+      "type": "boolean",
+      "description": "true se o commit tinha alteracao nao commitada (registro nao vale como validacao)"
+    },
+    "desenho_testado": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "A",
+          "B"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "ambiente": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "os",
+        "node",
+        "python"
+      ],
+      "properties": {
+        "os": {
+          "type": "string"
+        },
+        "node": {
+          "type": "string"
+        },
+        "python": {
+          "type": "string"
+        },
+        "navegador": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "parametros": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "torsos",
+        "config_tepid",
+        "config_simulacao"
+      ],
+      "properties": {
+        "torsos": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "decimacao_alvo_vertices": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "geodesica": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "enum": [
+                "mmp",
+                "calor"
+              ]
+            }
+          ]
+        },
+        "config_tepid": {
+          "type": "string"
+        },
+        "config_simulacao": {
+          "type": "string"
+        }
+      }
+    },
+    "resultados": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "marco0_erro_max_gabarito_mm",
+        "marco1_bland_altman",
+        "marco2_latencia_p95_ms",
+        "marco2_monotonicidade",
+        "marco2_simetria_max_mm",
+        "testes"
+      ],
+      "properties": {
+        "marco0_erro_max_gabarito_mm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "marco1_bland_altman": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "n",
+            "vies_mm",
+            "dp_mm",
+            "loa_mm",
+            "criterio_2mm"
+          ],
+          "properties": {
+            "n": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "vies_mm": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "dp_mm": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "loa_mm": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "criterio_2mm": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "marco2_latencia_p95_ms": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "marco2_monotonicidade": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "marco2_simetria_max_mm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "testes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "web_unit",
+            "web_e2e",
+            "python"
+          ],
+          "properties": {
+            "web_unit": {
+              "$ref": "#/$defs/resultadoTeste"
+            },
+            "web_e2e": {
+              "$ref": "#/$defs/resultadoTeste"
+            },
+            "python": {
+              "$ref": "#/$defs/resultadoTeste"
+            },
+            "contratos": {
+              "$ref": "#/$defs/resultadoTeste"
+            }
+          }
+        },
+        "marco1_n_imf": {
+          "description": "Bland-Altman só das distâncias N-IMF (relatado à parte; opcional, aditivo em 1.0)",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "n",
+            "vies_mm",
+            "dp_mm",
+            "loa_mm",
+            "criterio_2mm"
+          ],
+          "properties": {
+            "n": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "vies_mm": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "dp_mm": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            },
+            "loa_mm": {
+              "type": "array",
+              "items": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "criterio_2mm": {
+              "type": [
+                "boolean",
+                "null"
+              ]
+            }
+          }
+        },
+        "marco0_escala": {
+          "type": "object",
+          "description": "detalhe do Marco 0 por torso (opcional)",
+          "additionalProperties": true
+        },
+        "volume": {
+          "type": "object",
+          "description": "erro do estimador de volume contra o volume adicionado (opcional)",
+          "additionalProperties": true
+        },
+        "marco2_latencia": {
+          "type": "object",
+          "description": "p50/p95/máx por interação (opcional)",
+          "additionalProperties": true
+        },
+        "marco2_imf": {
+          "type": "object",
+          "description": "IMF manter/rebaixar (opcional)",
+          "additionalProperties": true
+        },
+        "marco2_regressao": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "snapshot de regressão geométrica dos morphs (opcional)"
+        },
+        "marco2b_e2e": {
+          "type": "object",
+          "description": "E2E do upload ao PDF por desenho (opcional)",
+          "additionalProperties": true
+        }
+      }
+    },
+    "status": {
+      "enum": [
+        "sem_testes",
+        "reprovado",
+        "aprovado"
+      ]
+    }
+  },
+  "$defs": {
+    "resultadoTeste": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "passaram",
+            "falharam",
+            "pulados"
+          ],
+          "properties": {
+            "passaram": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "falharam": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pulados": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}
