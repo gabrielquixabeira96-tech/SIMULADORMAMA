@@ -145,8 +145,29 @@ def linha_indice(v: str, data: str, status: str, n_ok: int, n_total: int, docs: 
             f"{' · '.join(comp) or '—'} |")
 
 
+def _ident(x: str) -> tuple[int, int, str]:
+    """Identificador comparavel: numerico (pelo valor) < alfanumerico (lexico ASCII), como no SemVer."""
+    return (0, int(x), "") if x.isdigit() else (1, 0, x)
+
+
 def _chave_versao(v: str) -> tuple:
-    return tuple(int(x) if x.isdigit() else x for x in v.replace("-", ".").split("."))
+    """Chave de ordenacao TOTAL estilo SemVer 2.0 para `X.Y.Z[-pre][+build]` (prefixo `v` opcional).
+
+    Nucleo comparado campo a campo (numeros pelo valor; campos ausentes contam como 0), e uma
+    pre-release vem ANTES da release de mesmo nucleo (0.2.0-rc1 < 0.2.0). Entre pre-releases,
+    identificadores separados por `.`: numerico < alfanumerico, e o prefixo mais curto vem antes
+    (rc < rc.1 < rc.2 < rc.10 < rc1). Metadado de build (`+...`) e ignorado. Nunca mistura int com
+    str na mesma posicao (cada campo vira uma tupla de mesmo formato), logo nunca levanta TypeError.
+    """
+    v = v.strip()
+    if v[:1] in ("v", "V"):
+        v = v[1:]
+    v = v.split("+", 1)[0]
+    nucleo, _, pre = v.partition("-")
+    campos = [_ident(x) for x in nucleo.split(".")]
+    campos += [(0, 0, "")] * (3 - len(campos))
+    # release (sem pre) > qualquer pre-release do mesmo nucleo
+    return (tuple(campos), (1,) if not pre else (0, tuple(_ident(x) for x in pre.split("."))))
 
 
 def atualizar_indice(indice: Path, v: str, linha: str) -> None:
