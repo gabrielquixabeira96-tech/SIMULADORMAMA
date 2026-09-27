@@ -147,7 +147,8 @@ def linha_indice(v: str, data: str, status: str, n_ok: int, n_total: int, docs: 
 
 def _ident(x: str) -> tuple[int, int, str]:
     """Identificador comparavel: numerico (pelo valor) < alfanumerico (lexico ASCII), como no SemVer."""
-    return (0, int(x), "") if x.isdigit() else (1, 0, x)
+    # isascii: str.isdigit aceita digitos Unicode ("²", "٣") que int() recusa ou que o SemVer nao considera numericos
+    return (0, int(x), "") if x.isascii() and x.isdigit() else (1, 0, x)
 
 
 def _chave_versao(v: str) -> tuple:

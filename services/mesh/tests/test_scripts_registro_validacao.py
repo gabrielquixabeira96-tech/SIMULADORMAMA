@@ -41,6 +41,8 @@ def test_ordem_semver_total_prerelease_antes_da_release():
     # build ignorado; prefixo v aceito; campos ausentes = 0
     assert rv._chave_versao("v0.1.1+abc") == rv._chave_versao("0.1.1")
     assert rv._chave_versao("0.2") == rv._chave_versao("0.2.0")
+    # digito Unicode nao e numerico (int("²") levantaria ValueError): vira identificador alfanumerico
+    assert rv._chave_versao("1.0.0-²") > rv._chave_versao("1.0.0-9")
 
 
 def test_indice_insere_prerelease_na_ordem(tmp_path: Path):
