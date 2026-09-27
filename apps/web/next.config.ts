@@ -58,8 +58,11 @@ const config: NextConfig = {
   serverExternalPackages: ["pg"],
   outputFileTracingRoot: raizRepo,
   // config/*.json e VERSION são lidos em runtime pelo servidor (nunca copiados para o código).
+  // pnpm-workspace.yaml: `raizRepo()` (config/ambiente.ts) reconhece a raiz por ele + VERSION; sem
+  // ele no trace, um deploy com o pacote rastreado não acha a raiz (lerConfig/dataDir falham).
+  // docs/validacao/*.json: registros lidos pela planilha do art. 5º (validacao/planilha.ts).
   outputFileTracingIncludes: {
-    "/**": ["../../config/**/*.json", "../../VERSION"],
+    "/**": ["../../config/**/*.json", "../../VERSION", "../../pnpm-workspace.yaml", "../../docs/validacao/*.json"],
   },
   // Dados de paciente e artefatos gerados NUNCA entram no pacote de deploy (LGPD).
   outputFileTracingExcludes: {
