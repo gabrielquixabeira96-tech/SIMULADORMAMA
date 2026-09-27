@@ -12,79 +12,18 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { cpus, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { AQUECIMENTO_DESCARTADO, CRITERIOS, LIMITE_P95_2_PAINEIS_MS, LIMITE_P95_MS, dentroDoCriterio, medirInteracao, resumir, rodarRoteiro } from "../src/simulacao/benchmark";
 import { IMPLANTE_1, IMPLANTE_2, esperarQuadro, prepararSimulacao } from "./simulacao-apoio";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const RAIZ = resolve(AQUI, "../../..");
 const VERSAO = readFileSync(join(RAIZ, "VERSION"), "utf8").trim();
 const VIEWPORT = { width: 1600, height: 1000 };
-const LIMITE_P95_MS = 100;
 
 test.use({ viewport: VIEWPORT });
 
-type Acao = { tipo: "slider"; valor: number } | { tipo: "clique"; testid: string };
-
-interface Amostra {
-  /** input → rAF após o quadro emitido em todos os painéis (métrica pedida). */
-  quadro: number;
-  /** input → quadro rasterizado (readPixels força a GPU/SwiftShader a terminar). Mais estrita. */
-  rasterizado: number;
-}
-
-/**
- * Executa a ação DENTRO da página, a partir de um estado ocioso (sem quadro pendente), e mede
- * as duas latências. O contador de quadros vem do useFrame de cada painel (gancho de teste).
- */
-async function medir(page: Page, acao: Acao): Promise<Amostra> {
-  return page.evaluate(async (a) => {
-    const g = (window as any).__simuladorSim as { quadros: Record<string, number> };
-    const raf = () => new Promise<void>((ok) => requestAnimationFrame(() => ok()));
-    const paineis = () => [...document.querySelectorAll('[data-testid^="sim-painel-"]')].map((e) => e.getAttribute("data-testid")!.replace("sim-painel-", ""));
-    // ocioso: nenhum quadro novo por 2 rAFs seguidos
-    for (let i = 0, ultimo = JSON.stringify(g.quadros); i < 50; i++) {
-      await raf();
-      await raf();
-      const agora = JSON.stringify(g.quadros);
-      if (agora === ultimo) break;
-      ultimo = agora;
-    }
-    await new Promise((ok) => setTimeout(ok, 30));
-    const antes: Record<string, number> = { ...g.quadros };
-    const t0 = performance.now();
-    if (a.tipo === "slider") {
-      const el = document.querySelector('[data-testid="slider-peso"]') as HTMLInputElement;
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, String(a.valor));
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    } else {
-      (document.querySelector(`[data-testid="${a.testid}"]`) as HTMLElement).click();
-    }
-    const quadro = await new Promise<number>((ok, erro) => {
-      const passo = () => {
-        const agora = performance.now();
-        if (paineis().every((k) => (g.quadros[k] ?? 0) > (antes[k] ?? 0))) return ok(agora - t0);
-        if (agora - t0 > 5000) return erro(new Error("quadro não renderizado em 5 s"));
-        requestAnimationFrame(passo);
-      };
-      requestAnimationFrame(passo);
-    });
-    const px = new Uint8Array(4);
-    for (const k of paineis()) {
-      const c = document.querySelector(`[data-testid="sim-painel-${k}"] canvas`) as HTMLCanvasElement;
-      const ctx = c.getContext("webgl2") as WebGL2RenderingContext;
-      ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, px);
-    }
-    return { quadro, rasterizado: performance.now() - t0 };
-  }, acao);
-}
-
-const pct = (xs: number[], p: number) => {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.min(s.length - 1, Math.ceil((p / 100) * s.length) - 1)]!;
-};
-const resumo = (xs: number[]) => ({ n: xs.length, p50_ms: +pct(xs, 50).toFixed(2), p95_ms: +pct(xs, 95).toFixed(2), max_ms: +Math.max(...xs).toFixed(2), media_ms: +(xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) });
-
-test("latência da simulação: slider, plano/IMF e implante (p95 < 100 ms)", async ({ page, browser }, info) => {
+test("latência da simulação: 1 painel (p95 < 100 ms) e comparação lado a lado (p95 ≤ 85 ms)", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desenho-B", "benchmark roda uma vez (desenho B)");
   test.setTimeout(10 * 60_000);
   await prepararSimulacao(page, [IMPLANTE_1, IMPLANTE_2]);
@@ -92,29 +31,18 @@ test("latência da simulação: slider, plano/IMF e implante (p95 < 100 ms)", as
   await page.getByTestId("slider-peso").scrollIntoViewIfNeeded();
   await esperarQuadro(page);
 
-  // aquecimento (compilação de shaders e upload das texturas de morph dos 4 .glb): descartado
-  for (const t of ["plano-dual_plane", "imf-rebaixar", "plano-subglandular", "imf-manter", "mostrar-implante-2", "mostrar-implante-1"]) await medir(page, { tipo: "clique", testid: t });
-  const q = (xs: Amostra[]) => xs.map((x) => x.quadro);
-  const rz = (xs: Amostra[]) => xs.map((x) => x.rasterizado);
-  await medir(page, { tipo: "clique", testid: "comparar" });
-  await medir(page, { tipo: "clique", testid: "comparar" });
-
-  const slider: Amostra[] = [];
-  for (let i = 0; i < 60; i++) slider.push(await medir(page, { tipo: "slider", valor: [0, 25, 50, 75, 100][i % 5]! }));
-  const planoImf: Amostra[] = [];
-  const ciclo = ["plano-dual_plane", "imf-rebaixar", "plano-subglandular", "imf-manter"];
-  for (let i = 0; i < 24; i++) planoImf.push(await medir(page, { tipo: "clique", testid: ciclo[i % 4]! }));
-  const implante: Amostra[] = [];
-  for (let i = 0; i < 20; i++) implante.push(await medir(page, { tipo: "clique", testid: i % 2 === 0 ? "mostrar-implante-2" : "mostrar-implante-1" }));
-  // comparação lado a lado (2 canvases): slider
-  await page.getByTestId("comparar").check();
-  await esperarQuadro(page);
-  const sliderComparacao: Amostra[] = [];
-  for (let i = 0; i < 30; i++) sliderComparacao.push(await medir(page, { tipo: "slider", valor: [60, 20, 80, 40, 100][i % 5]! }));
+  // mesmo roteiro (e mesmo n) da página /benchmark: src/simulacao/benchmark.ts
+  const amostras = await rodarRoteiro({
+    medir: (a) => page.evaluate(medirInteracao, a),
+    comparar: async (ligado) => {
+      await page.getByTestId("comparar").setChecked(ligado);
+      await esperarQuadro(page);
+    },
+  });
+  const { slider, troca_plano_imf: planoImf, troca_implante: implante, slider_comparacao_2_paineis: sliderComparacao } = amostras;
 
   const canvas = await page.getByTestId("sim-painel-i1").locator("canvas").boundingBox();
   if (process.env.E2E_CAPTURA) await page.getByTestId("simulacao-paineis").screenshot({ path: process.env.E2E_CAPTURA });
-  const todos = [...slider, ...planoImf, ...implante];
   const r = {
     esquema: "validacao_componente/web-marco2-latencia",
     versao_software: VERSAO,
@@ -135,37 +63,29 @@ test("latência da simulação: slider, plano/IMF e implante (p95 < 100 ms)", as
       torso: "t01_simetrico_300 (processado pelo services/mesh, ~40 mil vértices)",
       implantes: [IMPLANTE_1, IMPLANTE_2],
       morphs: "4 .glb (plano × IMF), 6 targets cada (2 implantes × ambos/dir/esq), pré-carregados",
-      desenho: "cena = pele com faixa do envelope + casca +4,5 mm por painel; frameloop sob demanda; render síncrono no evento",
+      desenho: "cena = pele com faixa do envelope + casca +4,5 mm por painel; frameloop sob demanda; render síncrono no evento; triângulos em ordem de cache; faces de costas da pele descartadas na CPU por vista",
       medida: "principal: input → quadro rasterizado (rAF após o render + readPixels); secundária: input → rAF após a emissão",
       limite_p95_ms: LIMITE_P95_MS,
-      aquecimento_descartado: 8,
+      limite_p95_2_paineis_ms: LIMITE_P95_2_PAINEIS_MS,
+      aquecimento_descartado: AQUECIMENTO_DESCARTADO,
     },
     /** métrica principal: input → quadro rasterizado (readPixels confirma o fim do trabalho da GPU) */
-    resultados: {
-      slider: resumo(rz(slider)),
-      troca_plano_imf: resumo(rz(planoImf)),
-      troca_implante: resumo(rz(implante)),
-      geral_1_painel: resumo(rz(todos)),
-      slider_comparacao_2_paineis: resumo(rz(sliderComparacao)),
-    },
+    resultados: resumir(amostras, "rasterizado"),
     /** secundária: input → rAF após o quadro emitido (o render é síncrono no evento, então não inclui a GPU) */
-    raf_apos_emissao: {
-      slider: resumo(q(slider)),
-      troca_plano_imf: resumo(q(planoImf)),
-      troca_implante: resumo(q(implante)),
-      geral_1_painel: resumo(q(todos)),
-      slider_comparacao_2_paineis: resumo(q(sliderComparacao)),
-    },
+    raf_apos_emissao: resumir(amostras, "quadro"),
     amostras_ms: { slider, troca_plano_imf: planoImf, troca_implante: implante, slider_comparacao_2_paineis: sliderComparacao },
   };
-  const GATE = ["slider", "troca_plano_imf", "troca_implante", "geral_1_painel"] as const;
-  const aprovado = GATE.every((k) => r.resultados[k].p95_ms < LIMITE_P95_MS);
+  const aprovado = CRITERIOS.every((c) => dentroDoCriterio(c, r.resultados[c.chave].p95_ms));
   escrever({ ...r, aprovado });
   console.log(`[latencia] rasterizado ${JSON.stringify(r.resultados)}`);
   console.log(`[latencia] raf ${JSON.stringify(r.raf_apos_emissao)}`);
 
   expect(slider.length).toBeGreaterThanOrEqual(50);
-  for (const k of GATE) expect(r.resultados[k].p95_ms, `p95 de ${k}`).toBeLessThan(LIMITE_P95_MS);
+  for (const c of CRITERIOS) {
+    const p95 = r.resultados[c.chave].p95_ms;
+    if (c.estrito) expect(p95, `p95 de ${c.chave}`).toBeLessThan(c.limite);
+    else expect(p95, `p95 de ${c.chave}`).toBeLessThanOrEqual(c.limite);
+  }
 });
 
 function escrever(r: any) {
@@ -201,10 +121,10 @@ Gerado automaticamente por \`apps/web/e2e/latencia.spec.ts\` (Playwright contra 
 
 ## Método
 
-- Cena por painel: pele (Lambert, textura) com morph targets e a faixa do envelope pintada na pele + casca translúcida a +4,5 mm ao longo da normal deformada (só sobre a região que o implante altera), ~40 mil vértices / ~80 mil triângulos; 4 \`.glb\` (plano × IMF) pré-carregados; \`frameloop="demand"\`, sem MSAA, \`dpr = 1\`, sem tone mapping.
+- Cena por painel: pele (Lambert, textura) com morph targets e a faixa do envelope pintada na pele + casca translúcida a +4,5 mm ao longo da normal deformada (só sobre a região que o implante altera), ~40 mil vértices / ~80 mil triângulos; 4 \`.glb\` (plano × IMF) pré-carregados; \`frameloop="demand"\`, sem MSAA, \`dpr = 1\`, sem tone mapping. Triângulos em ordem amigável ao cache de vértices e, a cada mudança de vista ou de alvo, as faces de costas da pele (de costas em peso 0, 0,5 e 1, com margem) saem do índice na CPU: a GPU as descartaria de qualquer forma, então a imagem é a mesma com menos trabalho de vértice/primitiva.
 - **Latência (métrica principal e critério)** = \`performance.now()\` no disparo do evento (input do slider / clique no rádio) até o quadro **rasterizado** em todos os painéis visíveis: o viewer renderiza de forma síncrona dentro do evento (\`advance()\` do R3F), espera-se o contador de quadros avançar e o \`requestAnimationFrame\` seguinte, e um \`readPixels\` de 1 px em cada canvas força a GPU (SwiftShader) a terminar o quadro. É mais estrita que "rAF após a atualização" (secundária, na tabela de baixo), que com o render síncrono não inclui o trabalho da GPU.
 - Cada amostra parte de estado ocioso (nenhum quadro pendente).
-- ${r.parametros.aquecimento_descartado} interações de aquecimento descartadas (compilação de shaders e upload das texturas de morph de cada \`.glb\`). Critério: p95 < ${r.parametros.limite_p95_ms} ms no slider, na troca de plano/IMF e na troca de implante (1 painel); a comparação lado a lado é informativa.
+- ${r.parametros.aquecimento_descartado} interações de aquecimento descartadas (compilação de shaders e upload das texturas de morph de cada \`.glb\`). Critérios: p95 < ${r.parametros.limite_p95_ms} ms no slider, na troca de plano/IMF e na troca de implante (1 painel) e p95 ≤ ${r.parametros.limite_p95_2_paineis_ms} ms no slider da comparação lado a lado (2 painéis). Roteiro e n iguais aos da página \`/benchmark\` (\`apps/web/src/simulacao/benchmark.ts\`).
 - Canvas: ${r.maquina.canvas_px} px (viewport ${r.maquina.viewport}).
 
 ## Resultados (ms)
@@ -215,9 +135,9 @@ ${linha("slider", "slider antes/depois (1 painel)")}
 ${linha("troca_plano_imf", "troca de plano / IMF")}
 ${linha("troca_implante", "troca de implante")}
 ${linha("geral_1_painel", "todas as interações de 1 painel")}
-${linha("slider_comparacao_2_paineis", "slider na comparação lado a lado (2 painéis) — informativo")}
+${linha("slider_comparacao_2_paineis", "slider na comparação lado a lado (2 painéis)")}
 
-**Resultado:** ${r.aprovado ? "p95 < 100 ms em slider, troca de plano/IMF e troca de implante → critério ATINGIDO" : "algum p95 ≥ 100 ms → critério NÃO ATINGIDO"} (no SwiftShader headless). A comparação lado a lado renderiza 2 canvases (2× o trabalho de vértices) e ${r.resultados.slider_comparacao_2_paineis.p95_ms < 100 ? "também fica abaixo de 100 ms" : "**fica acima de 100 ms no SwiftShader**; é informativa e precisa ser medida no hardware-alvo"}.
+**Resultado:** ${r.aprovado ? `p95 < ${r.parametros.limite_p95_ms} ms em slider, troca de plano/IMF e troca de implante e p95 ≤ ${r.parametros.limite_p95_2_paineis_ms} ms no slider com 2 painéis → critérios ATINGIDOS` : "algum p95 acima do limite → critério NÃO ATINGIDO"} (no SwiftShader headless). Comparação lado a lado (2 canvases, 2× o trabalho de vértices): p95 ${r.resultados.slider_comparacao_2_paineis.p95_ms} ms (limite ${r.parametros.limite_p95_2_paineis_ms} ms).
 
 Secundária — input → rAF após o quadro emitido (não inclui GPU):
 
@@ -239,7 +159,8 @@ Amostras brutas em \`v${r.versao_software}-web-marco2-latencia.json\`.
 
 ## Desvios e pendências
 
-- Medido em software (SwiftShader), não no iPad; falta a medição no hardware-alvo (Safari/WebKit + GPU Apple).
+- Medido em software (SwiftShader), não no iPad; falta a medição no hardware-alvo (Safari/WebKit + GPU Apple). A página \`/benchmark\` (com \`BENCHMARK_HABILITADO=1\`) roda o mesmo roteiro no aparelho e baixa o JSON; \`python3 scripts/importar_latencia.py <json>\` gera o registro "medido em hardware real".
+- Em máquina compartilhada (outros processos disputando a CPU), o SwiftShader fica mais lento e o p95 sobe: medir com a máquina ociosa.
 - A geração dos morphs (\`POST /morphs\`, segundos) não entra na latência de interação: acontece uma vez por escolha de implantes, antes da interação.
 `;
   const destinos = [join(AQUI, "../test-results/validacao")];
