@@ -1,7 +1,8 @@
 /**
  * Sobe o services/mesh REAL (FastAPI, Python) numa porta livre, apontando para o DATA_DIR do
- * teste, para os testes de integração sem MSW. Se o venv não existir, `disponivel` é false e
- * os testes de integração se auto-pulam (a CI roda `scripts/mesh.sh venv` antes).
+ * teste, para os testes de integração sem MSW. Fora da CI, se faltar venv, torso ou banco, os
+ * testes de integração se auto-pulam. Com EXIGIR_MESH_REAL=1 (exportado por `scripts/ci.sh`, que
+ * cria o venv e gera os torsos antes), a falta de qualquer pré-requisito vira FALHA explícita.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -16,6 +17,18 @@ export const TORSOS = ["t01_simetrico_300", "t02_assimetrico", "t03_pequeno_ptos
 export const meshRealInstalado = (): boolean => existsSync(PYTHON);
 export const torsoDisponivel = (nome: string): boolean =>
   ["torso.obj", "torso.mtl", "textura.png", "gabarito.json"].every((a) => existsSync(resolve(SINTETICOS, nome, a)));
+
+/** EXIGIR_MESH_REAL=1: a integração real não pode ser pulada (CI). */
+export const exigirMeshReal = (): boolean => process.env.EXIGIR_MESH_REAL === "1";
+
+/** Pré-requisitos ausentes da integração real (vazio = pronto para rodar). */
+export function faltasMeshReal(torso: string, dbOk: boolean): string[] {
+  const faltas: string[] = [];
+  if (!meshRealInstalado()) faltas.push(`venv do services/mesh (${PYTHON}; rode 'bash scripts/mesh.sh venv')`);
+  if (!torsoDisponivel(torso)) faltas.push(`torso sintético ${torso} em ${SINTETICOS} (rode 'bash scripts/mesh.sh torsos')`);
+  if (!dbOk) faltas.push("Postgres de teste (rode 'bash scripts/db.sh start criar')");
+  return faltas;
+}
 
 async function portaLivre(): Promise<number> {
   return new Promise((ok, erro) => {
