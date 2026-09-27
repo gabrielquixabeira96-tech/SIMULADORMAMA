@@ -13,6 +13,14 @@ Sem mudança numérica no modelo: `config/tepid.json`, `config/simulacao.json`, 
     - banco sem a marca de demo (gravada por `migrar.ts --marcar-demo`, só em banco vazio);
     - malha não sintética, anamnese gravada, ou pasta estranha em `DATA_DIR/pacientes`.
   - Novo `scripts/demo_sandbox.sh` (preparar/subir/parar/…), documentado em `docs/deploy-demo.md` com os riscos.
+- **Revisão de segurança do modo demo (ADR 0018, seção "Revisão de segurança").**
+  - O PDF leva a faixa DEMONSTRAÇÃO na tarja e no rodapé de todas as páginas.
+  - O relatório sai com `demo: true`.
+  - A planilha e as sessões de Bland-Altman ficam marcadas `demo:`.
+  - `versao_config_simulacao` deixa de aceitar texto livre (regex e versão do servidor), e o ADR registra a varredura dos esquemas.
+  - Na demo: observação da sessão desligada, token exatamente `^[0-9a-f]{64}$`, teto de corpo de 2 MB no build.
+  - `X-Forwarded-*` passa a usar o último valor da lista.
+  - No script: validação de desenho e portas, `apagar` só com marcador e senha do Postgres fora do argv.
 - **Proxy TLS no `?token=`.** Com `DEMO_SINTETICA=1` ou `APP_CONFIAR_PROXY_TLS=1`, o redirecionamento usa `X-Forwarded-Proto`/`-Host`: vai para `https://` e grava o cookie `Secure`. O host encaminhado precisa estar permitido e é o comparado com o `Origin`. No modo local padrão, esses cabeçalhos continuam ignorados.
 - **Trace do build (deploy em Functions, opções B/C).** `outputFileTracingIncludes` passa a incluir `pnpm-workspace.yaml`, que `raizRepo()` usa para achar a raiz, e `docs/validacao/*.json` (planilha do art. 5º). Sem isso, o pacote rastreado não achava a raiz do repositório em runtime.
 - **Testes.**

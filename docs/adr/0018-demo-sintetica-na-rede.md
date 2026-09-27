@@ -11,7 +11,7 @@ O sandbox expõe a porta por uma URL pública que **não** fica atrás da Deploy
 ## Decisão
 
 1. **Variável de servidor `DEMO_SINTETICA`**, lida em runtime e nunca `NEXT_PUBLIC_*`, com a mesma lógica da flag do ADR 0005 e do modo benchmark na rede. `1` liga. Vazio ou `0` desliga, e esse é o padrão. Qualquer outro valor (`true`, ` 1`) faz a **subida recusar**, porque um valor ignorado em silêncio desligaria a demo que o operador achou ter ligado. Sem a variável, o comportamento é idêntico ao da v0.1.2: há testes de tabela para isso.
-2. **Entradas de dado real fechadas.** `POST /api/malhas` (upload de scan) e `POST /api/llm/anamnese` (texto livre, a única rota que leva prosa da consulta ao banco) respondem `403 desligado_na_demo`. O bloqueio fica no proxy, depois do token: sem token a resposta continua `401`. Como defesa em profundidade, as duas rotas também recusam sozinhas e `registrarMalha` não aceita malha não sintética. Só são utilizáveis os torsos **gerados pelo `services/mesh`**, ou seja, os que têm `parametros.json` com `esquema: "torso_parametros/1.0"` e o mesmo nome. Isso vale para a listagem, os arquivos, a importação e a sessão de Bland-Altman. Um scan copiado para `sinteticos/` não aparece. A UI esconde o envio, a pré-visualização de arquivo local e a anamnese. TEPID (números), relatório e PDF (template + mock) continuam ligados.
+2. **Entradas de dado real fechadas.** `POST /api/malhas` (upload de scan) e `POST /api/llm/anamnese` (texto livre da consulta) respondem `403 desligado_na_demo`. A premissa original, de que a anamnese seria a única rota a levar prosa ao banco, estava **errada**. A revisão de segurança achou `versao_config_simulacao` aceitando texto livre, que ia ao banco, ao relatório e ao PDF, e a observação da sessão de Bland-Altman. Os dois foram fechados; a varredura completa está na seção "Revisão de segurança" abaixo. O bloqueio fica no proxy, depois do token: sem token a resposta continua `401`. Como defesa em profundidade, as duas rotas também recusam sozinhas e `registrarMalha` não aceita malha não sintética. Só são utilizáveis os torsos **gerados pelo `services/mesh`**, ou seja, os que têm `parametros.json` com `esquema: "torso_parametros/1.0"` e o mesmo nome. Isso vale para a listagem, os arquivos, a importação e a sessão de Bland-Altman. Um scan copiado para `sinteticos/` não aparece. A UI esconde o envio, a pré-visualização de arquivo local e a anamnese. TEPID (números), relatório e PDF (template + mock) continuam ligados.
 3. **Subida recusa** (`config/subida.ts`, chamada por `instrumentation.ts`, com `process.exit(1)`):
    - ambiente:
      - `ANTHROPIC_API_KEY` não vazia;
@@ -62,3 +62,41 @@ O sandbox expõe a porta por uma URL pública que **não** fica atrás da Deploy
   - `tests/ui/paineis.test.tsx`: a faixa;
   - `tests/unit/scripts.test.ts`: as guardas do script;
   - `e2e/demo.spec.ts`: projeto `demo` do Playwright, num terceiro servidor com banco próprio `<teste>_e2edemo` criado, marcado e apagado no teardown. Cobre a faixa em todas as páginas, upload e anamnese 403, `?token=` com `X-Forwarded-*` → `https://` + `Secure`, e o fluxo com o torso t01 até medidas B e relatório.
+
+## Revisão de segurança (2026-09-27, mesma v0.1.3 em desenvolvimento)
+
+A revisão independente reprovou a primeira versão com 2 bloqueantes, corrigidos assim:
+
+- **B1 — PDF e planilha sem marca de demo.**
+  - O relatório gerado na demo leva `demo: true`, na resposta de `/api/relatorio` e no payload gravado.
+  - O PDF desenha a faixa "DEMONSTRAÇÃO — dados sintéticos, não é previsão clínica" numa tarja no topo e no rodapé de **todas** as páginas, além da caixa sob o título. Basta o payload ter `demo: true` ou a instância estar em modo demo.
+  - A planilha do art. 5º exportada na demo sai com `demo: true`, uma nota no topo, toda linha e todo grupo com fonte `demo:<fonte>` e o arquivo `planilha-art5-DEMO-*.csv`.
+  - Sessões de Bland-Altman criadas na demo gravam `demo: true` e saem como `demo:sessao_bland_altman` mesmo exportadas fora dela.
+- **B2 — texto livre em `versao_config_simulacao`** (`POST /api/malhas/<id>/simulacoes`): o campo chegava ao banco, ao relatório e ao PDF. Agora:
+  - regex `^[0-9A-Za-z._-]{1,32}$`;
+  - tem de ser igual à versão de `config/simulacao.json` do servidor (senão `409 versao_config_divergente`);
+  - o valor gravado é o do servidor.
+
+**Varredura dos esquemas** de toda rota que grava no banco ou em `DATA_DIR`, ou cujo conteúdo vai para relatório ou PDF: todo campo de texto, com a situação depois da revisão.
+
+| Rota / campo | Situação |
+|---|---|
+| `POST /api/llm/anamnese` `texto` | prosa por desenho (higienizada, nunca gravada; só o JSON estruturado vai ao banco). **Fechada na demo** (403). |
+| `POST /api/malhas/<id>/simulacoes` `versao_config_simulacao` | era `z.string().min(1)`: **corrigido** (regex + igual à do servidor) |
+| `POST /api/malhas/<id>/simulacoes` `implante_id`; `POST /api/malhas/<id>/morphs` `implantes[]` | regex de id `^[a-z0-9]+(-[a-z0-9]+)*$` + existência no catálogo |
+| `POST /api/malhas` (multipart) `unidade_origem`, `recorte_modo`, nomes de arquivo | enums; os arquivos são renomeados para `scan.<ext>`. **Fechada na demo** (403). |
+| `POST /api/validacao/sessoes/<id>/encerrar` `observacoes` | texto limitado (≤ 500, sem `@` nem quebra de linha) por desenho no modo local; **recusada na demo** (403 `desligado_na_demo`; campo escondido na UI) |
+| `POST /api/validacao/sessoes` `operador` | código pseudônimo `^[A-Z0-9][A-Z0-9-]{1,15}$`; `torsos[]` `^[a-z0-9_]+$`; `tipo_operador` enum |
+| `POST /api/medidas`, `/api/medidas/medir`, `/api/malhas/<id>/morphs`, `/api/validacao/sessoes/<id>/itens/<i>` `landmarks` | chaves do enum canônico; `origem` enum; só números |
+| `POST /api/tepid`, `/api/medidas` `valores`/`medidas_digitadas` | só os campos do TEPID, convertidos para número; chave desconhecida → 400 (o nome ecoa na mensagem de erro, mas nunca é gravado) |
+| `POST /api/relatorio`, `/api/pdf`, `/api/pacientes`, `/api/sinteticos/<nome>/importar`, `/reescalar` | só uuid, números e nome de torso `^[a-z0-9_]+$` (o corpo de `/api/pacientes` é ignorado) |
+| Query strings (`/api/validacao/planilha`, `/api/benchmark/arquivo`, `/api/pdf/<id>`) | enums ou listas fixas; nada gravado |
+
+Não bloqueantes, também corrigidos:
+- **N1:** observação da sessão desligada na demo (ver a tabela).
+- **N2:** o token da demo tem de ser exatamente `^[0-9a-f]{64}$`. A comparação usa o valor cru, sem trim, na subida e no proxy.
+- **N3:** vale o **último** valor de `X-Forwarded-Proto`/`X-Forwarded-Host`, que é o acrescentado pelo proxy de borda. Um valor forjado pelo cliente no começo da lista é ignorado. A verificação no sandbox está em `docs/deploy-demo.md`.
+- **N4:** com `DEMO_SINTETICA=1` no build (o script builda assim), `proxyClientMaxBodySize` cai de 520 MB para 2 MB. É o teto do buffer do proxy do Next: acima dele o corpo é truncado. As rotas JSON já limitam em 1 MB (413), e a demo não tem upload. A subida avisa `build_nao_e_da_demo` se o build não for o da demo, como no e2e, que reaproveita o build de teste.
+- **N5:** a primeira URL com `?token=` pode ficar nos logs do proxy do Vercel e no histórico do navegador. `docs/deploy-demo.md` recomenda janela privada e `novo-token` ao fim de cada sessão.
+- **N6:** o script valida `DEMO_DESENHO` (`A`/`B`) e as portas; `apagar` só remove pastas com o marcador gravado pelo próprio script; a senha do role vai ao `psql` pela entrada padrão, nunca pelo argv.
+
