@@ -50,6 +50,11 @@ export async function lerGabarito(torso: string): Promise<GabaritoSessao> {
   return gabaritoSessaoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`sinteticos/${torso}/gabarito.json`), "utf8")));
 }
 
+export async function sha256TorsoObj(torso: string): Promise<string> {
+  if (!NOME_TORSO.test(torso)) throw new Error("nome de torso inválido");
+  return sha256(await readFile(caminhoEmDataDir(`sinteticos/${torso}/torso.obj`)));
+}
+
 export async function sha256Gabarito(torso: string): Promise<string> {
   return sha256(await readFile(caminhoEmDataDir(`sinteticos/${torso}/gabarito.json`)));
 }

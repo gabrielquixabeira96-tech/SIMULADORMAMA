@@ -1,7 +1,7 @@
 import { bloquearSeDesligado, json, lerJson } from "@/api/respostas";
 import { getDesenho } from "@/config/desenho";
 import { auditarSessao, erroValidacao, RECURSO_VALIDACAO } from "@/validacao/http";
-import { criarSessao, listarSessoes, vistaPublica } from "@/validacao/sessao";
+import { bloqueioGabarito, criarSessao, listarSessoes, vistaPublica } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,12 +24,13 @@ export async function POST(req: Request) {
   }
 }
 
-/** GET /api/validacao/sessoes — lista (vista pública de cada sessão). */
+/** GET /api/validacao/sessoes — lista (vista pública; encerradas com torso em sessão aberta ficam sem resultado). */
 export async function GET() {
   const bloqueio = bloquearSeDesligado(RECURSO_VALIDACAO);
   if (bloqueio) return bloqueio;
   try {
-    return json({ sessoes: (await listarSessoes()).map(vistaPublica) });
+    const b = await bloqueioGabarito();
+    return json({ sessoes: (await listarSessoes()).map((s) => vistaPublica(s, b)) });
   } catch (e) {
     return erroValidacao(e, "validacao.sessoes.listar");
   }

@@ -207,7 +207,12 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     setLandmarksGabarito(null);
     if (t.gabarito && recursos.medicao_automatica_3d) {
       fetch(`${base}/gabarito.json`)
-        .then((r) => (r.ok ? r.json() : null))
+        .then(async (r) => {
+          if (r.status === 403 && (await r.clone().json().catch(() => null))?.erro?.codigo === "gabarito_oculto_sessao_aberta") {
+            setMensagem({ tipo: "info", texto: `Gabarito de ${t.nome} bloqueado: há sessão de validação (Bland-Altman) aberta com este torso.` });
+          }
+          return r.ok ? r.json() : null;
+        })
         .then((g) => setGabarito(g?.distancias ?? null))
         .catch(() => setGabarito(null));
     } else setGabarito(null);
@@ -234,7 +239,10 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: true, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
     );
-    setMensagem({ tipo: "info", texto: `Torso ${t.nome} processado: ${j.meta?.processada?.n_vertices ?? "?"} vértices (malha ${j.malha_id}).` });
+    setMensagem({
+      tipo: "info",
+      texto: `Torso ${t.nome} processado: ${j.meta?.processada?.n_vertices ?? "?"} vértices (malha ${j.malha_id}).${j.gabarito_bloqueado ? " Gabarito bloqueado: há sessão de validação (Bland-Altman) aberta com este torso." : ""}`,
+    });
   }
 
   /** Landmarks `origem: "gabarito"` (contratos §2) projetados no vértice mais próximo da malha aberta. */

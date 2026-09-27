@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { blandAltman, embaralhar, prng, repetibilidade, resumir } from "@/validacao/estatistica";
 import { COLUNAS, paraCsv, type Linha, type Planilha } from "@/validacao/planilha";
-import { calcularResultado, observacaoSchema, operadorSchema, ordemItens, vistaPublica, type Sessao } from "@/validacao/sessao";
+import { calcularResultado, NOTAS_RESULTADO, observacaoSchema, operadorSchema, ordemItens, vistaPublica, type Sessao } from "@/validacao/sessao";
 
 // Diferenças 1, 2, 3, 4, 5 → viés 3; DP amostral √2,5 = 1,5811388; LoA 3 ± 3,0990321.
 const PARES_CONHECIDOS = [
@@ -110,8 +110,8 @@ const item = (indice: number, scan_id: string, repeticao: number, d: Record<stri
 const SESSAO_FECHADA = {
   tipo_operador: "humano" as const,
   scans: [
-    { scan_id: "S-1111", torso: "tA", sha256_gabarito: "x" },
-    { scan_id: "S-2222", torso: "tB", sha256_gabarito: "y" },
+    { scan_id: "S-1111", torso: "tA", sha256_gabarito: "x", sha256_obj: "ox" },
+    { scan_id: "S-2222", torso: "tB", sha256_gabarito: "y", sha256_obj: "oy" },
   ],
   itens: [
     item(0, "S-1111", 1, { ssn_n_dir: { euclidiana_mm: 201, geodesica_mm: 211 }, n_imf_dir: { euclidiana_mm: 71, geodesica_mm: 77 }, base_dir: { euclidiana_mm: 100, geodesica_mm: 101 } }),
@@ -143,6 +143,10 @@ describe("calcularResultado", () => {
     expect(r.euclidiana.n + r.geodesica.n).toBe(r.geral.n);
     expect(r.criterios).toMatchObject({ n_pares: 14, n_pares_min_30: false, n_imf_relatado_a_parte: true, scans_distintos: 2, vale_para_fase1: false });
     expect(r.criterios.motivo_fase1).toMatch(/sintétic/);
+    // pseudo-replicação e "pares ≠ sujeitos" documentados no próprio resultado (N5)
+    expect(r.notas).toEqual(NOTAS_RESULTADO);
+    expect(r.notas.join(" ")).toMatch(/pseudo-replicação/);
+    expect(r.notas.join(" ")).toMatch(/≥ 5 voluntárias/);
   });
 
   it("intra-operador: rep. 2 − rep. 1 por (scan, medida)", () => {
@@ -187,11 +191,19 @@ describe("vista pública (cegueira ao gabarito)", () => {
     expect(JSON.stringify(resto).match(/\d+\.\d+/g) ?? []).toEqual([]);
   });
 
-  it("cancelada continua cega; encerrada revela scans e resultado", () => {
-    expect(JSON.stringify(vistaPublica({ ...aberta, estado: "cancelada" }))).not.toMatch(/tA|tB|resultado/);
-    const fechada = vistaPublica({ ...aberta, estado: "encerrada", itens: SESSAO_FECHADA.itens, resultado: calcularResultado(SESSAO_FECHADA, GAB) });
+  it("cancelada continua cega; encerrada revela scans e resultado só sem torso em sessão aberta", () => {
+    expect(JSON.stringify(vistaPublica({ ...aberta, estado: "cancelada" }))).not.toMatch(/tA|tB|resultado"/);
+    const enc: Sessao = { ...aberta, estado: "encerrada", itens: SESSAO_FECHADA.itens, resultado: calcularResultado(SESSAO_FECHADA, GAB) };
+    const livre = { todos: false, torsos: new Set<string>(), invalidos: [] };
+    const fechada = vistaPublica(enc, livre);
     expect(fechada.scans?.map((s) => s.torso)).toEqual(["tA", "tB"]);
     expect(fechada.resultado).toBeTruthy();
+    // tB em outra sessão aberta → nada de scans/resultado
+    for (const b of [{ ...livre, torsos: new Set(["tB"]) }, { ...livre, todos: true, invalidos: ["x.json"] }, undefined]) {
+      const v = vistaPublica(enc, b);
+      expect(v.resultado_oculto).toBe("sessao_aberta_com_mesmo_torso");
+      expect(JSON.stringify(v)).not.toMatch(/tA|tB|referencia|pares/);
+    }
   });
 });
 
@@ -233,5 +245,15 @@ describe("CSV da planilha", () => {
     expect(l1).toContain(";70,12;69,5;-0,62;");
     expect(l1).toContain(`"'=HYPERLINK(""x"")"`);
     expect(l1).toContain('"OP;2"');
+  });
+
+  it("fórmula após espaço ou controle inicial também é neutralizada; números negativos não", () => {
+    for (const ruim of [" =1", "\r=1", "\t=1", "  +1", " @SUM(A1)", "-2+3"]) {
+      const l1 = paraCsv(p([linha({ observacoes: ruim })])).slice(1).split("\r\n")[1]!;
+      const cel = l1.slice(l1.lastIndexOf(",") + 1);
+      expect(cel, JSON.stringify(ruim)).toMatch(/^"'/);
+    }
+    const l1 = paraCsv(p([linha({ desvio_mm: -1.5 })])).slice(1).split("\r\n")[1]!;
+    expect(l1).toContain(",-1.5,");
   });
 });

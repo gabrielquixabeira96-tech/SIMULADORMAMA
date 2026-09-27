@@ -1,6 +1,6 @@
 import { bloquearSeDesligado, json, lerJson } from "@/api/respostas";
 import { auditarSessao, erroValidacao, RECURSO_VALIDACAO } from "@/validacao/http";
-import { encerrarSessao, vistaPublica, type ResultadoSessao } from "@/validacao/sessao";
+import { bloqueioGabarito, encerrarSessao, vistaPublica, type ResultadoSessao } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,7 +18,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const s = await encerrarSessao(id, await lerJson(req));
     const r = s.resultado as ResultadoSessao;
     await auditarSessao("alterou", s.id, { operacao: "encerrou", n_pares: r.criterios.n_pares, n_imf: r.n_imf.n });
-    return json(vistaPublica(s));
+    // outra sessão aberta com o mesmo torso? então o resultado fica oculto até ela terminar
+    return json(vistaPublica(s, await bloqueioGabarito()));
   } catch (e) {
     return erroValidacao(e, "validacao.sessoes.encerrar");
   }

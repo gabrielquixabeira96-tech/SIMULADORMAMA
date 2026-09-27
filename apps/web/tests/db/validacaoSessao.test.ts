@@ -4,10 +4,12 @@
  * as distâncias medidas) antes do encerramento; ordem e imutabilidade dos itens; resultado; planilha
  * sem dado identificável; auditoria; desenho A desliga tudo antes de tocar banco ou rede.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { DISTANCIAS, LANDMARK_IDS, type DistanciaId } from "@simulador/contratos";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { POST as postBenchmark } from "@/app/api/benchmark/route";
+import { GET as getArquivoBenchmark } from "@/app/api/benchmark/arquivo/route";
 import { GET as getPlanilha } from "@/app/api/validacao/planilha/route";
 import { GET as getSessao } from "@/app/api/validacao/sessoes/[id]/route";
 import { POST as postCancelar } from "@/app/api/validacao/sessoes/[id]/cancelar/route";
@@ -93,7 +95,7 @@ const numerosProibidos = () => {
 };
 
 function semVazamento(texto: string) {
-  expect(texto).not.toMatch(/tx_alfa|tx_beta|tx_gama|gabarito|distancias|euclidiana|geodesica|referencia|resultado|posicao|validacao\/malhas/);
+  expect(texto).not.toMatch(/tx_alfa|tx_beta|tx_gama|t01_simetrico_300|gabarito|distancias|euclidiana|geodesica|referencia|"resultado"|"scans"|"pares"|posicao|validacao\/malhas/);
   for (const n of numerosProibidos()) expect(texto, `número ${n} vazou`).not.toContain(n);
 }
 
@@ -112,6 +114,15 @@ describe.skipIf(!dbDisponivel())("sessão de Bland-Altman (rotas + banco + mock 
     expect(s.itens.every((i: any) => /^S-[0-9A-HJ-NP-Z]{4}$/.test(i.scan_id))).toBe(true);
     expect(await contarAuditoria("validacao_sessoes", s.id, "criou")).toBe(1);
     const id = s.id as string;
+
+    // ---- V1: com sessão aberta a planilha (CSV e JSON) não sai — traria referências dos gabaritos
+    for (const f of ["csv", "json"]) {
+      const pl = await getPlanilha(get(`http://x/api/validacao/planilha?formato=${f}`));
+      expect(pl.status).toBe(409);
+      const t = await pl.text();
+      expect(JSON.parse(t).erro.codigo).toBe("planilha_indisponivel_sessao_aberta");
+      semVazamento(t);
+    }
 
     // ---- o gabarito fica oculto nas rotas dos torsos da sessão (e só neles)
     const gOculto = await getArquivoSintetico(get(), p({ nome: "tx_alfa", arquivo: "gabarito.json" }));
@@ -188,6 +199,17 @@ describe.skipIf(!dbDisponivel())("sessão de Bland-Altman (rotas + banco + mock 
     expect((await getArquivoSintetico(get(), p({ nome: "tx_alfa", arquivo: "gabarito.json" }))).status).toBe(200);
     expect((await postEncerrar(post({}), p({ id }))).status).toBe(409);
 
+    // ---- V2: outra sessão aberta com um torso desta → lista e GET por id omitem scans/resultado da encerrada
+    const outra = await (await postSessao(post({ operador: "OP-17", torsos: ["tx_alfa"] }))).json();
+    const listaTxt = await (await listarSessoes()).text();
+    semVazamento(listaTxt);
+    expect(JSON.parse(listaTxt).sessoes.find((x: any) => x.id === id)).toMatchObject({ estado: "encerrada", resultado_oculto: "sessao_aberta_com_mesmo_torso" });
+    const porId = await (await getSessao(get(), p({ id }))).text();
+    semVazamento(porId);
+    expect((await getPlanilha(get("http://x/api/validacao/planilha?formato=json"))).status).toBe(409);
+    expect((await postCancelar(post({}), p({ id: outra.id }))).status).toBe(200);
+    expect((await (await getSessao(get(), p({ id }))).json()).resultado.geral.n).toBe(56);
+
     // ---- planilha CSV: cabeçalho exato; linhas dos registros versionados + desta sessão; nada identificável
     const antes = await consultar<{ n: string }>("select count(*)::text as n from auditoria where entidade = 'validacao_planilha' and acao = 'exportou'");
     const csvResp = await getPlanilha(get("http://x/api/validacao/planilha?formato=csv"));
@@ -237,6 +259,43 @@ describe.skipIf(!dbDisponivel())("sessão de Bland-Altman (rotas + banco + mock 
     // a planilha não inclui sessão cancelada
     const csv = await (await getPlanilha(get("http://x/api/validacao/planilha"))).text();
     expect(csv).not.toContain(`sessao:${s.id}`);
+  });
+
+  it("N1: arquivo de sessão inválido → fail closed (todos os gabaritos bloqueados, planilha 409) até ser removido", async () => {
+    const lixo = caminhoEmDataDir("validacao/sessoes/00000000-0000-4000-8000-00000000dead.json");
+    mkdirSync(caminhoEmDataDir("validacao/sessoes"), { recursive: true });
+    writeFileSync(lixo, "{ corrompido");
+    try {
+      expect((await getArquivoSintetico(get(), p({ nome: "tx_gama", arquivo: "gabarito.json" }))).status).toBe(403);
+      const pl = await getPlanilha(get("http://x/api/validacao/planilha"));
+      expect(pl.status).toBe(409);
+      expect((await pl.json()).erro.mensagem).toMatch(/inválido/);
+      // as sessões válidas continuam listadas, mas encerradas sem resultado
+      const l = await (await listarSessoes()).json();
+      expect(l.sessoes.filter((x: any) => x.estado === "encerrada").every((x: any) => x.resultado_oculto)).toBe(true);
+    } finally {
+      rmSync(lixo);
+    }
+    expect((await getArquivoSintetico(get(), p({ nome: "tx_gama", arquivo: "gabarito.json" }))).status).toBe(200);
+  });
+
+  it("benchmark (morphs ancorados no gabarito do t01) fica indisponível com sessão aberta sobre o t01", async () => {
+    vi.stubEnv("BENCHMARK_HABILITADO", "1");
+    const d = caminhoEmDataDir("sinteticos/t01_simetrico_300");
+    mkdirSync(d, { recursive: true });
+    writeFileSync(join(d, "torso.obj"), OBJ);
+    writeFileSync(join(d, "gabarito.json"), JSON.stringify(gabarito("t01_simetrico_300")));
+    const s = await (await postSessao(post({ operador: "OP-21", torsos: ["t01_simetrico_300"] }))).json();
+    try {
+      const b = await postBenchmark();
+      expect(b.status).toBe(409);
+      expect((await b.json()).erro.codigo).toBe("benchmark_indisponivel_sessao_aberta");
+      const a = await getArquivoBenchmark(get("http://x/api/benchmark/arquivo?nome=morphs/dual_plane__manter.glb"));
+      expect(a.status).toBe(409);
+      expect(chamadas).toHaveLength(0);
+    } finally {
+      await postCancelar(post({}), p({ id: s.id }));
+    }
   });
 
   it("entradas inválidas: operador com nome, torso inexistente, id desconhecido", async () => {

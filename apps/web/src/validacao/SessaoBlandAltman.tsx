@@ -47,6 +47,14 @@ function LinhaBA({ rotulo, r, testid }: { rotulo: string; r: ResultadoBlandAltma
 }
 
 function Resultado({ sessao }: { sessao: VistaSessao }) {
+  if (sessao.resultado_oculto) {
+    return (
+      <section className="painel" data-testid="resultado-oculto">
+        <h3>Resultado oculto</h3>
+        <p>Um torso desta sessão está em outra sessão aberta: o resultado (que revela o gabarito) volta a aparecer quando ela for encerrada ou cancelada.</p>
+      </section>
+    );
+  }
   const r = sessao.resultado as ResultadoSessao;
   const intra = r.intra_operador;
   return (
@@ -87,6 +95,11 @@ function Resultado({ sessao }: { sessao: VistaSessao }) {
           Vale para a fase 1: <strong>{r.criterios.vale_para_fase1 ? "sim" : "não"}</strong> — {r.criterios.motivo_fase1}
         </li>
       </ul>
+      <ul className="nota" data-testid="notas-resultado">
+        {r.notas?.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
       <p className="nota">Scans: {sessao.scans?.map((s) => `${s.scan_id} = ${s.torso}`).join(" · ")}</p>
       <p>
         Planilha art. 5º:{" "}
@@ -107,6 +120,7 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
   const [tipoOperador, setTipoOperador] = useState<"humano" | "simulado">("humano");
   const [repeticoes, setRepeticoes] = useState("2");
   const [observacoes, setObservacoes] = useState("");
+  const [abertas, setAbertas] = useState<VistaSessao[]>([]);
 
   const [carregada, setCarregada] = useState<MalhaCarregada | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -140,6 +154,31 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
         if (carga.current === minha) setCarregando(false);
       });
   }, []);
+
+  const listarAbertas = useCallback(() => {
+    fetch("/api/validacao/sessoes", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { sessoes: [] }))
+      .then((j: { sessoes: VistaSessao[] }) => setAbertas(j.sessoes.filter((s) => s.estado === "aberta")))
+      .catch(() => setAbertas([]));
+  }, []);
+
+  useEffect(() => {
+    if (sessaoInicial) return;
+    listarAbertas();
+  }, [sessaoInicial, listarAbertas]);
+
+  async function cancelarPorId(id: string) {
+    const r = await postJson(`/api/validacao/sessoes/${id}/cancelar`, {});
+    if (!r.ok) setMensagem({ tipo: "erro", texto: await lerErro(r) });
+    listarAbertas();
+  }
+
+  async function retomar(id: string) {
+    const r = await fetch(`/api/validacao/sessoes/${id}`, { cache: "no-store" });
+    if (!r.ok) return setMensagem({ tipo: "erro", texto: await lerErro(r) });
+    aplicarSessao(await r.json());
+    window.history.replaceState(null, "", `?sessao=${id}`);
+  }
 
   useEffect(() => {
     if (!sessaoInicial) return;
@@ -241,6 +280,25 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
     return (
       <section className="painel">
         {avisos}
+        {abertas.length > 0 && (
+          <div data-testid="sessoes-abertas">
+            <h3>Sessões abertas</h3>
+            <p className="nota">Enquanto houver sessão aberta, o gabarito dos torsos dela fica bloqueado na consulta e a planilha não é exportada. Retome ou cancele.</p>
+            <ul>
+              {abertas.map((a) => (
+                <li key={a.id} data-testid={`sessao-aberta-${a.id}`}>
+                  {a.operador} · {a.itens.filter((i) => i.concluido).length}/{a.itens.length} itens · {a.criada_em.slice(0, 16).replace("T", " ")}{" "}
+                  <button type="button" className="secundario" onClick={() => retomar(a.id)}>
+                    Retomar
+                  </button>{" "}
+                  <button type="button" className="secundario" onClick={() => cancelarPorId(a.id)}>
+                    Cancelar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <h3>Nova sessão</h3>
         <form onSubmit={iniciar} className="linha-form">
           <label>
@@ -263,7 +321,7 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
           </button>
         </form>
         <p className="nota">
-          Os scans são os torsos sintéticos com gabarito, identificados só por código e em ordem aleatória. Durante a sessão nenhuma distância é mostrada — nem a medida nem a do gabarito. O
+          <strong>O código do operador não pode conter nome, CRM, e-mail ou outro dado pessoal</strong> — use um código combinado (ex.: OP-01) cuja chave fica fora do sistema. Os scans são os torsos sintéticos com gabarito, identificados só por código e em ordem aleatória. Durante a sessão nenhuma distância é mostrada — nem a medida nem a do gabarito. O
           resultado (viés, LoA 95 %, N-IMF à parte e repetibilidade) aparece ao encerrar.
         </p>
       </section>
@@ -337,7 +395,7 @@ export function SessaoBlandAltman({ sessaoInicial }: { sessaoInicial: string | n
               <section className="painel">
                 <h3>Encerrar</h3>
                 <label className="linha-form">
-                  Observações (opcional; sem dado de paciente, sem @)
+                  Observações (opcional; sem nome, CRM, e-mail ou qualquer dado de paciente ou do operador)
                   <input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} maxLength={500} data-testid="observacoes" />
                 </label>
                 <button type="button" onClick={encerrar} disabled={ocupado} data-testid="encerrar-sessao">

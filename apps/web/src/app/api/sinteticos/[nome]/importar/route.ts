@@ -8,7 +8,7 @@ import { recursoAtivoEm } from "@/config/recursos";
 import { pacientePorId } from "@/db/repositorio";
 import { registrarMalha } from "@/malhas/registrar";
 import { ErroUpload, prepararUpload, type ArquivoUpload } from "@/malhas/upload";
-import { torsosComSessaoAberta } from "@/validacao/sessao";
+import { bloqueioGabarito, gabaritoBloqueado } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,7 +46,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
     }
     let gabarito: z.infer<typeof gabaritoSchema> | null = null;
     // Cegueira da sessão de Bland-Altman (ADR 0017): sem gabarito enquanto houver sessão aberta com o torso.
-    if (!(await torsosComSessaoAberta()).has(nome)) {
+    const bloqueado = gabaritoBloqueado(await bloqueioGabarito(), nome);
+    if (!bloqueado) {
       try {
         gabarito = gabaritoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`sinteticos/${nome}/gabarito.json`), "utf8")));
       } catch {
@@ -56,7 +57,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
     const r = await registrarMalha({ paciente, upload: prepararUpload(entradas), unidade: "mm", recorte: "abaixo_do_pescoco", sintetica: true, desenho, origem: "sintetico" });
     // Em A nenhuma distância sai para a UI, nem as do gabarito (ADR 0005); os landmarks servem de âncora.
     const distancias = recursoAtivoEm(desenho, "medicao_automatica_3d") ? gabarito?.distancias ?? null : null;
-    return json({ ...r, torso: nome, gabarito: gabarito ? { landmarks: gabarito.landmarks, distancias } : null }, 201);
+    return json({ ...r, torso: nome, gabarito: gabarito ? { landmarks: gabarito.landmarks, distancias } : null, gabarito_bloqueado: bloqueado }, 201);
   } catch (e) {
     if (e instanceof ErroUpload) return erro(e.status, e.codigo, e.message);
     return tratarErro(e, "sinteticos.importar");

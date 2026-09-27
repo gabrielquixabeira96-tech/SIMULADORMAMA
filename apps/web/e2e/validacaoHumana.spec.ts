@@ -88,6 +88,11 @@ test.describe("validação humana: sessão de Bland-Altman", () => {
     // o gabarito do torso em sessão também não sai pela rota dos sintéticos
     const gab = await request.get(`/api/sinteticos/${TORSOS_SESSAO[0]}/gabarito.json`);
     expect(gab.status()).toBe(403);
+    // nem pela planilha (os registros versionados cobrem os mesmos torsos) nem pela lista de sessões
+    const pl = await request.get("/api/validacao/planilha?formato=json");
+    expect(pl.status()).toBe(409);
+    expect((await pl.json()).erro.codigo).toBe("planilha_indisponivel_sessao_aberta");
+    lidas.push(request.get("/api/validacao/sessoes").then((r) => r.text()));
 
     await page.goto(`/validacao/bland-altman?sessao=${id}`);
     const discoSessao = () => JSON.parse(readFileSync(join(dataDirE2E(), "validacao", "sessoes", `${id}.json`), "utf8"));

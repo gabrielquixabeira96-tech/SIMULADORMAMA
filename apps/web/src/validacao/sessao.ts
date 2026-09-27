@@ -3,10 +3,11 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { DISTANCIA_IDS, LANDMARK_IDS, landmarksSchema, type Desenho, type DistanciaId, type Landmarks } from "@simulador/contratos";
 import { z } from "zod";
 import { caminhoEmDataDir, isoComFuso, versaoSoftware } from "@/config/ambiente";
+import { log } from "@/log/logger";
 import { distanciasEuclidianas } from "@/medidas/geometria";
 import { ClienteMesh } from "@/mesh/cliente";
 import { blandAltman, embaralhar, prng, repetibilidade, arred4, type ResultadoBlandAltman, type Repetibilidade } from "./estatistica";
-import { garantirScan, lerGabarito, sha256Gabarito, torsosElegiveis } from "./scans";
+import { garantirScan, lerGabarito, sha256Gabarito, sha256TorsoObj, torsosElegiveis } from "./scans";
 
 /**
  * Sessão de Bland-Altman com operador humano (ADR 0017; ESTRATEGIA fase 1; plano A13).
@@ -61,7 +62,7 @@ const itemSchema = z.object({
   avisos: z.array(z.string()).default([]),
 });
 
-const scanSchema = z.object({ scan_id: z.string(), torso: z.string(), sha256_gabarito: z.string() });
+const scanSchema = z.object({ scan_id: z.string(), torso: z.string(), sha256_gabarito: z.string(), sha256_obj: z.string() });
 
 export const sessaoSchema = z.object({
   esquema: z.literal(ESQUEMA_SESSAO),
@@ -120,29 +121,59 @@ async function gravarSessao(s: Sessao): Promise<void> {
   await rename(tmp, destino);
 }
 
-export async function listarSessoes(): Promise<Sessao[]> {
+/** Lê todas as sessões; arquivos que não passam no esquema vão para `invalidos` (nomes, sem caminho). */
+async function lerTodas(): Promise<{ sessoes: Sessao[]; invalidos: string[] }> {
   let nomes: string[] = [];
   try {
-    nomes = (await readdir(caminhoEmDataDir("validacao/sessoes"))).filter((n) => /^[0-9a-f-]{36}\.json$/.test(n)).sort();
+    nomes = (await readdir(caminhoEmDataDir("validacao/sessoes"))).filter((n) => n.endsWith(".json")).sort();
   } catch {
-    return [];
+    return { sessoes: [], invalidos: [] };
   }
-  const out: Sessao[] = [];
+  const sessoes: Sessao[] = [];
+  const invalidos: string[] = [];
   for (const n of nomes) {
     try {
-      out.push(sessaoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`validacao/sessoes/${n}`), "utf8"))));
+      if (!/^[0-9a-f-]{36}\.json$/.test(n)) throw new Error("nome fora do padrão");
+      sessoes.push(sessaoSchema.parse(JSON.parse(await readFile(caminhoEmDataDir(`validacao/sessoes/${n}`), "utf8"))));
     } catch {
-      // arquivo inválido: ignorado (não derruba a lista nem a planilha)
+      invalidos.push(n);
     }
   }
-  return out.sort((a, b) => a.criada_em.localeCompare(b.criada_em));
+  if (invalidos.length) log.warn("validacao_sessao_invalida", { arquivos: invalidos });
+  return { sessoes: sessoes.sort((a, b) => a.criada_em.localeCompare(b.criada_em)), invalidos };
 }
 
-/** Torsos com sessão ABERTA: o gabarito deles não sai por nenhuma rota até o encerramento. */
-export async function torsosComSessaoAberta(): Promise<Set<string>> {
-  const s = new Set<string>();
-  for (const sessao of await listarSessoes()) if (sessao.estado === "aberta") for (const sc of sessao.scans) s.add(sc.torso);
-  return s;
+export async function listarSessoes(): Promise<Sessao[]> {
+  return (await lerTodas()).sessoes;
+}
+
+/**
+ * Estado da cegueira (ADR 0017): torsos com sessão ABERTA — o gabarito deles (e qualquer número
+ * derivado dele: planilha, resultados de outras sessões, benchmark) não sai por nenhuma rota.
+ * FAIL CLOSED: se algum arquivo em DATA_DIR/validacao/sessoes não for uma sessão válida, não dá
+ * para saber quais torsos estão em sessão, então TODOS os gabaritos ficam bloqueados até o arquivo
+ * ser corrigido ou removido à mão (ver ADR 0017).
+ */
+export interface Bloqueio {
+  todos: boolean;
+  torsos: ReadonlySet<string>;
+  invalidos: readonly string[];
+}
+
+export async function bloqueioGabarito(): Promise<Bloqueio> {
+  const { sessoes, invalidos } = await lerTodas();
+  const torsos = new Set<string>();
+  for (const s of sessoes) if (s.estado === "aberta") for (const sc of s.scans) torsos.add(sc.torso);
+  return { todos: invalidos.length > 0, torsos, invalidos };
+}
+
+export const gabaritoBloqueado = (b: Bloqueio, torso: string): boolean => b.todos || b.torsos.has(torso);
+export const algumBloqueio = (b: Bloqueio): boolean => b.todos || b.torsos.size > 0;
+
+/** Compatibilidade: conjunto consultável por `has` (fail closed com arquivo inválido). */
+export async function torsosComSessaoAberta(): Promise<{ has: (torso: string) => boolean }> {
+  const b = await bloqueioGabarito();
+  return { has: (t: string) => gabaritoBloqueado(b, t) };
 }
 
 const filas = new Map<string, Promise<unknown>>();
@@ -193,7 +224,7 @@ export async function criarSessao(entrada: unknown, desenho: Desenho): Promise<S
   if (fora.length) throw new ErroSessao(422, "torso_inelegivel", `torso sem gabarito ou inexistente: ${fora.join(", ")}`);
   const usados = new Set<string>();
   const scans = [];
-  for (const torso of torsos) scans.push({ scan_id: codigoScan(usados), torso, sha256_gabarito: await sha256Gabarito(torso) });
+  for (const torso of torsos) scans.push({ scan_id: codigoScan(usados), torso, sha256_gabarito: await sha256Gabarito(torso), sha256_obj: await sha256TorsoObj(torso) });
   // a ordem dos scans na lista também é aleatória: a posição não revela o torso
   const semente = e.semente ?? randomInt(0, 0xffffffff);
   const scansOrdenados = [...scans].sort((a, b) => a.scan_id.localeCompare(b.scan_id));
@@ -242,13 +273,17 @@ export interface VistaSessao {
   observacoes?: string | null;
   scans?: Sessao["scans"];
   resultado?: unknown;
+  /** encerrada, mas com torso ainda em outra sessão aberta: scans e resultado omitidos */
+  resultado_oculto?: "sessao_aberta_com_mesmo_torso";
 }
 
 /**
  * O que o cliente pode ver. Aberta ou cancelada: só códigos de scan, repetição e "concluído" —
- * nada de torso, gabarito, landmarks ou distâncias. Encerrada: o resultado completo.
+ * nada de torso, gabarito, landmarks ou distâncias. Encerrada: o resultado completo — EXCETO se
+ * algum torso dela estiver em outra sessão aberta (`bloqueio`): aí scans e resultado ficam omitidos.
+ * Sem `bloqueio` informado, a sessão encerrada também é omitida (fail closed).
  */
-export function vistaPublica(s: Sessao): VistaSessao {
+export function vistaPublica(s: Sessao, bloqueio?: Bloqueio): VistaSessao {
   const pendente = s.itens.find((i) => i.registrado_em === null);
   const base: VistaSessao = {
     esquema: s.esquema,
@@ -265,6 +300,7 @@ export function vistaPublica(s: Sessao): VistaSessao {
     proximo_indice: s.estado === "aberta" && pendente ? pendente.indice : null,
   };
   if (s.estado !== "encerrada") return base;
+  if (!bloqueio || s.scans.some((sc) => gabaritoBloqueado(bloqueio, sc.torso))) return { ...base, resultado_oculto: "sessao_aberta_com_mesmo_torso" };
   return { ...base, observacoes: s.observacoes, scans: s.scans, resultado: s.resultado };
 }
 
@@ -327,8 +363,14 @@ export interface ParSessao {
   repeticao: number;
 }
 
+export const NOTAS_RESULTADO = [
+  "O LoA geral trata repetições, scans e tipos de medida como pares independentes (pseudo-replicação; Bland & Altman 2007, Stat Methods Med Res 17:571): com medidas repetidas por sujeito ele tende a ficar estreito demais; o LoA para medidas repetidas e o critério final ficam para a análise estatística da fase 1.",
+  "n_pares_min_30 conta pares, não sujeitos: não substitui o requisito de ≥ 5 voluntárias ou manequim da ESTRATEGIA.",
+];
+
 export interface ResultadoSessao {
   calculado_em: string;
+  notas: string[];
   limite_marco1_mm: number;
   limite_estrategia_mm: number;
   pares: ParSessao[];
@@ -386,6 +428,7 @@ export function calcularResultado(s: Pick<Sessao, "itens" | "scans" | "tipo_oper
   const scansDistintos = new Set(pares.map((p) => p.scan_id)).size;
   return {
     calculado_em: agora,
+    notas: [...NOTAS_RESULTADO],
     limite_marco1_mm: LIMITE_MARCO1_MM,
     limite_estrategia_mm: LIMITE_ESTRATEGIA_MM,
     pares,
@@ -421,6 +464,7 @@ export function encerrarSessao(id: string, entrada: unknown): Promise<Sessao> {
     if (faltam) throw new ErroSessao(409, "sessao_incompleta", `faltam ${faltam} item(ns) para encerrar`);
     const gabaritos: Record<string, Awaited<ReturnType<typeof lerGabarito>>> = {};
     for (const sc of s.scans) {
+      if ((await sha256TorsoObj(sc.torso)) !== sc.sha256_obj) throw new ErroSessao(409, "torso_alterado", "o torso.obj de um scan mudou durante a sessão; cancele e abra outra");
       if ((await sha256Gabarito(sc.torso)) !== sc.sha256_gabarito) throw new ErroSessao(409, "gabarito_alterado", "o gabarito de um torso mudou durante a sessão; cancele e abra outra");
       gabaritos[sc.torso] = await lerGabarito(sc.torso);
     }

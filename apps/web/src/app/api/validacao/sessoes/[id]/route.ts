@@ -1,6 +1,6 @@
 import { bloquearSeDesligado, json } from "@/api/respostas";
 import { erroValidacao, RECURSO_VALIDACAO } from "@/validacao/http";
-import { lerSessao, vistaPublica } from "@/validacao/sessao";
+import { bloqueioGabarito, lerSessao, vistaPublica } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,7 +11,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (bloqueio) return bloqueio;
   try {
     const { id } = await ctx.params;
-    return json(vistaPublica(await lerSessao(id)));
+    const s = await lerSessao(id);
+    return json(vistaPublica(s, await bloqueioGabarito()));
   } catch (e) {
     return erroValidacao(e, "validacao.sessoes.ler");
   }

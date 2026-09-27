@@ -67,6 +67,7 @@ const NOTAS = [
   "N-IMF (n_imf=sim) é relatado à parte no resumo (ESTRATEGIA fase 1).",
   "Todos os scans são torsos sintéticos paramétricos: não contam para o critério da fase 1 (≥ 30 pares em ≥ 5 voluntárias ou manequim, LoA ±3 mm).",
   "Operador identificado só por código pseudônimo; nenhum dado de paciente.",
+  "O LoA do resumo trata repetições, scans e tipos de medida como pares independentes (pseudo-replicação; Bland & Altman 2007): tende a ficar estreito demais com medidas repetidas. n ≥ 30 pares não substitui ≥ 5 sujeitos.",
 ];
 
 const registroE2eSchema = z.object({
@@ -206,8 +207,9 @@ export interface OpcoesCsv {
 
 /** Célula de texto: neutraliza fórmula (=, +, -, @ no início) e aplica aspas RFC 4180. */
 function celulaTexto(v: string, sep: string): string {
-  let t = v.replace(/[\r\n]+/g, " ");
-  if (/^[=+\-@\t]/.test(t)) t = `'${t}`;
+  // fórmula mesmo após espaços/controles iniciais (" =1", "\r=1"); números vão por `celula`, não aqui
+  if (/^\s*[=+\-@\t\r]/.test(v)) v = `'${v}`;
+  const t = v.replace(/[\r\n]+/g, " ");
   return /["\s]/.test(t) || t.includes(sep) || t.includes("'") ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
