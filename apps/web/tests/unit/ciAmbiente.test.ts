@@ -75,6 +75,14 @@ describe("A2: integração real obrigatória e testes pulados no resumo", () => 
     expect(CI).toMatch(/--outputFile\.json=/);
   });
 
+  it("ci.sh gera os morphs que faltarem e roda o glTF-Validator contando como falha", () => {
+    expect(CI).toMatch(/mesh\.cli morphs --sintetico/);
+    expect(CI).toMatch(/node scripts\/validar_gltf\.mjs "\$SINT"\/\*\/morphs\/\*\.glb "\$SINT"\/\*\/torso\.glb/);
+    expect(CI).toMatch(/\|\| falha "glTF-Validator \(node scripts\/validar_gltf\.mjs\)"/);
+    // depois da geracao dos torsos
+    expect(CI.indexOf("validar_gltf.mjs")).toBeGreaterThan(CI.indexOf("bash scripts/mesh.sh torsos"));
+  });
+
   it("faltasMeshReal lista torso e banco ausentes (com EXIGIR_MESH_REAL=1 viram falha)", () => {
     const f = faltasMeshReal("torso_que_nao_existe", false);
     expect(f.some((x) => x.includes("torso_que_nao_existe"))).toBe(true);

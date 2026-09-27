@@ -3,7 +3,7 @@
 Cada versão do software (arquivo `VERSION`) tem **um registro** aqui, criado antes do primeiro commit daquela versão e atualizado quando os testes de acurácia rodam:
 
 - `v<versao>.md` — documento humano: front matter YAML + "O que mudou", "Como reproduzir", "Desvios e pendências".
-- `v<versao>.json` — sidecar de máquina no esquema `validacao/1.0` (`config/schemas/validacao.schema.json`), gerado/atualizado pela CI.
+- `v<versao>.json` — sidecar de máquina no esquema `validacao/1.0` (`config/schemas/validacao.schema.json`), gerado/atualizado por `bash scripts/validacao.sh` (via `scripts/registro_validacao.py`), não pela CI; a CI (`scripts/ci.sh`) só confere que ele existe e valida contra o schema.
 
 Formato detalhado em `docs/contratos.md` §15. A CI (`scripts/ci.sh`) falha se faltar o registro da versão corrente ou se `versao_software` do JSON divergir de `VERSION`.
 

@@ -115,6 +115,19 @@ if [[ -f apps/web/package.json ]]; then
       if [[ $TORSOS_OK -eq 1 ]]; then ok "torsos sinteticos presentes (data/sinteticos)"
       elif DATA_DIR="$RAIZ/data" bash scripts/mesh.sh torsos >/dev/null; then ok "torsos sinteticos gerados (bash scripts/mesh.sh torsos)"
       else falha "geracao dos torsos sinteticos (bash scripts/mesh.sh torsos)"; fi
+      # glTF-Validator (Khronos) nos torso.glb e morphs/*.glb: gera os morphs do catalogo de teste que
+      # faltarem (como o scripts/validacao.sh) e exige 0 erros e 0 avisos.
+      SINT="$RAIZ/data/sinteticos"; GLB_OK=1
+      for t in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do
+        [[ -f "$SINT/$t/torso.glb" ]] \
+          || ( cd services/mesh && "$RAIZ/$PY" -m mesh.cli torso --preset "$t" --saida "$SINT" >/dev/null ) || GLB_OK=0
+        compgen -G "$SINT/$t/morphs/*.glb" >/dev/null \
+          || ( cd services/mesh && "$RAIZ/$PY" -m mesh.cli morphs --sintetico "$SINT/$t" --catalogo tests/fixtures/catalogo_teste.json >/dev/null ) || GLB_OK=0
+      done
+      if [[ $GLB_OK -eq 1 ]]; then ok "morphs sinteticos presentes (data/sinteticos/*/morphs)"
+      else falha "geracao de torso.glb/morphs (mesh.cli torso/morphs)"; fi
+      node scripts/validar_gltf.mjs "$SINT"/*/morphs/*.glb "$SINT"/*/torso.glb \
+        && ok "glTF-Validator: 0 erros, 0 avisos" || falha "glTF-Validator (node scripts/validar_gltf.mjs)"
       MESH_REAL_EXIGIDO=1
       EXIGIR_MESH_REAL=1 pnpm --filter web run test "${VITEST_ARGS[@]}" && ok "testes web (vitest, com banco e services/mesh real)" || falha "testes web"
     else
