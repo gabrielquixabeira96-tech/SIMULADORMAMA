@@ -97,7 +97,7 @@ Conjunto canônico de **10 IDs**. A `PROMPT.md` fala em "6 a 8 landmarks por cli
 
 Regras:
 
-- Um landmark é um ponto **na superfície** da malha processada. É representado por `posicao` `[x, y, z]` em mm (ponto exato do raycast) **e** `vertice` (índice do vértice mais próximo). Distâncias euclidianas usam `posicao`; geodésicas partem de `vertice`. Ambos são obrigatórios.
+- Um landmark é um ponto **na superfície** da malha processada. É representado por `posicao` `[x, y, z]` em mm (ponto exato do raycast) **e** `vertice` (índice do vértice mais próximo). Distâncias euclidianas e geodésicas usam `posicao`: a geodésica parte do ponto exato, projetado e inserido na malha (seção 3.1; ADR 0016). `vertice` é validado pelo `services/mesh` (índice dentro de `processada.obj`, senão 422 `vertice_invalido`), mas não entra no cálculo. Ambos são obrigatórios.
 - `origem` de cada landmark: `"clique"` (médico), `"gabarito"` (torso sintético), `"automatico"` (fase avançada; DESENHO=B apenas).
 - Nomes fora da tabela DEVEM ser rejeitados por ambos os lados.
 
@@ -120,7 +120,7 @@ Regras:
 Cada distância tem **dois valores**:
 
 - `euclidiana_mm`: norma do vetor entre as duas `posicao`. Fórmula fechada; qualquer lado calcula.
-- `geodesica_mm`: comprimento do caminho mais curto **sobre a superfície** da malha processada entre os dois `vertice`. **Algoritmo de referência: geodésica discreta exata (MMP — Mitchell, Mount & Papadimitriou)** sobre a malha triangular; implementação sugerida `pygeodesic` (MIT). Alternativa aceita: método do calor (`potpourri3d`, MIT) desde que a diferença contra MMP nos torsos sintéticos fique < 0,5 mm. **Dijkstra puro sobre arestas NÃO é aceito** como valor registrado (superestima até ~8 %); o web PODE mostrá-lo como prévia rotulada `aproximada`, mas o valor gravado vem do `services/mesh` (ADR 0011).
+- `geodesica_mm`: comprimento do caminho mais curto **sobre a superfície** da malha processada (soldada: vértices duplicados em costura de UV fundidos) entre as duas `posicao`. Cada `posicao` é projetada na superfície e inserida como vértice novo (divisão 1→3 do triângulo que a contém); ponto a menos de 2 % (coordenada baricêntrica) de um vértice usa esse vértice, e ponto junto a uma aresta é empurrado 2 % para dentro (deslocamento < 0,1 mm). Partir do vértice mais próximo erraria até ~2 mm por extremo numa malha de 40 mil vértices (ADR 0016). **Algoritmo de referência: geodésica discreta exata (MMP — Mitchell, Mount & Papadimitriou)** sobre a malha triangular; implementação sugerida `pygeodesic` (MIT). Alternativa aceita: método do calor (`potpourri3d`, MIT) desde que a diferença contra MMP nos torsos sintéticos fique < 0,5 mm. **Dijkstra puro sobre arestas NÃO é aceito** como valor registrado (superestima até ~8 %); o web PODE mostrá-lo como prévia rotulada `aproximada`, mas o valor gravado vem do `services/mesh` (ADR 0011).
 
 ### 3.2 Volumes
 
@@ -242,7 +242,7 @@ Regras do gabarito:
 - `landmarks.*.posicao` são os pontos exatos da superfície paramétrica (não do vértice), em mm, no quadro anatômico (`furcula` = origem exata).
 - `landmarks.*.vertice` é o vértice mais próximo **na malha decimada** `torso.obj`.
 - `distancias.*.euclidiana_mm` é calculada das `posicao` exatas.
-- `distancias.*.geodesica_mm` é calculada por MMP na **malha densa**, entre os vértices mais próximos das posições na malha densa. É a "verdade" de geodésica.
+- `distancias.*.geodesica_mm` é calculada por MMP na **malha densa**, entre as `posicao` exatas inseridas na malha densa (mesmo método da seção 3.1; ADR 0016). É a "verdade" de geodésica.
 - `volumes.X.adicionado_ml` é o volume real adicionado pelo gerador (integração numérica da diferença de altura entre a superfície com mama e a parede sem mama, na malha densa; erro < 0,5 %). `estimado_plano_base_elipse_ml` é o estimador da seção 3.2 aplicado à malha decimada com os landmarks do gabarito, para referência.
 
 ### 4.4 Casos obrigatórios (fixtures)
@@ -370,9 +370,9 @@ Regras:
 
 ## 7. API HTTP do `services/mesh`
 
-Servidor FastAPI (MIT) em `MESH_SERVICE_URL` (padrão `http://127.0.0.1:8765`). JSON UTF-8. Erros seguem `{"erro": {"codigo": "...", "mensagem": "...", "detalhes": {}}}` com status 400 (entrada inválida), 404 (arquivo não encontrado), 422 (validação de contrato), 500. Sem autenticação nesta fase (só escuta em 127.0.0.1); o web é o único cliente. Todas as rotas são síncronas; `/morphs` pode levar minutos — o web usa timeout de 30 min.
+Servidor FastAPI (MIT) em `MESH_SERVICE_URL` (padrão `http://127.0.0.1:8765`). JSON UTF-8. Erros seguem `{"erro": {"codigo": "...", "mensagem": "...", "detalhes": {}}}` com status 400 (entrada inválida), 403 (rota desligada no desenho A), 404 (arquivo não encontrado), 422 (validação de contrato), 500. Sem autenticação nesta fase (só escuta em 127.0.0.1); o web é o único cliente. Todas as rotas são síncronas; `/morphs` pode levar minutos — o web usa timeout de 30 min.
 
-Cabeçalho obrigatório em toda requisição: `X-Desenho: A|B` (o Python não decide nada com ele, apenas o grava no log estruturado e o ecoa na resposta — permite auditar que em A nenhum volume foi pedido).
+Cabeçalho obrigatório em toda requisição, exceto `GET /saude`: `X-Desenho: A|B`. Ausente → `400 desenho_ausente`; outro valor → `400 desenho_invalido`. O serviço o grava no log estruturado e o ecoa na resposta. Com `X-Desenho: A`, o serviço recusa `POST /medir` com `403 desligado_no_desenho_a` (e ecoa `X-Desenho: A`) antes de calcular qualquer coisa, e registra no log o evento `desligado_no_desenho_a` com o `incluir_volume` recebido. É defesa em profundidade: o web já não chama `/medir` em A (seção 13; ADRs 0005 e 0016). Em `/morphs` com `X-Desenho: A`, `previsto` sai `null` (seção 10.4). As demais rotas funcionam igual nos dois desenhos.
 
 ### 7.1 `GET /saude`
 
@@ -443,7 +443,7 @@ Multiplica todas as coordenadas de `processada.obj`/`.glb` por `fator` (em torno
 }
 ```
 
-→ `200` com `{ "distancias": {...}, "volumes": {...} | null, "quadro_anatomico": {...} | null, "geodesica": {...}, "avisos": [] }` nos formatos da seção 6. Erro 422 `euclidiana_divergente` se alguma euclidiana do web diferir > 0,01 mm da recalculada.
+→ `200` com `{ "distancias": {...}, "volumes": {...} | null, "quadro_anatomico": {...} | null, "geodesica": {...}, "avisos": [] }` nos formatos da seção 6. Erro 422 `euclidiana_divergente` se alguma euclidiana do web diferir > 0,01 mm da recalculada. Com `X-Desenho: A` → `403 desligado_no_desenho_a`, sem corpo de medida (ver início desta seção).
 
 ### 7.5 `POST /torso-sintetico`
 
@@ -459,7 +459,7 @@ Ver seção 10.4.
 { "pares": [ { "medida": "ssn_n_dir", "referencia_mm": 212.30, "medido_mm": 213.1, "torso": "t01_simetrico_300", "operador": "op1" } ] }
 ```
 
-→ `{ "n": 30, "vies_mm": 0.4, "dp_mm": 0.9, "loa_inferior_mm": -1.36, "loa_superior_mm": 2.16, "dentro_de_2mm": true, "por_medida": { ... } }`. LoA = viés ± 1,96·DP. Usado para gerar o registro de validação (seção 15).
+→ `{ "n": 30, "vies_mm": 0.4, "dp_mm": 0.9, "loa_inferior_mm": -1.36, "loa_superior_mm": 2.16, "dentro_de_2mm": true, "por_medida": { ... } }`. LoA = viés ± 1,96·DP. Usado pelo e2e `apps/web/e2e/validacao.spec.ts` para o Bland-Altman do Marco 1, que vai para o registro de componente `v<versao>-web-marcos-0-1.json` (seção 15).
 
 ---
 
@@ -803,7 +803,7 @@ O web monta `dados_travados` (números e rótulos vindos do banco), renderiza as
 
 ## 15. Registro de validação — `docs/validacao/`
 
-Um arquivo por versão: `docs/validacao/v<versao>.md` com front matter YAML + tabelas, **e** o sidecar `docs/validacao/v<versao>.json` (`validacao/1.0`) gerado pela CI (`scripts/ci.sh` → `services/mesh` → `/validar-bland-altman`). O `.md` é o documento humano; o `.json` é o que a fase 3 agrega.
+Um arquivo por versão: `docs/validacao/v<versao>.md` com front matter YAML + tabelas, **e** o sidecar `docs/validacao/v<versao>.json` (`validacao/1.0`). Os dois são gerados por comando, com a árvore limpa: `bash scripts/validacao.sh` captura o commit (`git describe --always --dirty`), gera os registros de componente (`v<versao>-services-mesh.*` pelo `mesh.validacao`; `v<versao>-web-marcos-0-1.*`, cujo Bland-Altman do Marco 1 vem de `POST /validar-bland-altman`, e `v<versao>-web-marco2-latencia.*` pelos e2e) e chama `scripts/registro_validacao.py`, que consolida `v<versao>.{md,json}` a partir dessas saídas e das de pytest, Vitest e Playwright (nada digitado à mão; ADR 0016). `scripts/ci.sh` não gera o registro: confere que `v<VERSION>.md` existe e, por `scripts/validar_config.py`, valida `v*.json` contra `validacao/1.0` e exige `versao_software` igual a `VERSION`. O `.md` é o documento humano; o `.json` é o que a fase 3 agrega.
 
 ```yaml
 ---
