@@ -21,10 +21,23 @@ Sem mudança numérica no modelo: `config/tepid.json`, `config/simulacao.json`, 
   - Na demo: observação da sessão desligada, token exatamente `^[0-9a-f]{64}$`, teto de corpo de 2 MB no build.
   - `X-Forwarded-*` passa a usar o último valor da lista.
   - No script: validação de desenho e portas, `apagar` só com marcador e senha do Postgres fora do argv.
+- **Ajustes do deploy real no Vercel Sandbox (gru1) e revisão R1/R2.**
+  - `scripts/demo_sandbox.sh`:
+    - acha o Postgres 18 (`/usr/lib/postgresql/18/bin`, busca por versão decrescente);
+    - instala por `apt` no Ubuntu 26.04 (a imagem observada), com falha clara;
+    - com só Python 3.14+ e `pygeodesic` sem wheel `cp314`, usa o Python 3.13 do `uv` (instala o `uv` em `~/.local/bin` só se faltar; MIT OR Apache-2.0).
+  - R2: o `preparar` recusa `DEMO_DIR` já existente, não vazio e sem o marcador `.simulador-demo-sintetica`.
+  - R1: na demo, o operador da sessão de Bland-Altman precisa ser `OP-NN` (`422 operador_invalido` fora disso).
+  - `docs/deploy-demo.md`:
+    - imagem, pacotes, Postgres 18, Python via `uv` e timeout de 24 h;
+    - `X-Forwarded-*` sobrescritos pelo proxy (observado);
+    - `novo-token` antes de parar, porque o snapshot inclui `demo.env`;
+    - como retomar, e rede `deny-all` como melhoria registrada.
 - **Proxy TLS no `?token=`.** Com `DEMO_SINTETICA=1` ou `APP_CONFIAR_PROXY_TLS=1`, o redirecionamento usa `X-Forwarded-Proto`/`-Host`: vai para `https://` e grava o cookie `Secure`. O host encaminhado precisa estar permitido e é o comparado com o `Origin`. No modo local padrão, esses cabeçalhos continuam ignorados.
 - **Trace do build (deploy em Functions, opções B/C).** `outputFileTracingIncludes` passa a incluir `pnpm-workspace.yaml`, que `raizRepo()` usa para achar a raiz, e `docs/validacao/*.json` (planilha do art. 5º). Sem isso, o pacote rastreado não achava a raiz do repositório em runtime.
 - **Testes.**
   - `tests/unit/demoSintetica.test.ts`;
-  - guardas do script em `tests/unit/scripts.test.ts`;
+  - guardas do script em `tests/unit/scripts.test.ts`, inclusive `DEMO_DIR` alheio (R2);
+  - operador `OP-NN` na demo em `tests/unit/demoSintetica.test.ts` e em `e2e/demo.spec.ts` (R1);
   - faixa em `tests/ui/paineis.test.tsx`;
   - e2e `e2e/demo.spec.ts`: projeto `demo` do Playwright, num terceiro servidor (:3103) com banco próprio `<teste>_e2edemo`, criado, marcado e apagado no teardown.
