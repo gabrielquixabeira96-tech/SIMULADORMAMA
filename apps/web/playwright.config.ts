@@ -58,6 +58,8 @@ const next = (desenho: "A" | "B") => ({
     USUARIO_LOCAL_ID: "e2e",
     LOG_LEVEL: "warn",
     APP_TOKEN_LOCAL: TOKEN,
+    // /benchmark (plano A14): ligado só no servidor B para o e2e cobrir os dois estados (A = padrão, 404)
+    BENCHMARK_HABILITADO: desenho === "B" ? "1" : "0",
   },
 });
 
