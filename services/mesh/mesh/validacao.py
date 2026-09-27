@@ -207,7 +207,19 @@ def metricas_marco2(sinteticos: Path, catalogo_arquivo: Path) -> dict:
     return res
 
 
-def _markdown_marco2(r: dict, catalogo_nome: str) -> str:
+def _linha_gltf(gltf: dict | None) -> str:
+    """Resultado do Khronos glTF-Validator (`node scripts/validar_gltf.mjs --json ...`, rodado pelo
+    scripts/validacao.sh); sem resultado, o registro diz que nao foi executado (nada de "verificacao manual")."""
+    if not gltf:
+        return ("glTF-Validator (Khronos) **não executado** nesta geração; rode `bash scripts/validacao.sh` "
+                "(chama `node scripts/validar_gltf.mjs` nos `.glb`).")
+    ok = gltf["erros"] == 0 and gltf["avisos"] == 0
+    return (f"glTF-Validator (Khronos) {gltf['versao']} nos `.glb` (morphs e `torso.glb` dos 3 torsos), por "
+            f"`node scripts/validar_gltf.mjs`: {gltf['arquivos']} arquivos, **{gltf['erros']} erros, "
+            f"{gltf['avisos']} avisos** ({'sem erros nem avisos' if ok else 'NÃO passou'}).")
+
+
+def _markdown_marco2(r: dict, catalogo_nome: str, gltf: dict | None = None) -> str:
     L = ["## Marco 2 (Python) — modelo geométrico e morph targets (ADR 0014)", "",
          f"Catálogo: `{catalogo_nome}` (EXEMPLO NÃO CLÍNICO). Coeficientes de `config/simulacao.json`, todos "
          "`nao_calibrado`.", "",
@@ -223,7 +235,7 @@ def _markdown_marco2(r: dict, catalogo_nome: str) -> str:
     L += ["", "| torso | targets | tempo de pré-cômputo (s) | tamanho dos 4 .glb (MB) |", "|---|---|---|---|"]
     for k, v in r["precomputo"].items():
         L.append(f"| {k} | {v['targets']} | {v['s']} | {v['mb']} |")
-    L += ["", "Os `.glb` passam no Khronos glTF-Validator sem erros nem avisos (verificação manual desta versão).", ""]
+    L += ["", _linha_gltf(gltf), ""]
     return "\n".join(L) + "\n"
 
 
@@ -285,7 +297,7 @@ def _markdown(resumo: dict, resultados: list[dict], ba: dict) -> str:
     L.append("")
     L.append(f"# Validacao do services/mesh — Marco 0 e Bland-Altman do pipeline (v{VERSAO_SOFTWARE})")
     L.append("")
-    L.append("Registro complementar ao `v0.0.1.md` (orquestrador), gerado por "
+    L.append(f"Registro complementar ao `v{VERSAO_SOFTWARE}.md` (consolidado), gerado por "
              "`python -m mesh.cli validar --sinteticos data/sinteticos --relatorio <este arquivo>` "
              "(RDC 657, art. 5º: versão, data, parâmetros e resultados). Somente torsos sintéticos paramétricos; "
              "nenhum dado de paciente.")
@@ -353,8 +365,10 @@ def _markdown(resumo: dict, resultados: list[dict], ba: dict) -> str:
     L.append("bash scripts/mesh.sh venv")
     L.append("cd services/mesh && .venv/bin/python -m mesh.cli torso --todos --saida ../../data/sinteticos")
     L.append(".venv/bin/python -m mesh.cli morphs --todos --sinteticos ../../data/sinteticos")
+    L.append("node ../../scripts/validar_gltf.mjs ../../data/sinteticos/*/morphs/*.glb "
+             "../../data/sinteticos/*/torso.glb")
     L.append(".venv/bin/python -m mesh.cli validar --sinteticos ../../data/sinteticos \\")
-    L.append("  --relatorio ../../docs/validacao/v0.0.1-services-mesh.md")
+    L.append(f"  --relatorio ../../docs/validacao/v{VERSAO_SOFTWARE}-services-mesh.md")
     L.append(".venv/bin/pytest -q")
     L.append("```")
     L.append("")

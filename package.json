@@ -17,6 +17,10 @@
     "dev:mesh": "bash scripts/mesh.sh dev",
     "db": "bash scripts/db.sh",
     "licencas": "bash scripts/licencas.sh",
-    "validar:config": "python3 scripts/validar_config.py"
+    "validar:config": "python3 scripts/validar_config.py",
+    "validar:gltf": "node scripts/validar_gltf.mjs"
+  },
+  "devDependencies": {
+    "gltf-validator": "2.0.0-dev.3.10"
   }
 }
