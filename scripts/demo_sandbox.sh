@@ -9,7 +9,7 @@
 # Uso: bash scripts/demo_sandbox.sh <comando>
 #   preparar       instala dependencias (pacotes do sistema so se faltarem; apt ou dnf), pnpm install,
 #                  venv do services/mesh (Python 3.11-3.13; com so 3.14+ e pygeodesic sem wheel, usa
-#                  Python 3.13 do uv em ~/.local/bin, instalando o uv so se ausente), cluster
+#                  Python 3.13 do uv; o uv, se ausente, vem do PyPI com versao e hash fixos), cluster
 #                  Postgres proprio + banco marcado como demo, torsos e
 #                  morphs sinteticos, next build
 #   subir          sobe Postgres, mesh (127.0.0.1) e web (0.0.0.0:DEMO_PORTA) com DEMO_SINTETICA=1;
@@ -62,6 +62,15 @@ for _p in "$PORTA" "$PG_PORTA" "$MESH_PORTA"; do
 done
 # Marcador gravado pelo proprio script: 'apagar' so remove pastas que o tenham (nunca um DEMO_DIR errado).
 MARCADOR=".simulador-demo-sintetica"
+# Pasta que o script cria, grava ou apaga (DEMO_DIR, DEMO_PG_DIR): se ja existe, nao esta vazia e nao
+# tem o marcador, nao e da demo -> recusa (nunca mkdir/chown/touch nem 'apagar' numa pasta alheia).
+checar_pasta_demo() { # checar_pasta_demo CAMINHO NOME_DA_VARIAVEL
+  if [[ -e "$1" && ! -f "$1/$MARCADOR" ]]; then
+    [[ -d "$1" ]] || erro "$2 ($1) existe e nao e pasta"
+    [[ -z "$(ls -A -- "$1")" ]] || erro "$2 ($1) existe, nao esta vazio e nao tem o marcador $MARCADOR: nao uso (aponte $2 para uma pasta nova)"
+  fi
+  return 0
+}
 
 # ------------------------------------------------------------------ ferramentas
 pg_bin() {
@@ -78,7 +87,8 @@ pg_bin() {
 # pygeodesic 0.1.11 -- ver python_uv e preparar_venv).
 py_valido() { "$1" -c 'import sys, venv, ensurepip; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; }
 py_versao() { "$1" -c 'import sys; print("%d.%d" % sys.version_info[:2])'; }
-uv_bin() { if tem uv; then command -v uv; elif [[ -x "$HOME/.local/bin/uv" ]]; then echo "$HOME/.local/bin/uv"; else return 1; fi; }
+UV_VENV="$DEMO_DIR/.uv"
+uv_bin() { if tem uv; then command -v uv; elif [[ -x "$UV_VENV/bin/uv" ]]; then echo "$UV_VENV/bin/uv"; else return 1; fi; }
 
 python_ok() {
   local p uv
@@ -91,14 +101,29 @@ python_ok() {
 }
 
 # Python 3.13 gerenciado pelo uv (MIT OR Apache-2.0; ferramenta de preparo, nao vai para o app).
-# Instala o uv pelo instalador oficial em ~/.local/bin SO se ele faltar, sem mexer no PATH do shell.
+# Se o uv faltar, instala do PyPI num venv proprio em $DEMO_DIR/.uv (apagado com 'apagar'), com
+# versao fixa e --require-hashes (wheels manylinux x86_64/aarch64 de uv 0.12.19, sha256 do PyPI).
+UV_VERSAO="0.12.19"
+UV_HASHES=(
+  a63d18a0aa38ee9f21a5406afbbaeb41303bcd954be9d6b7c1b95ac275e53958 # manylinux_2_17_x86_64
+  b466eb0f74645883df52446d54474905e8515d75fdf0b313bf099dedc3237896 # manylinux_2_17_aarch64 (+musllinux)
+  a36d92c137098fdb9dce27261c5fa8ef5519ba82dcd15d70864c4676d889738d # manylinux_2_28_aarch64
+)
+instalar_uv() {
+  local req h
+  [[ "${DEMO_SEM_INSTALAR:-0}" == "1" ]] && { msg "uv ausente e DEMO_SEM_INSTALAR=1" >&2; return 1; }
+  if ! { tem python3 && py_valido python3; }; then msg "python3 com venv ausente: nao da para instalar o uv" >&2; return 1; fi
+  msg "instalando uv==$UV_VERSAO do PyPI (hashes fixos) em $UV_VENV" >&2
+  rm -rf -- "$UV_VENV"
+  python3 -m venv "$UV_VENV" >&2 || return 1
+  req="$UV_VENV/requisitos.txt"
+  { printf 'uv==%s' "$UV_VERSAO"; for h in "${UV_HASHES[@]}"; do printf ' --hash=sha256:%s' "$h"; done; printf '\n'; } > "$req"
+  "$UV_VENV/bin/pip" install -q --disable-pip-version-check --require-hashes --only-binary=:all: -r "$req" >&2 || return 1
+}
 python_uv() {
   local uv p
   if ! uv="$(uv_bin)"; then
-    [[ "${DEMO_SEM_INSTALAR:-0}" == "1" ]] && { msg "uv ausente e DEMO_SEM_INSTALAR=1" >&2; return 1; }
-    tem curl || { msg "curl ausente: nao da para instalar o uv" >&2; return 1; }
-    msg "instalando uv em $HOME/.local/bin (instalador oficial astral.sh)" >&2
-    curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >&2 || return 1
+    instalar_uv || return 1
     uv="$(uv_bin)" || return 1
   fi
   if ! p="$("$uv" python find 3.13 2>/dev/null)"; then
@@ -184,6 +209,7 @@ pg_stop() {
 }
 
 pg_cluster() {
+  checar_pasta_demo "$PG_DIR" DEMO_PG_DIR # antes de qualquer mkdir/chown/touch
   PGBIN="$(pg_bin)" || erro "Postgres nao encontrado depois da instalacao"
   local maior; maior="$("$PGBIN/postgres" --version | sed -E 's/.* ([0-9]+)(\.[0-9]+)?.*/\1/')"
   [[ "$maior" -ge 15 ]] || erro "Postgres $maior < 15 (ADR 0007)"
@@ -235,18 +261,8 @@ banco() {
       node --experimental-strip-types --no-warnings scripts/migrar.ts --teste --marcar-demo )
 }
 
-# DEMO_DIR ja existente, nao vazio e sem o marcador nao e da demo: recusa (nunca grava demo.env, banco
-# ou dados sinteticos por cima de uma pasta alheia apontada por engano).
-checar_demo_dir() {
-  if [[ -e "$DEMO_DIR" && ! -f "$DEMO_DIR/$MARCADOR" ]]; then
-    [[ -d "$DEMO_DIR" ]] || erro "DEMO_DIR ($DEMO_DIR) existe e nao e pasta"
-    [[ -z "$(ls -A -- "$DEMO_DIR")" ]] || erro "DEMO_DIR ($DEMO_DIR) existe, nao esta vazio e nao tem o marcador $MARCADOR: nao uso (aponte DEMO_DIR para uma pasta nova)"
-  fi
-  return 0
-}
-
 env_base() {
-  checar_demo_dir
+  checar_pasta_demo "$DEMO_DIR" DEMO_DIR
   mkdir -p "$DEMO_DIR" "$LOGS" "$RUN" "$DATA_DIR_DEMO"
   chmod 700 "$DEMO_DIR"
   touch "$DEMO_DIR/$MARCADOR"
@@ -263,10 +279,13 @@ env_base() {
 
 # ------------------------------------------------------------------ comandos
 cmd_preparar() {
-  checar_demo_dir # antes de instalar qualquer coisa (env_base confere de novo)
+  # antes de instalar qualquer coisa (env_base e pg_cluster conferem de novo)
+  checar_pasta_demo "$DEMO_DIR" DEMO_DIR
+  checar_pasta_demo "$PG_DIR" DEMO_PG_DIR
   instalar_sistema
   tem node || erro "node ausente (o sandbox usa o runtime node22)"
   [[ "$(node -p 'process.versions.node.split(".")[0]')" == "22" ]] || erro "node $(node -v): o projeto exige Node 22 (package.json engines)"
+  env_base # cria DEMO_DIR (com o marcador) antes do venv do uv, que mora nele
   msg "pnpm install"
   ( cd "$RAIZ" && pnpm_ install --frozen-lockfile )
 
@@ -276,12 +295,11 @@ cmd_preparar() {
     "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 14) else 1)' \
       || erro "dependencias do services/mesh nao importam com Python $(py_versao "$py") (pygeodesic sem wheel? instale gcc/g++ e os cabecalhos do Python)"
     msg "Python $(py_versao "$py") sem pygeodesic funcional: usando Python 3.13 do uv"
-    py="$(python_uv)" || erro "nao consegui o Python 3.13 via uv (rede para astral.sh e github.com liberada no preparo?)"
+    py="$(python_uv)" || erro "nao consegui o Python 3.13 via uv (rede para PyPI e github.com liberada no preparo?)"
     rm -rf -- "$VENV"
     preparar_venv "$py" || erro "dependencias do services/mesh nao importam nem com o Python 3.13 do uv ($py)"
   fi
 
-  env_base
   pg_cluster
   banco
 
@@ -383,6 +401,7 @@ cmd_novo_token() {
 }
 
 cmd_recriar_banco() {
+  checar_pasta_demo "$DEMO_DIR" DEMO_DIR
   carregar_env
   parar_proc web
   pg_start

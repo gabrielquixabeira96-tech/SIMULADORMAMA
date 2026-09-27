@@ -234,4 +234,29 @@ describe("scripts/demo_sandbox.sh (ADR 0018): guardas que não sobem nada", () =
       expect(ok.stderr, rotulo).toMatch(/exige Node 22/); // passou da guarda e parou no node falso
     }
   });
+
+  // D1: a mesma guarda vale para DEMO_PG_DIR (antes, pg_cluster fazia mkdir/chown/touch do marcador
+  // dentro da pasta alheia e 'apagar' a removia depois)
+  it("preparar e apagar recusam DEMO_PG_DIR alheio: nada gravado, nada apagado", () => {
+    const bin = novoTmp("simulador-bin-");
+    writeFileSync(join(bin, "node"), "#!/bin/sh\necho 22\n"); // passaria do node: a guarda tem de vir antes
+    chmodSync(join(bin, "node"), 0o755);
+    const demoDir = join(novoTmp("simulador-demo-"), "nova");
+    const pg = novoTmp("simulador-pg-alheio-");
+    mkdirSync(join(pg, "docs"));
+    writeFileSync(join(pg, "docs", "a"), "nao mexer");
+    const env = { DEMO_SEM_INSTALAR: "1", PATH: `${bin}:/usr/bin:/bin`, DEMO_DIR: demoDir, DEMO_PG_DIR: pg };
+
+    const r = rodar(["preparar"], env);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/DEMO_PG_DIR .* nao esta vazio e nao tem o marcador/);
+    expect(existsSync(demoDir)).toBe(false); // recusado antes de criar DEMO_DIR
+    expect(existsSync(join(pg, ".simulador-demo-sintetica"))).toBe(false);
+    expect(existsSync(join(pg, "dados"))).toBe(false);
+
+    const a = rodar(["apagar"], env);
+    expect(a.status).not.toBe(0);
+    expect(a.stderr).toMatch(/nao tem o marcador/);
+    expect(readFileSync(join(pg, "docs", "a"), "utf8")).toBe("nao mexer");
+  });
 });

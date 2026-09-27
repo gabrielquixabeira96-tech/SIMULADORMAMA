@@ -38,13 +38,13 @@ Como subir a pilha inteira do simulador (Next + `services/mesh` + Postgres local
   - `persistent: true`, se quiser snapshot (ver "Encerrar" e "Retomar");
   - timeout: o maior valor aceito foi **24 h**. Use o menor que cubra o teste e pare o sandbox ao fim de qualquer jeito.
 - Código dentro do sandbox: `git clone` com token do GitHub *fine-grained*, só leitura, só este repositório e com validade curta; ou um tarball enviado.
-- Política de rede do sandbox durante o `preparar`: GitHub (clone e as versões do Python baixadas pelo `uv`), `astral.sh` (instalador do `uv`, só se ele faltar), registro npm, PyPI (`pypi.org`, `files.pythonhosted.org`) e os espelhos do `apt` do Ubuntu (ou os repositórios do `dnf`, em Amazon Linux).
+- Política de rede do sandbox durante o `preparar`: GitHub (clone e as versões do Python baixadas pelo `uv`), registro npm, PyPI (`pypi.org`, `files.pythonhosted.org`; também de onde vem o `uv`) e os espelhos do `apt` do Ubuntu (ou os repositórios do `dnf`, em Amazon Linux).
 
 ### O que o `preparar` instala (observado no Ubuntu 26.04)
 
 - **Pacotes do sistema, só se faltarem:** `apt-get install postgresql postgresql-contrib build-essential python3 python3-venv python3-dev openssl curl ca-certificates`. Em Amazon Linux/`dnf`, o caminho antigo (`postgresql16-server`, `gcc-c++`, `python3.13-devel`) continua. Sem `apt-get` nem `dnf`, ou se a instalação falhar, o script para com mensagem clara.
 - **Postgres 18**, em `/usr/lib/postgresql/18/bin`. O script procura por versão decrescente (18, 17, 16, 15, depois `/usr/pgsql-16/bin` e `/usr/bin`); `PG_BIN` força outro caminho.
-- **Python 3.13 via `uv`.** O Python do sistema é o 3.14, e o `pygeodesic` 0.1.11 não tem wheel `cp314` (a compilação falha). O script prefere `python3.13`/`3.12`/`3.11`, depois o 3.13 já instalado pelo `uv`. Se só houver 3.14+ e o `services/mesh` não importar com ele, instala o `uv` em `~/.local/bin` pelo instalador oficial (só se o `uv` faltar, sem mexer no `PATH`), roda `uv python install 3.13` e recria o venv com esse Python. `DEMO_SEM_INSTALAR=1` também impede instalar o `uv`.
+- **Python 3.13 via `uv`.** O Python do sistema é o 3.14, e o `pygeodesic` 0.1.11 não tem wheel `cp314` (a compilação falha). O script prefere `python3.13`/`3.12`/`3.11`, depois o 3.13 já instalado pelo `uv`. Se só houver 3.14+ e o `services/mesh` não importar com ele, instala o `uv` do PyPI num venv próprio em `$DEMO_DIR/.uv` (só se o `uv` faltar), com versão fixa (`uv==0.12.19`) e `--require-hashes` com os sha256 das wheels manylinux x86_64/aarch64. Depois roda `uv python install 3.13` e recria o venv com esse Python. `DEMO_SEM_INSTALAR=1` também impede instalar o `uv`.
 - **Licenças.** O `uv` é MIT OR Apache-2.0, permitido pelo ADR 0009. Ele e o Python que baixa (distribuições *python-build-standalone*, PSF-2.0 e bibliotecas permissivas) são ferramentas de preparo do sandbox, como o Postgres e o `gcc`: não entram no repositório nem no app. Por isso não aparecem no `THIRD_PARTY_LICENSES.md`, que o `scripts/licencas.sh` gera das dependências do projeto (pnpm e `services/mesh/.venv`); ficam registrados aqui.
 
 ## Passo a passo
@@ -56,7 +56,8 @@ bash scripts/demo_sandbox.sh preparar
 #    sistema for 3.14), pnpm install, venv do services/mesh, cluster Postgres próprio (127.0.0.1:5433,
 #    banco simulador_demo marcado como demo), torsos t01/t02/t03 + morphs em $HOME/simulador-demo/data e
 #    next build com DEMO_SINTETICA=1 (teto de corpo do proxy 2 MB). Idempotente.
-#    Recusa DEMO_DIR que já exista, não esteja vazio e não tenha o marcador .simulador-demo-sintetica.
+#    Recusa DEMO_DIR ou DEMO_PG_DIR que já exista, não esteja vazio e não tenha o marcador
+#    .simulador-demo-sintetica (nada é criado, gravado nem apagado nessa pasta).
 
 # 2. (melhoria, ainda não feita no deploy real) política de rede do sandbox → deny-all
 
@@ -127,7 +128,7 @@ Para descartar tudo, rode `bash scripts/demo_sandbox.sh apagar` e apague sandbox
 | `status` | processos, Postgres e `GET /api/config` sem token (esperado 401) |
 | `novo-token` | gera e imprime uma vez um novo `APP_TOKEN_LOCAL` (depois: `parar` + `subir`) |
 | `recriar-banco` | apaga banco e dados de pacientes sintéticos da demo e recria o banco marcado (use se a subida recusar por dado inconsistente) |
-| `apagar` | para tudo e apaga `DEMO_DIR` e o cluster; só apaga pastas que tenham o marcador `.simulador-demo-sintetica` gravado pelo próprio script (o `preparar` também recusa `DEMO_DIR` já existente, não vazio e sem esse marcador) |
+| `apagar` | para tudo e apaga `DEMO_DIR` e o cluster; só apaga pastas que tenham o marcador `.simulador-demo-sintetica` gravado pelo próprio script (o `preparar` também recusa `DEMO_DIR` ou `DEMO_PG_DIR` já existente, não vazio e sem esse marcador) |
 
 Variáveis: `DEMO_HOST_PUBLICO`, `DEMO_SO_LOOPBACK=1` (teste local, escuta só em 127.0.0.1), `DEMO_DIR` (padrão `$HOME/simulador-demo`, nunca dentro do repositório), `DEMO_PG_DIR`, `DEMO_PORTA` (3000), `DEMO_PG_PORTA` (5433), `DEMO_MESH_PORTA` (8765), `DEMO_DESENHO` (B; `A` para ver a UI enxuta), `DEMO_SEM_INSTALAR=1`. O script recusa desenho fora de `A`/`B` e portas não numéricas. A senha do role do Postgres vai ao `psql` pela entrada padrão, nunca pelo argv.
 

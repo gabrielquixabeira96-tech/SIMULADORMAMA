@@ -25,8 +25,8 @@ Sem mudança numérica no modelo: `config/tepid.json`, `config/simulacao.json`, 
   - `scripts/demo_sandbox.sh`:
     - acha o Postgres 18 (`/usr/lib/postgresql/18/bin`, busca por versão decrescente);
     - instala por `apt` no Ubuntu 26.04 (a imagem observada), com falha clara;
-    - com só Python 3.14+ e `pygeodesic` sem wheel `cp314`, usa o Python 3.13 do `uv` (instala o `uv` em `~/.local/bin` só se faltar; MIT OR Apache-2.0).
-  - R2: o `preparar` recusa `DEMO_DIR` já existente, não vazio e sem o marcador `.simulador-demo-sintetica`.
+    - com só Python 3.14+ e `pygeodesic` sem wheel `cp314`, usa o Python 3.13 do `uv` (se o `uv` faltar, instala `uv==0.12.19` do PyPI em `$DEMO_DIR/.uv` com `--require-hashes`; MIT OR Apache-2.0).
+  - R2: o `preparar` recusa `DEMO_DIR` ou `DEMO_PG_DIR` já existente, não vazio e sem o marcador `.simulador-demo-sintetica`. A mesma guarda roda antes de qualquer `mkdir`/`chown` do cluster e no `recriar-banco`.
   - R1: na demo, o operador da sessão de Bland-Altman precisa ser `OP-NN` (`422 operador_invalido` fora disso).
   - `docs/deploy-demo.md`:
     - imagem, pacotes, Postgres 18, Python via `uv` e timeout de 24 h;
