@@ -29,3 +29,11 @@ Status: aceito · Data: 2026-09-26
 - Testes de banco rodam em Postgres real, sem mocks de banco.
 - Dependência de `service postgresql` no ambiente cloud; se a imagem base mudar, `scripts/db.sh` detecta ausência e orienta (`apt install postgresql-16` ou Docker).
 - Senha trivial só existe localmente; `.env.example` deixa isso explícito e `.env*` está no `.gitignore`.
+
+## Revisão v0.1.1 (registrada na v0.1.2) — banco obrigatório na CI
+
+O item 1 dizia que a CI "pula esses testes com aviso se o Postgres não estiver disponível". Isso foi superado na v0.1.1 (`docs/validacao/mudancas-v0.1.1.md`): um teste de banco pulado em silêncio deixava a CI verde sem ter validado o banco. Regra atual:
+
+1. **Banco obrigatório.** `scripts/ci.sh` chama `scripts/db.sh start criar`; se o Postgres não subir, conta como falha. O `globalSetup` do Vitest (`apps/web/tests/setup/global.ts`) recria o schema do banco de teste (`simulador_test`, `DATABASE_URL_TEST`) e aplica as migrations; sem conexão, a execução **falha** e os testes não se auto-pulam.
+2. **Pular só de forma explícita.** `bash scripts/ci.sh --sem-db` roda os testes web com `SEM_DB=1`: só então os testes de banco se auto-pulam. A saída mostra "esta execucao nao vale como validacao", e `test-results/ci-resumo.json` grava `"sem_db": true` e `"vale_como_validacao": false`.
+3. O restante deste ADR (PostgreSQL 16 nativo, mesmo DDL, `docker-compose.yml` como alternativa, sem PGlite/SQLite) continua valendo.
