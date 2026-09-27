@@ -20,3 +20,4 @@ Formato: contexto, decisão, alternativas consideradas, consequências. Um ADR �
 | [0014](0014-modelo-geometrico-e-morphs.md) | Modelo geométrico-paramétrico v1 e morph targets | aceito |
 | [0015](0015-catalogo-base-oval.md) | Catálogo 1.1: pegada oval (`base_forma`) e catálogo real extraído dos PDFs | aceito |
 | [0016](0016-desvios-aceitos-v0-1.md) | Desvios aceitos na v0.1.x: geodésica a partir da `posicao`, 403 do `services/mesh` em A, registro gerado por `scripts/validacao.sh` | aceito |
+| [0017](0017-sessao-bland-altman-e-planilha-art5.md) | Sessão de Bland-Altman com operador humano (cega ao gabarito, só em B) e planilha de validação do art. 5º | aceito |

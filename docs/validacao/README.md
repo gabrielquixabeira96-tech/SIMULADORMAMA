@@ -13,6 +13,8 @@ Registros de componente (`v<versao>-<componente>.md/.json`, esquema `validacao_c
 
 Textos versionados por versão, escritos à mão e lidos pelo gerador: `mudancas-v<versao>.md` ("O que mudou") e `pendencias-v<versao>.md` ("Desvios e pendências"; o gerador acrescenta as pendências que dependem de números medidos, como latência p95 ≥ 100 ms por interação e o resultado do glTF-Validator). Os `.glb` são conferidos por comando com o Khronos glTF-Validator (`node scripts/validar_gltf.mjs <arquivos>`, chamado pelo `scripts/validacao.sh`; resultado em `gltf_validator` do `v<versao>-services-mesh.json`).
 
+**Planilha do art. 5º** (versão, data, scan, medidas, referência, desvios, operador; ADR 0017): gerada sob demanda, no desenho B, por `GET /api/validacao/planilha?formato=csv` (ou `json`, com resumo de Bland-Altman por grupo e N-IMF à parte), a partir dos `v<versao>-web-marcos-0-1.json` deste diretório e das sessões de Bland-Altman encerradas em `DATA_DIR/validacao/sessoes/` (ferramenta `/validacao/bland-altman`: operador por código pseudônimo, cego ao gabarito, com repetição). A sessão com cirurgião (≥ 30 pares em ≥ 5 voluntárias ou manequim, LoA ±3 mm) é tarefa humana pendente; com torsos sintéticos a planilha marca `vale_para_fase1 = false`.
+
 A tabela abaixo é mantida por `scripts/registro_validacao.py`: a cada geração ele insere ou substitui (idempotente) a linha da versão corrente, em ordem decrescente; linhas de outras versões (e suas erratas) não são tocadas.
 
 | Versão | Data | Status | Registro consolidado | Registros de componente |

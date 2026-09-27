@@ -303,6 +303,9 @@ $DATA_DIR/
     simulacoes/<simulacao_id>.json
     relatorios/<atendimento_id>.pdf
   sinteticos/<nome>/       # seção 4.2
+  validacao/               # seção 18 (não é dado de paciente)
+    malhas/<uuid>/         # torso sintético processado para a sessão (original/, processada.*, preparo.json)
+    sessoes/<id>.json      # sessao_bland_altman/1.0
 ```
 
 `apps/web` e `services/mesh` rodam na **mesma máquina** nesta fase e trocam **caminhos relativos a `DATA_DIR`** (nunca absolutos, nunca `..`). O Python DEVE recusar caminhos que escapem de `DATA_DIR`.
@@ -934,3 +937,27 @@ create index auditoria_entidade_idx on auditoria (entidade, entidade_id, ocorrid
 ```
 
 Toda leitura de malha, medida, simulação, relatório ou PDF por rota do Next.js insere uma linha em `auditoria`. Logs de aplicação (stdout, Sentry no futuro) só contêm IDs e pseudônimos, nunca `detalhes` de anamnese.
+
+---
+
+## 18. Validação humana: sessão de Bland-Altman e planilha do art. 5º (ADR 0017)
+
+Só no desenho B (recurso `medicao_automatica_3d`); em A toda rota abaixo responde `403 desligado_no_desenho_a` antes de tocar banco, disco ou rede. Mutações seguem o §7 do proxy (JSON, Origin, token local). Tudo em `DATA_DIR/validacao/` (§5.4), nunca em `pacientes/`.
+
+| Rota | Faz | Cliente recebe |
+|---|---|---|
+| `POST /api/validacao/sessoes` | `{ operador, tipo_operador?: "humano"\|"simulado", repeticoes?: 2..5, torsos?: [nome], semente? }`. Abre a sessão com os torsos sintéticos que têm gabarito | vista pública (201) |
+| `GET /api/validacao/sessoes[/<id>]` | lista ou lê | vista pública |
+| `GET /api/validacao/sessoes/<id>/itens/<i>/malha` | GLB processado do scan do item (sessão aberta) | `model/gltf-binary` |
+| `POST /api/validacao/sessoes/<id>/itens/<i>` | `{ landmarks }` com os 10 landmarks, `origem: "clique"`; só o próximo item pendente; uma vez por item (409 `fora_de_ordem` / `item_ja_registrado`; 422 `landmarks_incompletos` / `origem_invalida`) | vista pública |
+| `POST /api/validacao/sessoes/<id>/encerrar` | `{ observacoes? }` (≤ 500, sem `@`); exige todos os itens (409 `sessao_incompleta`) | vista pública com `scans` e `resultado` |
+| `POST /api/validacao/sessoes/<id>/cancelar` | abandona sem resultado | vista pública |
+| `GET /api/validacao/planilha?formato=csv\|json[&separador=virgula\|ponto-e-virgula]` | planilha art. 5º; audita `exportou` | CSV (anexo) ou JSON |
+
+**Vista pública** (sessão aberta ou cancelada): `id`, `estado`, `operador` (código pseudônimo `^[A-Z0-9][A-Z0-9-]{1,15}$`), `tipo_operador`, `repeticoes`, `versao_software`, datas, `landmarks_exigidos`, `itens[] { indice, scan_id, repeticao, concluido }` e `proximo_indice`. **Nunca** traz nome do torso, gabarito, landmarks gravados ou distâncias. Com sessão aberta sobre um torso, `GET /api/sinteticos/<nome>/gabarito.json` → `403 gabarito_oculto_sessao_aberta` e `POST /api/sinteticos/<nome>/importar` devolve `gabarito: null`.
+
+**`sessao_bland_altman/1.0`** (arquivo `validacao/sessoes/<id>.json`, só no servidor): campos da vista + `desenho`, `semente`, `scans[] { scan_id, torso, sha256_gabarito }`, `itens[] { ..., registrado_em, landmarks, distancias (§3.1, do /medir), avisos }`, `observacoes`, `resultado`.
+
+**`resultado`**: `pares[] { medida: "<distancia>:<tipo>", distancia, tipo, referencia_mm, medido_mm, desvio_mm, scan_id, torso, repeticao }`, Bland-Altman `geral`, `n_imf` (à parte), `sem_n_imf`, `euclidiana`, `geodesica` (cada um: `n`, `vies_mm`, `dp_mm`, `loa_inferior_mm`, `loa_superior_mm`, `erro_abs_max_mm`, `dentro_de_2mm`, `dentro_de_3mm`, `por_medida`; fórmula do §7.7), `intra_operador { n_grupos, dp_intra_mm, coeficiente_repetibilidade_mm, bland_altman_rep2_rep1 }` e `criterios { n_pares, n_pares_min_30, loa_dentro_3mm, loa_dentro_2mm, n_imf_relatado_a_parte, scans_distintos, vale_para_fase1 (false com torso sintético), motivo_fase1 }`.
+
+**Planilha `planilha_validacao_art5/1.0`**: uma linha por par. As fontes são `docs/validacao/v<versao>-web-marcos-0-1.json` (`fonte = registro_e2e`, operador simulado) e as sessões encerradas (`fonte = sessao_bland_altman`). Colunas, nesta ordem: `versao_software, data, fonte, registro, commit, desenho, operador, tipo_operador, scan_id, sintetico, repeticao, medida, tipo_distancia, n_imf, referencia_mm, medido_mm, desvio_mm, observacoes`. `scan_id = sintetico:<nome>`. `desvio_mm = medido − referência`. CSV em RFC 4180, UTF-8 com BOM e CRLF; células de texto iniciadas por `= + - @` ganham `'`. O JSON acrescenta `resumo[]` por registro ou sessão (geral, N-IMF, sem N-IMF) e `notas`. Nenhuma linha tem nome, pseudônimo de paciente, caminho absoluto ou e-mail.
