@@ -1,7 +1,8 @@
 /**
  * Integração web × services/mesh REAL (sem MSW) + Postgres de teste: upload de um torso
  * sintético → /processar → /medir com os landmarks do gabarito (±1 mm) → /reescalar →
- * medidas reescaladas; desenho A; contratos de erro reais. Pulado se faltar venv, torso ou banco.
+ * medidas reescaladas; desenho A; contratos de erro reais. Pulado se faltar venv, torso ou banco,
+ * EXCETO com EXIGIR_MESH_REAL=1 (CI): aí a falta de qualquer pré-requisito é uma falha explícita.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -18,14 +19,24 @@ import { carregarTepidConfig } from "@/config/arquivosConfig";
 import { fecharPools } from "@/db/pool";
 import { ClienteMesh, ErroMesh } from "@/mesh/cliente";
 import { dbDisponivel } from "../helpers/banco";
-import { SINTETICOS, lerGabarito, meshRealInstalado, subirMeshReal, torsoDisponivel, verticeMaisProximo, verticesObj, type ServidorMesh } from "../helpers/meshReal";
+import { SINTETICOS, exigirMeshReal, faltasMeshReal, lerGabarito, subirMeshReal, verticeMaisProximo, verticesObj, type ServidorMesh } from "../helpers/meshReal";
 
 const TORSO = "t01_simetrico_300";
-const pronto = meshRealInstalado() && torsoDisponivel(TORSO) && dbDisponivel();
+const faltas = faltasMeshReal(TORSO, dbDisponivel());
+const pronto = faltas.length === 0;
 const json = (corpo: unknown) => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
 let mesh: ServidorMesh | null = null;
+
+// Declarado só quando necessário (um runIf falso contaria como teste pulado na CI).
+if (!pronto && exigirMeshReal()) {
+  describe("integração real exigida (EXIGIR_MESH_REAL=1)", () => {
+    it("pré-requisitos da integração real presentes", () => {
+      expect.fail(`integração com o services/mesh real NÃO pode ser pulada na CI; faltam: ${faltas.join("; ")}`);
+    });
+  });
+}
 
 describe.skipIf(!pronto)("integração com o services/mesh real", () => {
   let malhaId = "";
