@@ -42,9 +42,12 @@ export interface CenaSimulada {
 
 /**
  * Margem do descarte de costas (cosseno entre a normal do triângulo e a direção ao olho): um
- * triângulo só sai do índice se estiver de costas além de ~5,7° em peso 0, 0,5 e 1 do alvo ativo.
+ * triângulo só sai do índice se estiver de costas além de ~5,7° em TODO peso w ∈ [0, 1] do alvo
+ * ativo (ver `indicesDeFrente`).
  */
 const MARGEM_COSTAS = 0.1;
+/** Subintervalos de peso usados só nos triângulos limítrofes do descarte (cotas mais justas). */
+const SUBDIV = 4;
 /** Deslocamento mínimo do olho (mm, espaço do objeto) que refaz o descarte. */
 const EPS_OLHO_MM = 1e-3;
 
@@ -190,9 +193,25 @@ function comoFloat32(a: THREE.BufferAttribute): Float32Array {
 
 /**
  * Copia para `saida` os triângulos de `indices` que podem estar de FRENTE para o olho (espaço do
- * objeto) em algum peso do alvo: testa peso 0, 0,5 e 1 (posições base + peso·delta) e só descarta
- * se o triângulo estiver de costas nos três, além da margem. Devolve o número de índices copiados.
- * Mantém a ordem e o sentido de giro: os triângulos que ficam são desenhados exatamente como antes.
+ * objeto) em algum peso w ∈ [0, 1] do alvo ativo. Devolve o número de índices copiados. Mantém a
+ * ordem e o sentido de giro: os triângulos que ficam são desenhados exatamente como antes.
+ *
+ * O morph é linear no peso: cada vértice é p(w) = P + w·Q (relativo: Q = delta; absoluto:
+ * Q = alvo − base). Assim, para o triângulo (a, b, c), com u = b − a e v = c − a,
+ *   n(w) = u(w) × v(w) = n0 + n1·w + n2·w²,   f(w) = olho − a(w) = f0 + f1·w,
+ *   d(w) = n(w)·f(w) = c0 + c1·w + c2·w² + c3·w³ (cúbico),
+ * e d(w) ≥ 0 ⇔ o triângulo está de frente em w (é o sinal que decide o giro na projeção).
+ * O máximo exato de d em [0, 1] é tomado entre os extremos e as raízes de d′ dentro do intervalo.
+ *
+ * Garantia (em aritmética real; o arredondamento em float64 é desprezível frente à margem): um
+ * triângulo só é descartado se, para TODO w ∈ [0, 1],
+ *   d(w) < −MARGEM_COSTAS · |n(w)| · |f(w)|,
+ * isto é, se estiver de costas além de ~5,7° em todos os pesos. Para isso exige-se, num
+ * intervalo de pesos I, máx_I d < −MARGEM_COSTAS · N · F, com N ≥ |n(w)| e F ≥ |f(w)| em I
+ * (cotas pela expansão exata de n e f em torno do centro de I): primeiro com I = [0, 1]; nos casos
+ * limítrofes, em cada um de SUBDIV subintervalos (todos precisam passar). Cotas folgadas só fazem
+ * MANTER triângulos a mais, nunca descartar um de frente. Sem alvo (ou vértices que o alvo não
+ * move), N e F são exatos e o teste é o de peso 0. Degenerados (n ≡ 0) ficam.
  */
 export function indicesDeFrente(
   indices: ArrayLike<number>,
@@ -202,30 +221,62 @@ export function indicesDeFrente(
   olho: { x: number; y: number; z: number },
   saida: Uint32Array,
 ): number {
-  const m2 = MARGEM_COSTAS * MARGEM_COSTAS;
-  const nPesos = delta ? 3 : 1;
+  const m = MARGEM_COSTAS;
+  const absoluto = delta !== null && !deltaRelativo;
   let k = 0;
   for (let t = 0; t + 2 < indices.length; t += 3) {
     const a = 3 * indices[t]!, b = 3 * indices[t + 1]!, c = 3 * indices[t + 2]!;
-    let frente = false;
-    for (let j = 0; j < nPesos && !frente; j++) {
-      const w = j * 0.5;
-      const wb = delta && !deltaRelativo ? 1 - w : 1; // morph absoluto: base·(1−w) + alvo·w
-      let ax = pos[a]! * wb, ay = pos[a + 1]! * wb, az = pos[a + 2]! * wb;
-      let bx = pos[b]! * wb, by = pos[b + 1]! * wb, bz = pos[b + 2]! * wb;
-      let cx = pos[c]! * wb, cy = pos[c + 1]! * wb, cz = pos[c + 2]! * wb;
-      if (delta && w > 0) {
-        ax += delta[a]! * w; ay += delta[a + 1]! * w; az += delta[a + 2]! * w;
-        bx += delta[b]! * w; by += delta[b + 1]! * w; bz += delta[b + 2]! * w;
-        cx += delta[c]! * w; cy += delta[c + 1]! * w; cz += delta[c + 2]! * w;
+    const pax = pos[a]!, pay = pos[a + 1]!, paz = pos[a + 2]!;
+    const u0x = pos[b]! - pax, u0y = pos[b + 1]! - pay, u0z = pos[b + 2]! - paz;
+    const v0x = pos[c]! - pax, v0y = pos[c + 1]! - pay, v0z = pos[c + 2]! - paz;
+    const n0x = u0y * v0z - u0z * v0y, n0y = u0z * v0x - u0x * v0z, n0z = u0x * v0y - u0y * v0x;
+    const f0x = olho.x - pax, f0y = olho.y - pay, f0z = olho.z - paz;
+    const c0 = n0x * f0x + n0y * f0y + n0z * f0z;
+    const nn0 = Math.hypot(n0x, n0y, n0z), nf0 = Math.hypot(f0x, f0y, f0z);
+    let frente: boolean;
+    if (delta === null) {
+      frente = c0 >= -m * nn0 * nf0;
+    } else {
+      // velocidades Q = dp/dw dos três vértices
+      let qax = delta[a]!, qay = delta[a + 1]!, qaz = delta[a + 2]!;
+      let qbx = delta[b]!, qby = delta[b + 1]!, qbz = delta[b + 2]!;
+      let qcx = delta[c]!, qcy = delta[c + 1]!, qcz = delta[c + 2]!;
+      if (absoluto) {
+        qax -= pax; qay -= pay; qaz -= paz;
+        qbx -= pos[b]!; qby -= pos[b + 1]!; qbz -= pos[b + 2]!;
+        qcx -= pos[c]!; qcy -= pos[c + 1]!; qcz -= pos[c + 2]!;
       }
-      const ux = bx - ax, uy = by - ay, uz = bz - az;
-      const vx = cx - ax, vy = cy - ay, vz = cz - az;
-      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      const ex = olho.x - ax, ey = olho.y - ay, ez = olho.z - az;
-      const d = nx * ex + ny * ey + nz * ez;
-      // de frente, ou de costas por menos que a margem (|cos| ≤ MARGEM_COSTAS); degenerado fica
-      frente = d >= 0 || d * d <= m2 * (nx * nx + ny * ny + nz * nz) * (ex * ex + ey * ey + ez * ez);
+      const u1x = qbx - qax, u1y = qby - qay, u1z = qbz - qaz;
+      const v1x = qcx - qax, v1y = qcy - qay, v1z = qcz - qaz;
+      // n1 = u0×v1 + u1×v0; n2 = u1×v1; f1 = −Qa
+      const n1x = u0y * v1z - u0z * v1y + (u1y * v0z - u1z * v0y);
+      const n1y = u0z * v1x - u0x * v1z + (u1z * v0x - u1x * v0z);
+      const n1z = u0x * v1y - u0y * v1x + (u1x * v0y - u1y * v0x);
+      const n2x = u1y * v1z - u1z * v1y, n2y = u1z * v1x - u1x * v1z, n2z = u1x * v1y - u1y * v1x;
+      const f1x = -qax, f1y = -qay, f1z = -qaz;
+      const c1 = n0x * f1x + n0y * f1y + n0z * f1z + (n1x * f0x + n1y * f0y + n1z * f0z);
+      const c2 = n1x * f1x + n1y * f1y + n1z * f1z + (n2x * f0x + n2y * f0y + n2z * f0z);
+      const c3 = n2x * f1x + n2y * f1y + n2z * f1z;
+      const dMax = maximoCubico(c0, c1, c2, c3, 0, 1);
+      if (dMax >= 0) frente = true; // de frente em algum peso
+      else {
+        const nn1 = Math.hypot(n1x, n1y, n1z), nn2 = Math.hypot(n2x, n2y, n2z), nf1 = Math.hypot(f1x, f1y, f1z);
+        if (dMax < -m * (nn0 + nn1 + nn2) * (nf0 + nf1)) frente = false; // costas além da margem em todo w
+        else {
+          // caso limítrofe: cotas mais justas em SUBDIV subintervalos [lo, hi] com centro wm, meia-largura h:
+          // |n(w)| ≤ |n(wm)| + |n′(wm)|·h + |n2|·h² e |f(w)| ≤ |f(wm)| + |f1|·h (expansão exata em torno de wm)
+          frente = false;
+          const h = 0.5 / SUBDIV;
+          for (let s = 0; s < SUBDIV && !frente; s++) {
+            const lo = s / SUBDIV, wm = lo + h;
+            const nmx = n0x + wm * (n1x + wm * n2x), nmy = n0y + wm * (n1y + wm * n2y), nmz = n0z + wm * (n1z + wm * n2z);
+            const dnx = n1x + 2 * wm * n2x, dny = n1y + 2 * wm * n2y, dnz = n1z + 2 * wm * n2z;
+            const Ns = Math.hypot(nmx, nmy, nmz) + Math.hypot(dnx, dny, dnz) * h + nn2 * h * h;
+            const Fs = Math.hypot(f0x + wm * f1x, f0y + wm * f1y, f0z + wm * f1z) + nf1 * h;
+            frente = maximoCubico(c0, c1, c2, c3, lo, lo + 2 * h) >= -m * Ns * Fs;
+          }
+        }
+      }
     }
     if (frente) {
       saida[k++] = indices[t]!;
@@ -234,6 +285,28 @@ export function indicesDeFrente(
     }
   }
   return k;
+}
+
+/** Máximo exato de c0 + c1·w + c2·w² + c3·w³ em w ∈ [lo, hi] (extremos e pontos críticos internos). */
+export function maximoCubico(c0: number, c1: number, c2: number, c3: number, lo: number, hi: number): number {
+  let max = Math.max(c0 + lo * (c1 + lo * (c2 + lo * c3)), c0 + hi * (c1 + hi * (c2 + hi * c3)));
+  // d′(w) = A·w² + B·w + C
+  const A = 3 * c3, B = 2 * c2, C = c1;
+  let r1 = Number.NaN, r2 = Number.NaN;
+  if (A === 0) {
+    if (B !== 0) r1 = -C / B;
+  } else {
+    const disc = B * B - 4 * A * C;
+    if (disc >= 0) {
+      // fórmula estável (evita cancelamento); q = 0 só com raiz dupla em w = 0
+      const q = -0.5 * (B + (B >= 0 ? 1 : -1) * Math.sqrt(disc));
+      r1 = q / A;
+      if (q !== 0) r2 = C / q;
+    }
+  }
+  if (r1 > lo && r1 < hi) max = Math.max(max, c0 + r1 * (c1 + r1 * (c2 + r1 * c3)));
+  if (r2 > lo && r2 < hi) max = Math.max(max, c0 + r2 * (c1 + r2 * (c2 + r2 * c3)));
+  return max;
 }
 
 function geometriaCompartilhada(base: THREE.BufferGeometry, indices: readonly number[]): THREE.BufferGeometry {

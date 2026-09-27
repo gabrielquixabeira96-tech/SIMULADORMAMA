@@ -4,7 +4,7 @@
  */
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { EnvelopeAusenteError, criarCenaSimulada, garantirEnvelope, geometriaOtimizada, indicesDeFrente, ordenarTriangulosCache } from "@/simulacao/cena";
+import { EnvelopeAusenteError, criarCenaSimulada, garantirEnvelope, geometriaOtimizada, indicesDeFrente, maximoCubico, ordenarTriangulosCache } from "@/simulacao/cena";
 
 /** Malha pequena com 2 targets: um que desloca 2 vértices em +Z (5 mm) e um lateral (dir). */
 function malhaComMorphs(): THREE.Mesh {
@@ -202,6 +202,79 @@ describe("latência: mesma geometria, menos trabalho", () => {
           const n = b.clone().sub(a).cross(c.clone().sub(a));
           // de costas (ou de perfil) para o olho: a GPU o descartaria (FrontSide)
           expect(n.dot(olho.clone().sub(a))).toBeLessThanOrEqual(0);
+        }
+      }
+    }
+  });
+
+  it("descarte de costas: triângulo de costas em w = 0, 0,5 e 1 mas de frente entre eles NÃO sai", () => {
+    // A fixo; B e C se movem de modo que n_z(w) = −(w − 0,2)(w − 0,3): de frente só em (0,2; 0,3)
+    const pos = new Float32Array([0, 0, 0, 1, 0, 0, 0, -0.06, 0]);
+    const delta = new Float32Array([0, 0, 0, 0, 1, 0, 1, 0.5, 0]);
+    const olho = { x: 0, y: 0, z: 10 };
+    const nz = (w: number) => (1 * (-0.06 + 0.5 * w)) - (w * 1) * (w * 1);
+    for (const w of [0, 0.5, 1]) expect(nz(w)).toBeLessThan(0); // de costas (cos = −1) nas amostras antigas
+    expect(nz(0.25)).toBeGreaterThan(0);
+    const saida = new Uint32Array(3);
+    expect(indicesDeFrente([0, 1, 2], pos, delta, true, olho, saida)).toBe(3);
+    // o mesmo morph em forma absoluta (alvo = base + delta) dá o mesmo resultado
+    const alvoAbs = pos.map((v, i) => v + delta[i]!);
+    expect(indicesDeFrente([0, 1, 2], pos, alvoAbs, false, olho, saida)).toBe(3);
+    // controle: sem o trecho de frente (n_z sempre < 0) o triângulo é descartado
+    const deltaCostas = new Float32Array([0, 0, 0, 0, 1, 0, 1, 0, 0]); // n_z = −0,06 − w²
+    expect(indicesDeFrente([0, 1, 2], pos, deltaCostas, true, olho, saida)).toBe(0);
+  });
+
+  it("máximo do cúbico num intervalo é exato (confere com amostragem densa)", () => {
+    let s = 12345;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
+    for (let i = 0; i < 2000; i++) {
+      const c = [rnd(), rnd() * 4, rnd() * 8, i % 7 === 0 ? 0 : rnd() * 8] as const;
+      const [lo, hi] = i % 3 === 0 ? [0, 1] : [(i % 4) / 4, (i % 4) / 4 + 0.25];
+      const m = maximoCubico(...c, lo, hi);
+      let amostrado = -Infinity;
+      for (let j = 0; j <= 4000; j++) {
+        const w = lo + ((hi - lo) * j) / 4000;
+        amostrado = Math.max(amostrado, c[0] + w * (c[1] + w * (c[2] + w * c[3])));
+      }
+      expect(m).toBeGreaterThanOrEqual(amostrado - 1e-12);
+      expect(m - amostrado).toBeLessThan(1e-5);
+    }
+  });
+
+  it("descarte de costas com triângulos finos aleatórios: descartado ⇒ de costas além da margem em todo w", () => {
+    let s = 987;
+    const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648) * 2 - 1;
+    const nTri = 3000;
+    const pos = new Float32Array(9 * nTri), delta = new Float32Array(9 * nTri);
+    for (let t = 0; t < nTri; t++) {
+      const fino = t % 2 === 0 ? 0.02 : 1; // metade com triângulos muito finos
+      for (let v = 0; v < 3; v++) {
+        const o = 9 * t + 3 * v;
+        pos[o] = rnd() * 10;
+        pos[o + 1] = rnd() * 10 * (v === 2 ? fino : 1);
+        pos[o + 2] = rnd() * 10;
+        for (let e = 0; e < 3; e++) delta[o + e] = rnd() * 8;
+      }
+    }
+    const idx = Uint32Array.from({ length: 3 * nTri }, (_, i) => i);
+    const olho = { x: 3, y: -40, z: 25 };
+    for (const relativo of [true, false]) {
+      const D = relativo ? delta : pos.map((v, i) => v + delta[i]!);
+      const saida = new Uint32Array(idx.length);
+      const k = indicesDeFrente(idx, pos, D, relativo, olho, saida);
+      const mantidos = new Set(Array.from(saida.subarray(0, k)));
+      expect(k).toBeGreaterThan(0);
+      expect(k).toBeLessThan(idx.length);
+      for (let t = 0; t < nTri; t++) {
+        if (mantidos.has(3 * t)) continue;
+        const p = (v: number, w: number) => new THREE.Vector3(pos[9 * t + 3 * v]! + w * delta[9 * t + 3 * v]!, pos[9 * t + 3 * v + 1]! + w * delta[9 * t + 3 * v + 1]!, pos[9 * t + 3 * v + 2]! + w * delta[9 * t + 3 * v + 2]!);
+        for (let j = 0; j <= 200; j++) {
+          const w = j / 200;
+          const a = p(0, w);
+          const n = p(1, w).sub(a).cross(p(2, w).sub(a));
+          const f = new THREE.Vector3(olho.x, olho.y, olho.z).sub(a);
+          expect(n.dot(f)).toBeLessThan(-0.1 * n.length() * f.length());
         }
       }
     }
