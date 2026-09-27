@@ -126,8 +126,14 @@ async function lerTodas(): Promise<{ sessoes: Sessao[]; invalidos: string[] }> {
   let nomes: string[] = [];
   try {
     nomes = (await readdir(caminhoEmDataDir("validacao/sessoes"))).filter((n) => n.endsWith(".json")).sort();
-  } catch {
-    return { sessoes: [], invalidos: [] };
+  } catch (e) {
+    // Diretório ausente = nenhuma sessão. Qualquer outro erro (permissão, não é diretório, E/S) →
+    // FAIL CLOSED: não dá para saber quais torsos estão em sessão, então conta como sessão inválida
+    // e bloqueia todos os gabaritos (ADR 0017), em vez de liberá-los como se não houvesse sessão.
+    if ((e as NodeJS.ErrnoException)?.code === "ENOENT") return { sessoes: [], invalidos: [] };
+    const codigo = (e as NodeJS.ErrnoException)?.code ?? "desconhecido";
+    log.warn("validacao_sessoes_ilegiveis", { codigo });
+    return { sessoes: [], invalidos: [`(diretório de sessões ilegível: ${codigo})`] };
   }
   const sessoes: Sessao[] = [];
   const invalidos: string[] = [];
