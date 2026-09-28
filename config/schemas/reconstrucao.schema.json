@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/reconstrucao.schema.json",
+  "title": "reconstrucao/1.0",
+  "description": "Resultado de POST /reconstruir-foto do services/mesh, gravado como reconstrucao.json na pasta da malha (docs/contratos.md secao 19; contrato C1 do plano foto3d). Mundo = quadro anatomico em mm. Camera no padrao OpenCV: x_cam = R X + t, x para a direita, y para baixo, z para a frente; pixel continuo com origem no canto superior esquerdo (centro do pixel i em i + 0,5). K e R em 9 numeros coluna-major.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "malha_id", "malha_dir", "quadro", "unidade", "convencao_camera", "fotos", "parametros", "escala", "landmarks", "estimado", "reprojecao_rms_px", "residuo_silhueta_mm", "forma_fora_do_modelo", "incerteza_por_eixo_mm", "incerteza_volume_pct", "profundidade_confiavel", "qualidade", "avisos", "cobertura_observada_pct", "malha", "versao_software", "gerado_em"],
+  "properties": {
+    "esquema": { "const": "reconstrucao/1.0" },
+    "malha_id": { "type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" },
+    "malha_dir": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.).+$" },
+    "quadro": { "const": "anatomico" },
+    "unidade": { "const": "mm" },
+    "convencao_camera": { "const": "opencv" },
+    "fotos": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["vista", "arquivo", "largura_px", "altura_px", "K", "R", "t", "k1", "f_origem", "focal_35mm", "landmarks_2d", "residuos_px", "rms_px", "mascara"],
+        "properties": {
+          "vista": { "enum": ["frente", "obliqua_dir", "obliqua_esq", "perfil_dir", "perfil_esq"] },
+          "arquivo": { "type": "string", "description": "relativo a malha_dir, ex. original/foto_frente.jpg" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "largura_px": { "type": "integer", "minimum": 1 },
+          "altura_px": { "type": "integer", "minimum": 1 },
+          "K": { "$ref": "#/$defs/mat3" },
+          "R": { "$ref": "#/$defs/mat3" },
+          "t": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "k1": { "type": "number" },
+          "f_origem": { "enum": ["exif", "estimado"] },
+          "focal_35mm": { "type": "number", "exclusiveMinimum": 0 },
+          "landmarks_2d": { "$ref": "#/$defs/landmarks2d" },
+          "residuos_px": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
+          "rms_px": { "type": "number", "minimum": 0 },
+          "mascara": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["arquivo", "modo"],
+            "properties": {
+              "arquivo": { "type": "string" },
+              "modo": { "enum": ["fornecida", "onnx", "template"] }
+            }
+          }
+        }
+      }
+    },
+    "parametros": { "type": "object", "description": "torso_parametros/1.1 do template ajustado" },
+    "escala": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metodo", "valor_mm", "fator"],
+      "properties": {
+        "metodo": { "enum": ["ssn_n_fita", "regua_foto", "base_digitada"] },
+        "valor_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "fator": { "type": ["number", "null"], "description": "valor_mm / a mesma medida no modelo ajustado (~1)" },
+        "lado": { "enum": ["dir", "esq"] },
+        "medido_no_modelo_mm": { "type": "number" }
+      }
+    },
+    "landmarks": {
+      "type": "object",
+      "description": "os 10 landmarks 3D levantados pelo ajuste (origem foto); vertice = indice em processada.obj",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["posicao", "vertice", "origem"],
+        "properties": {
+          "posicao": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "vertice": { "type": "integer", "minimum": 0 },
+          "origem": { "const": "foto" }
+        }
+      }
+    },
+    "estimado": {
+      "type": "object",
+      "description": "gabarito estimado: medidas no modelo ajustado (ilustracao com incerteza; em DESENHO=A o web nao mostra numeros)",
+      "additionalProperties": false,
+      "required": ["distancias", "volumes"],
+      "properties": {
+        "distancias": { "type": "object", "additionalProperties": { "type": "object", "properties": { "euclidiana_mm": { "type": ["number", "null"] } } } },
+        "volumes": { "type": "object", "additionalProperties": { "type": "object", "properties": { "adicionado_ml": { "type": "number" } } } }
+      }
+    },
+    "reprojecao_rms_px": { "type": "number", "minimum": 0 },
+    "residuo_silhueta_mm": { "type": "number", "minimum": 0 },
+    "forma_fora_do_modelo": { "type": "boolean" },
+    "incerteza_por_eixo_mm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": { "x": { "type": "number", "minimum": 0 }, "y": { "type": "number", "minimum": 0 }, "z": { "type": "number", "minimum": 0 } }
+    },
+    "incerteza_volume_pct": { "type": "number", "minimum": 0 },
+    "profundidade_confiavel": { "type": "boolean", "description": "false sem foto de perfil: profundidade so ilustracao, sem numeros de projecao (previsto null)" },
+    "qualidade": { "enum": ["boa", "regular", "ruim"] },
+    "avisos": { "type": "array", "items": { "type": "string" } },
+    "cobertura_observada_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "% dos texels do atlas UV com observado >= 0,15 (C3; textura_reconstruida/1.0). A area da malha vista por alguma foto vai em diagnostico.cobertura_area_vista_pct" },
+    "malha": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["obj", "glb", "textura", "textura_provisoria", "n_vertices", "n_faces"],
+      "properties": {
+        "obj": { "type": "string" },
+        "glb": { "type": "string" },
+        "textura": { "type": "string" },
+        "textura_provisoria": { "type": "boolean", "description": "true so se a projecao da foto (P2) nao rodou; na reconstrucao integrada, false" },
+        "observado": { "type": "string", "description": "mapa de confianca do atlas (observado.png; C3)" },
+        "n_vertices": { "type": "integer", "minimum": 3 },
+        "n_faces": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "diagnostico": { "type": "object" },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "gerado_em": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "mat3": { "type": "array", "items": { "type": "number" }, "minItems": 9, "maxItems": 9 },
+    "landmarks2d": {
+      "type": "object",
+      "propertyNames": { "enum": ["furcula", "mamilo_dir", "mamilo_esq", "sulco_dir", "sulco_esq", "linha_media_inferior", "base_medial_dir", "base_lateral_dir", "base_medial_esq", "base_lateral_esq"] },
+      "additionalProperties": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 }
+    }
+  }
+}

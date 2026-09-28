@@ -71,7 +71,7 @@ class ReqReescalar(Estrito):
 class Landmark(Estrito):
     posicao: Vetor3
     vertice: int = Field(ge=0)
-    origem: Literal["clique", "gabarito", "automatico"] = "clique"
+    origem: Literal["clique", "gabarito", "automatico", "foto"] = "clique"
 
 
 class ReqMedir(Estrito):
@@ -96,6 +96,40 @@ class ReqMorphs(Estrito):
     lados: Literal["ambos", "separados"] = "separados"
     catalogo_arquivo: str | None = None
     pinca_polo_superior_mm: PorLado | None = None
+
+
+Vista = Literal["frente", "obliqua_dir", "obliqua_esq", "perfil_dir", "perfil_esq"]
+Ponto2 = Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
+class FotoReconstrucao(Estrito):
+    vista: Vista
+    arquivo: str
+    largura_px: int = Field(gt=0, le=12000)
+    altura_px: int = Field(gt=0, le=12000)
+    focal_35mm: float | None = Field(None, gt=0)
+    landmarks_2d: dict[str, Ponto2] = {}
+    mascara: str | None = None
+    k1: float = 0.0
+
+
+class EscalaReconstrucao(Estrito):
+    metodo: Literal["ssn_n_fita", "regua_foto", "base_digitada"]
+    valor_mm: float = Field(gt=0)
+    lado: Literal["dir", "esq"] = "dir"
+    pontos_px: list[Ponto2] | None = None
+
+
+class OpcoesReconstrucao(Estrito):
+    segmentacao: Literal["onnx", "template"] = "onnx"
+
+
+class ReqReconstruirFoto(Estrito):
+    malha_dir: str
+    fotos: list[FotoReconstrucao] = Field(min_length=1, max_length=5)
+    escala: EscalaReconstrucao | None = None
+    opcoes: OpcoesReconstrucao = OpcoesReconstrucao()
+    malha_id: str | None = None
 
 
 class Par(BaseModel):
@@ -216,6 +250,16 @@ def criar_app() -> FastAPI:
         # desligados (ADR 0005).
         r = await run_in_threadpool(servico.morphs, req.model_dump(), request.headers.get("x-desenho") or "B")
         log.registrar("morphs", malha_id=r["malha_id"], n=sum(len(a["targets"]) for a in r["arquivos"]))
+        return r
+
+    @app.post("/reconstruir-foto")
+    async def reconstruir_foto(req: ReqReconstruirFoto, request: Request):
+        # log sem caminhos de foto nem coordenadas (LGPD; log.py so aceita IDs, contagens e tempos)
+        r = await run_in_threadpool(servico.reconstruir_foto, req.model_dump(), request.headers.get("x-desenho") or "B")
+        rec = r["reconstrucao"]
+        total = rec["diagnostico"].get("tempos_reconstrucao", {}).get("total_s") or 0.0
+        log.registrar("reconstruir_foto", malha_id=rec["malha_id"], n=len(rec["fotos"]),
+                      n_vertices=rec["malha"]["n_vertices"], duracao_ms=round(total * 1000))
         return r
 
     @app.post("/validar-bland-altman")

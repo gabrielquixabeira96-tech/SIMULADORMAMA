@@ -5,7 +5,8 @@
  * nenhum número calculado.
  */
 import type { Distancias, MedidasDigitadas, Volumes } from "@simulador/contratos";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TEXTO_FAIXA_DEMO } from "@/config/aviso";
 import { ProvedorMock } from "@/llm/mock";
 import { montarDadosTravados, type ImplanteMostrado } from "@/llm/numeros";
 import { gerarRelatorio, type RelatorioFinal } from "@/llm/relatorio";
@@ -55,6 +56,7 @@ async function relatorio(desenho: "A" | "B"): Promise<RelatorioFinal> {
 }
 
 const sem = (s: string) => s.replace(/\s+/g, " ");
+afterEach(() => vi.unstubAllEnvs());
 
 describe("PDF do atendimento — conteúdo extraído", () => {
   it("B: versão, parâmetros, simulações, relatório, aviso e placeholder de assinatura", async () => {
@@ -92,6 +94,25 @@ describe("PDF do atendimento — conteúdo extraído", () => {
     expect(t).not.toMatch(/compartilh|whatsapp|instagram|facebook/i);
     // sem imagem embutida (nenhum snapshot real)
     expect(raw).not.toMatch(/\/Subtype\s*\/Image/);
+  });
+
+  it("sem demo: nenhuma faixa DEMONSTRAÇÃO no PDF", async () => {
+    const { texto } = await extrairTextoPdf(await gerarPdfAtendimento(await relatorio("B"), "2026-09-26T10:05:00-04:00"));
+    expect(texto).not.toContain("DEMONSTRAÇÃO");
+  });
+
+  it("demo (ADR 0018): faixa DEMONSTRAÇÃO na tarja e no rodapé de TODAS as páginas (pelo payload ou pela instância)", async () => {
+    const r = await relatorio("B");
+    for (const [rotulo, rel, env] of [["payload demo: true", { ...r, demo: true as const }, ""], ["instância DEMO_SINTETICA=1", r, "1"]] as const) {
+      vi.stubEnv("DEMO_SINTETICA", env);
+      const { porPagina, paginas } = await extrairTextoPdf(await gerarPdfAtendimento(rel, "2026-09-26T10:05:00-04:00"));
+      expect(paginas, rotulo).toBeGreaterThanOrEqual(2);
+      porPagina.forEach((t, i) => {
+        const n = sem(t).split(TEXTO_FAIXA_DEMO).length - 1;
+        // tarja do topo + linha do rodapé em toda página; a 1ª página tem também a caixa sob o título
+        expect(n, `${rotulo}: página ${i + 1}`).toBeGreaterThanOrEqual(i === 0 ? 3 : 2);
+      });
+    }
   });
 
   it("A: nenhum número calculado aparece no PDF; digitados e catálogo aparecem", async () => {

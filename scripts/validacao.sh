@@ -17,22 +17,39 @@ export VALIDACAO_COMMIT="$(git describe --always --dirty --abbrev=12)"
 echo "== commit validado: $VALIDACAO_COMMIT"
 ART="$RAIZ/test-results/validacao-v$V"
 mkdir -p "$ART"
+rm -f "$ART/gltf-validator.json"  # nunca reaproveita resultado de uma execucao anterior
 SEM_E2E=0
 [[ "${1:-}" == "--sem-e2e" ]] && SEM_E2E=1
 PY="$RAIZ/services/mesh/.venv/bin/python"
 [[ -x "$PY" ]] || bash scripts/mesh.sh venv
 bash scripts/db.sh start criar >/dev/null
 
-echo "== 1/4 services/mesh: Marco 0, volume, Marco 2"
-( cd services/mesh && "$PY" - "$RAIZ/data/sinteticos" "$RAIZ/docs/validacao/v$V-services-mesh" <<'PY'
+echo "== 1/4 services/mesh: Marco 0, volume, Marco 2, glTF-Validator"
+SINT="$RAIZ/data/sinteticos"
+# Torsos e morphs (catalogo de teste, nao clinico) que o glTF-Validator (Khronos) confere; regera so o que
+# estiver desatualizado ou faltar.
+for p in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do
+  # --se-desatualizado: regera se faltar arquivo, mudar versao/parametros ou faltar o bloco `textura` (ADR 0020)
+  ( cd services/mesh && "$PY" -m mesh.cli torso --preset "$p" --saida "$SINT" --se-desatualizado )
+  compgen -G "$SINT/$p/morphs/*.glb" >/dev/null \
+    || ( cd services/mesh && "$PY" -m mesh.cli morphs --sintetico "$SINT/$p" --catalogo tests/fixtures/catalogo_teste.json )
+done
+# Resultado (arquivos, erros, avisos, versao) vai para `gltf_validator` no v<V>-services-mesh.json; erro ou
+# aviso nao interrompe a geracao, mas reprova o registro consolidado.
+node scripts/validar_gltf.mjs --json "$ART/gltf-validator.json" "$SINT"/*/morphs/*.glb "$SINT"/*/torso.glb || true
+( cd services/mesh && "$PY" - "$SINT" "$RAIZ/docs/validacao/v$V-services-mesh" "$ART/gltf-validator.json" <<'PY'
 import json, sys
 from pathlib import Path
 from mesh.validacao import _markdown_marco2, metricas_marco2, relatorio_marco0
-sint, saida = Path(sys.argv[1]), Path(sys.argv[2])
+sint, saida, gltf_json = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
 cat = Path("tests/fixtures/catalogo_teste.json").resolve()
 res = relatorio_marco0(sint, gerar_se_faltar=True)
 m2 = metricas_marco2(sint, cat)
-md = res["markdown"].replace("<!-- MARCO2 -->", _markdown_marco2(m2, cat.name))
+gltf = None
+if gltf_json.is_file():
+    g = json.loads(gltf_json.read_text(encoding="utf-8"))
+    gltf = {k: g[k] for k in ("arquivos", "erros", "avisos", "versao")}
+md = res["markdown"].replace("<!-- MARCO2 -->", _markdown_marco2(m2, cat.name, gltf))
 Path(f"{saida}.md").write_text(md, encoding="utf-8")
 ba = res["bland_altman"]
 Path(f"{saida}.json").write_text(json.dumps({
@@ -40,6 +57,7 @@ Path(f"{saida}.json").write_text(json.dumps({
     "resumo": res["resumo"],
     "bland_altman_pipeline": {k: ba[k] for k in ("n", "vies_mm", "dp_mm", "loa_inferior_mm", "loa_superior_mm", "dentro_de_2mm", "erro_abs_max_mm")},
     "marco2": m2,
+    "gltf_validator": gltf,
 }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 print("ok", saida)
 PY

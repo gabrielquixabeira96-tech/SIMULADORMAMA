@@ -1,5 +1,6 @@
 import { modoRecorteSchema, unidadeOrigemSchema, uuidSchema } from "@simulador/contratos";
-import { erro, json, limitarCorpo, tratarErro } from "@/api/respostas";
+import { desligadoNaDemo, erro, json, limitarCorpo, tratarErro } from "@/api/respostas";
+import { demoAtiva } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { pacientePorId } from "@/db/repositorio";
 import { registrarMalha } from "@/malhas/registrar";
@@ -17,6 +18,8 @@ export const runtime = "nodejs";
  * chama /processar e só então registra a malha e a auditoria.
  */
 export async function POST(req: Request) {
+  // modo demo sintética (ADR 0018): upload de malha real fechado (o proxy já recusa; defesa em profundidade)
+  if (demoAtiva()) return desligadoNaDemo();
   try {
     const desenho = getDesenho();
     // Limite pelo STREAM (conta os bytes recebidos), não só pelo Content-Length: chunked não escapa.

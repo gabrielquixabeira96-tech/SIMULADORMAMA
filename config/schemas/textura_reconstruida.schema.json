@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/textura_reconstruida.schema.json",
+  "title": "textura_reconstruida/1.0",
+  "description": "Bloco `textura` do meta.json de uma malha reconstruida por fotos (plano foto3d, P2, contrato C3; docs/contratos.md secao 5.5): a foto projetada no atlas UV do template + preenchimento procedural do nao observado. Devolvido por mesh.foto.preencher.texturizar_malha.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "origem", "arquivo", "observado", "cobertura_observada_pct", "limiar_nao_observado", "largura_px", "altura_px", "px_por_mm", "fotos", "sha256", "sha256_observado", "iluminacao", "avisos"],
+  "properties": {
+    "esquema": { "const": "textura_reconstruida/1.0" },
+    "origem": { "const": "foto_projetada" },
+    "arquivo": { "const": "textura.png" },
+    "observado": { "const": "observado.png", "description": "L 8 bits no mesmo atlas: fracao da cor do texel que veio da(s) foto(s) (0 = preenchido proceduralmente, 255 = foto pura)" },
+    "cobertura_observada_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "% dos texels do atlas com observado >= limiar_nao_observado" },
+    "limiar_nao_observado": { "type": "number", "minimum": 0, "maximum": 1 },
+    "largura_px": { "type": "integer", "minimum": 4 },
+    "altura_px": { "type": "integer", "minimum": 2 },
+    "px_por_mm": { "type": "number", "exclusiveMinimum": 0 },
+    "fotos": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["vista", "texels_na_imagem", "texels_visiveis", "texels_oclusos", "ganhos_rgb", "cobertura_pct"],
+        "properties": {
+          "vista": { "enum": ["frente", "obliqua_dir", "obliqua_esq", "perfil_dir", "perfil_esq"] },
+          "texels_na_imagem": { "type": "integer", "minimum": 0 },
+          "texels_visiveis": { "type": "integer", "minimum": 0 },
+          "texels_oclusos": { "type": "integer", "minimum": 0 },
+          "ganhos_rgb": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+          "cobertura_pct": { "type": "number", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "sha256_observado": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "iluminacao": {
+      "type": "object",
+      "required": ["esquema", "sh9", "r2", "origem"],
+      "properties": {
+        "esquema": { "const": "iluminacao_sh9/1.0" },
+        "sh9": { "type": "array", "items": { "type": "number" }, "minItems": 9, "maxItems": 9 },
+        "r2": { "type": "number", "minimum": 0, "maximum": 1 },
+        "origem": { "enum": ["ajuste", "padrao"] }
+      }
+    },
+    "avisos": { "type": "array", "items": { "type": "string" } },
+    "duracao_s": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+  }
+}

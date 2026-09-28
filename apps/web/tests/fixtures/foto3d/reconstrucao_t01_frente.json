@@ -1,0 +1,31 @@
+{
+  "_nota": "Fixture SINTÉTICA escrita à mão para os testes do web (plano foto → 3D, P3-lite), no formato do contrato C1 (reconstrucao/1.0). Câmera frontal do torso t01 (quadro anatômico): R = diag(1, −1, −1), K coluna-major. Não é saída do services/mesh nem de foto real.",
+  "esquema": "reconstrucao/1.0",
+  "malha_id": "00000000-0000-4000-8000-000000000001",
+  "fotos": [
+    {
+      "vista": "frente",
+      "arquivo": "original/foto_frente.png",
+      "largura_px": 960,
+      "altura_px": 720,
+      "K": [2734.5, 0, 0, 0, 2734.5, 0, 480, 360, 1],
+      "R": [1, 0, 0, 0, -1, 0, 0, 0, -1],
+      "t": [0, -165, 1350],
+      "k1": 0,
+      "f_origem": "estimado",
+      "landmarks_2d": { "furcula": [480, 25.8], "mamilo_dir": [279.6, 360], "mamilo_esq": [680.4, 360] },
+      "residuos_px": { "furcula": 0, "mamilo_dir": 0, "mamilo_esq": 0 },
+      "rms_px": 0.4
+    }
+  ],
+  "parametros": { "esquema": "torso_parametros/1.1" },
+  "escala": { "metodo": "ssn_n_fita", "valor_mm": 190.4, "fator": 1 },
+  "residuo_silhueta_mm": 0.8,
+  "incerteza_por_eixo_mm": { "x": 1.8, "y": 2.1, "z": 12.4 },
+  "incerteza_volume_pct": 30,
+  "qualidade": "boa",
+  "avisos": ["so_frontal_profundidade_ilustrativa"],
+  "cobertura_observada_pct": 42.5,
+  "versao_software": "0.2.0",
+  "gerado_em": "2026-09-28T12:00:00-04:00"
+}

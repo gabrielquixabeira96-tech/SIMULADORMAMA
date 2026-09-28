@@ -307,3 +307,28 @@ def morphs(req: dict, desenho: str = "B") -> dict:
         codigo = str(e).split(":")[0]
         raise ErroServico(422, codigo, str(e)) from e
     return {k: v for k, v in m.items() if not k.startswith("_")}
+
+
+# ----------------------------------------------------------------------------- /reconstruir-foto
+
+def reconstruir_foto(req: dict, desenho: str = "B") -> dict:
+    """Reconstrucao do torso a partir de 1-5 fotos (contratos §7.8; plano foto3d C1/C4). Devolve
+    {"reconstrucao": reconstrucao/1.0, "meta": malha_meta/1.0 (origem "foto")}. Em `desenho == "A"` o
+    bloco `estimado` (medidas calculadas no modelo) vai vazio, como o `previsto` dos morphs (ADR 0005)."""
+    from mesh.foto.reconstruir import ErroReconstrucao, reconstruir
+
+    malha_dir = req["malha_dir"]
+    pasta = _dir_malha(malha_dir)
+    if not pasta.is_dir():
+        raise ErroServico(404, "malha_dir_nao_encontrado", "malha_dir nao existe em DATA_DIR")
+    malha_id = _malha_id(malha_dir, req.get("malha_id"))
+    try:
+        r = reconstruir(pasta, req, malha_dir, malha_id)
+    except ErroReconstrucao as e:
+        raise ErroServico(e.status, e.codigo, e.mensagem, e.detalhes) from e
+    if desenho == "A":
+        r["reconstrucao"]["estimado"] = {"distancias": {}, "volumes": {}}
+        r["reconstrucao"]["avisos"].append("desenho_a:medidas_estimadas_omitidas")
+        (pasta / "reconstrucao.json").write_text(json.dumps(r["reconstrucao"], ensure_ascii=False, indent=2) + "\n",
+                                                 encoding="utf-8")
+    return r

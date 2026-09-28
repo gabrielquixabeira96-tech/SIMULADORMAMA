@@ -3,9 +3,11 @@ import { readFile, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { erro, tratarErro } from "@/api/respostas";
 import { caminhoEmDataDir } from "@/config/ambiente";
+import { torsoUtilizavel } from "@/config/demo";
 import { getDesenho } from "@/config/desenho";
 import { recursoAtivoEm } from "@/config/recursos";
 import { redigirGabarito } from "@/malhas/arquivos";
+import { bloqueioGabarito, gabaritoBloqueado } from "@/validacao/sessao";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,9 +28,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ nome: string; 
     if (!/^[a-z0-9_]+$/.test(nome)) return erro(400, "nome_invalido", "nome de torso inválido");
     const tipo = Object.hasOwn(TIPOS, arquivo) ? TIPOS[arquivo] : undefined;
     if (!tipo) return erro(400, "nome_nao_permitido", "arquivo fora da lista permitida");
+    if (!(await torsoUtilizavel(nome))) return erro(404, "arquivo_nao_encontrado", "arquivo não encontrado");
     const abs = caminhoEmDataDir(`sinteticos/${nome}/${arquivo}`);
     const s = await stat(abs).catch(() => null);
     if (!s?.isFile()) return erro(404, "arquivo_nao_encontrado", "arquivo não encontrado");
+    // Cegueira da sessão de Bland-Altman (ADR 0017): gabarito oculto enquanto houver sessão aberta com o torso.
+    if (arquivo === "gabarito.json" && gabaritoBloqueado(await bloqueioGabarito(), nome)) {
+      return erro(403, "gabarito_oculto_sessao_aberta", "gabarito oculto: há sessão de validação aberta com este torso");
+    }
     const medir = recursoAtivoEm(desenho, "medicao_automatica_3d");
     const volume = recursoAtivoEm(desenho, "volume_calculado");
     if (arquivo === "gabarito.json" && (!medir || !volume)) {

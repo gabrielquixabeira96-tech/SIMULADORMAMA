@@ -3,7 +3,7 @@
  * scripts de verdade (bash/python3) em pastas temporárias; nada do repositório é alterado.
  */
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -154,5 +154,109 @@ describe("scripts/registro_validacao.py grava git describe --dirty (item 7)", ()
     const re = new RegExp(schema.properties.commit.pattern);
     for (const ok of ["5292a27", "18227b1abcde", "18227b1abcde-dirty", "v0.1.0-3-g18227b1abcde"]) expect(re.test(ok), ok).toBe(true);
     for (const ruim of ["", "HEAD", "18227b1 -dirty", "xyz1234"]) expect(re.test(ruim), ruim).toBe(false);
+  });
+});
+
+describe("scripts/demo_sandbox.sh (ADR 0018): guardas que não sobem nada", () => {
+  const script = join(RAIZ, "scripts/demo_sandbox.sh");
+  const rodar = (args: string[], env: Record<string, string>) => spawnSync("bash", [script, ...args], { env: { ...process.env, DEMO_HOST_PUBLICO: "", DEMO_SO_LOOPBACK: "", ...env }, encoding: "utf8" });
+
+  it("sintaxe válida; sem comando mostra o uso e sai 2", () => {
+    expect(spawnSync("bash", ["-n", script]).status).toBe(0);
+    const r = rodar([], { DEMO_DIR: novoTmp("simulador-demo-") });
+    expect(r.status).toBe(2);
+    expect(r.stdout).toContain("preparar");
+  });
+
+  it("recusa DEMO_DIR dentro do repositório (estado da demo nunca no repo)", () => {
+    const r = rodar(["status"], { DEMO_DIR: join(RAIZ, "data/demo") });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao pode ficar dentro do repositorio/);
+  });
+
+  it("subir exige DEMO_HOST_PUBLICO (nome puro) para escutar em 0.0.0.0", () => {
+    const d = novoTmp("simulador-demo-");
+    writeFileSync(join(d, "demo.env"), "DEMO_SINTETICA=1\n", { mode: 0o600 });
+    const sem = rodar(["subir"], { DEMO_DIR: d });
+    expect(sem.status).not.toBe(0);
+    expect(sem.stderr).toMatch(/defina DEMO_HOST_PUBLICO/);
+    const url = rodar(["subir"], { DEMO_DIR: d, DEMO_HOST_PUBLICO: "https://sb-x.vercel.run/" });
+    expect(url.status).not.toBe(0);
+    expect(url.stderr).toMatch(/DEMO_HOST_PUBLICO invalido/);
+    expect(readFileSync(join(d, "demo.env"), "utf8")).not.toMatch(/APP_TOKEN_LOCAL/); // nenhum token gerado antes das guardas
+  });
+
+  it("valida DEMO_DESENHO (A|B) e portas numéricas antes de qualquer comando", () => {
+    const d = novoTmp("simulador-demo-");
+    const des = rodar(["status"], { DEMO_DIR: d, DEMO_DESENHO: "B; rm -rf /" });
+    expect(des.status).not.toBe(0);
+    expect(des.stderr).toMatch(/DEMO_DESENHO invalido/);
+    for (const [k, v] of [["DEMO_PORTA", "3000x"], ["DEMO_PG_PORTA", "0"], ["DEMO_MESH_PORTA", "70000"]]) {
+      const r = rodar(["status"], { DEMO_DIR: d, [k]: v });
+      expect(r.status, k).not.toBe(0);
+      expect(r.stderr, k).toMatch(/porta invalida/);
+    }
+  });
+
+  it("apagar recusa pasta sem o marcador gravado pelo script (nunca apaga DEMO_DIR errado)", () => {
+    const d = novoTmp("simulador-demo-");
+    writeFileSync(join(d, "importante.txt"), "nao apagar");
+    const r = rodar(["apagar"], { DEMO_DIR: d, DEMO_PG_DIR: join(d, "pg-inexistente") });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao tem o marcador/);
+    expect(readFileSync(join(d, "importante.txt"), "utf8")).toBe("nao apagar");
+  });
+
+  // R2 da revisão: preparar/env_base nunca gravam demo.env, banco ou dados sobre pasta alheia
+  it("preparar recusa DEMO_DIR existente, não vazio e sem o marcador; aceita vazio ou marcado", () => {
+    // "node" falso (versão 18) para o preparar parar logo depois da guarda, sem instalar nada
+    const bin = novoTmp("simulador-bin-");
+    writeFileSync(join(bin, "node"), "#!/bin/sh\necho 18\n");
+    chmodSync(join(bin, "node"), 0o755);
+    const env = { DEMO_SEM_INSTALAR: "1", PATH: `${bin}:/usr/bin:/bin` };
+
+    const alheia = novoTmp("simulador-demo-");
+    writeFileSync(join(alheia, "importante.txt"), "nao mexer");
+    const r = rodar(["preparar"], { ...env, DEMO_DIR: alheia });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/nao esta vazio e nao tem o marcador/);
+    expect(existsSync(join(alheia, "demo.env"))).toBe(false);
+    expect(existsSync(join(alheia, ".simulador-demo-sintetica"))).toBe(false);
+
+    for (const [rotulo, d] of [
+      ["vazia", novoTmp("simulador-demo-")],
+      ["marcada", (() => { const m = novoTmp("simulador-demo-"); writeFileSync(join(m, ".simulador-demo-sintetica"), ""); writeFileSync(join(m, "demo.env"), "DEMO_SINTETICA=1\n"); return m; })()],
+      ["inexistente", join(novoTmp("simulador-demo-"), "nova")],
+    ] as const) {
+      const ok = rodar(["preparar"], { ...env, DEMO_DIR: d });
+      expect(ok.status, rotulo).not.toBe(0);
+      expect(ok.stderr, rotulo).not.toMatch(/marcador/);
+      expect(ok.stderr, rotulo).toMatch(/exige Node 22/); // passou da guarda e parou no node falso
+    }
+  });
+
+  // D1: a mesma guarda vale para DEMO_PG_DIR (antes, pg_cluster fazia mkdir/chown/touch do marcador
+  // dentro da pasta alheia e 'apagar' a removia depois)
+  it("preparar e apagar recusam DEMO_PG_DIR alheio: nada gravado, nada apagado", () => {
+    const bin = novoTmp("simulador-bin-");
+    writeFileSync(join(bin, "node"), "#!/bin/sh\necho 22\n"); // passaria do node: a guarda tem de vir antes
+    chmodSync(join(bin, "node"), 0o755);
+    const demoDir = join(novoTmp("simulador-demo-"), "nova");
+    const pg = novoTmp("simulador-pg-alheio-");
+    mkdirSync(join(pg, "docs"));
+    writeFileSync(join(pg, "docs", "a"), "nao mexer");
+    const env = { DEMO_SEM_INSTALAR: "1", PATH: `${bin}:/usr/bin:/bin`, DEMO_DIR: demoDir, DEMO_PG_DIR: pg };
+
+    const r = rodar(["preparar"], env);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/DEMO_PG_DIR .* nao esta vazio e nao tem o marcador/);
+    expect(existsSync(demoDir)).toBe(false); // recusado antes de criar DEMO_DIR
+    expect(existsSync(join(pg, ".simulador-demo-sintetica"))).toBe(false);
+    expect(existsSync(join(pg, "dados"))).toBe(false);
+
+    const a = rodar(["apagar"], env);
+    expect(a.status).not.toBe(0);
+    expect(a.stderr).toMatch(/nao tem o marcador/);
+    expect(readFileSync(join(pg, "docs", "a"), "utf8")).toBe("nao mexer");
   });
 });

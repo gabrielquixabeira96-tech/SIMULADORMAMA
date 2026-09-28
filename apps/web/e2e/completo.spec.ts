@@ -2,7 +2,7 @@
  * E2E do fluxo INTEIRO (critério do Marco 2b), contra o stack real (services/mesh + Next.js +
  * Postgres; LLM em modo mock), nos desenhos A e B:
  *   upload OBJ → /processar → régua → landmarks → medidas (B: calculadas; A: digitadas) → TEPID →
- *   implante + simulação com envelope → anamnese → relatório → PDF gerado e BAIXADO.
+ *   implante + simulação com envelope (fotos A/B e aba 3D) → anamnese → relatório → PDF gerado e BAIXADO.
  * O texto do PDF baixado é extraído (pdfjs-dist) e conferido: versão, parâmetros, simulações
  * mostradas, aviso fixo e placeholder de assinatura ICP-Brasil. Em A, TODO número do relatório e do PDF
  * pertence a uma lista de PERMITIDOS (digitados, catálogo, constantes declaradas; ADR 0005 item 4).
@@ -13,7 +13,7 @@ import { dirname, join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { LANDMARKS, dataDirE2E } from "./apoio";
 import { RAIZ, preencherTepid, uploadCalibrarMarcar, valoresTepid } from "./fluxo-apoio";
-import { IMPLANTE_1, IMPLANTE_2, escolherImplante, esperarQuadro, estadoSim } from "./simulacao-apoio";
+import { IMPLANTE_1, IMPLANTE_2, abrirExplorar3D, escolherImplante, esperarFotos, esperarQuadro, estadoFotos, estadoSim } from "./simulacao-apoio";
 
 test.use({ viewport: { width: 1920, height: 1080 } });
 
@@ -150,7 +150,7 @@ async function fluxoAteOPdf(page: Page, desenho: "A" | "B") {
   await page.getByRole("button", { name: "Gravar registro de medidas" }).click();
   const gravado = page.getByRole("status").filter({ hasText: "Registro de medidas gravado" });
   await expect(gravado).toBeVisible({ timeout: 120_000 });
-  const medidaId = (await gravado.innerText()).match(/\(([0-9a-f-]{36})\)/)![1]!;
+  const medidaId = (await gravado.getAttribute("data-medida-id"))!; // P3: sem UUID visível, id no atributo
   const registro = await (await page.request.get(`/api/medidas/${medidaId}`)).json();
   expect(registro.desenho).toBe(desenho);
   const malhaId: string = registro.malha_id;
@@ -160,21 +160,37 @@ async function fluxoAteOPdf(page: Page, desenho: "A" | "B") {
   await escolherImplante(page, 2, IMPLANTE_2);
   await page.getByTestId("gerar-simulacao").click();
   await expect(page.getByTestId("simulacao-pronta")).toBeVisible({ timeout: 240_000 });
-  await esperarQuadro(page);
-  await expect(page.getByTestId("simulacao-paineis")).toHaveAttribute("data-n", "2");
+  await esperarFotos(page, { estado: "a" });
   await expect(page.getByTestId("selo-nao-calibrado")).toBeVisible();
+  // comparador de fotos (ADR 0019): A e B lado a lado, mesmo enquadramento, envelope em cada "depois"
+  await page.getByTestId("foto-modo-lado").click();
+  await esperarFotos(page);
+  for (const e of ["antes", "a", "b"]) await expect(page.getByTestId(`foto-lado-${e}`)).toBeVisible();
   for (const [plano, imf] of [["subglandular", "manter"], ["dual_plane", "manter"], ["dual_plane", "rebaixar"]] as const) {
     await page.getByTestId(`plano-${plano}`).check();
     await page.getByTestId(`imf-${imf}`).check();
-    await esperarQuadro(page);
-    const est = await estadoSim(page);
-    for (const k of ["i1", "i2"]) {
-      expect(est[k]).toMatchObject({ plano, imf, envelope_mm: 4.5, envelope_visivel: true, pele_visivel: true });
-      await expect(page.getByTestId(`envelope-legenda-${k}`)).toContainText("±4,5 mm");
-    }
+    await esperarFotos(page);
+    expect(await estadoFotos(page)).toMatchObject({ plano, imf, modo: "lado", envelope_mm: 4.5, envelope_visivel: true, pele_visivel: true, luzes: 0 });
+    await expect(page.getByTestId("foto-legenda")).toContainText("±4,5 mm");
   }
   await expect.poll(async () => (await (await page.request.get(`/api/malhas/${malhaId}/simulacoes`)).json()).simulacoes.length).toBeGreaterThanOrEqual(6);
-  if (desenho === "B") await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0); // comparação: previsto só com 1 painel
+  if (desenho === "B") {
+    await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0); // comparação: previsto só com um implante mostrado
+    await expect(page.getByTestId("foto-diferencas")).toBeVisible();
+  } else await expect(page.getByTestId("foto-diferencas")).toHaveCount(0);
+  await page.getByTestId("foto-modo-foto").click();
+  await esperarFotos(page);
+  if (desenho === "B") await expect(page.getByTestId("previsto-simulacao")).toBeVisible();
+  else await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
+  // aba "Explorar 3D": 2 painéis (A e B) com câmeras sincronizadas e o envelope nos dois
+  await abrirExplorar3D(page);
+  await expect(page.getByTestId("simulacao-paineis")).toHaveAttribute("data-n", "2");
+  const est = await estadoSim(page);
+  for (const k of ["i1", "i2"]) {
+    expect(est[k]).toMatchObject({ plano: "dual_plane", imf: "rebaixar", envelope_mm: 4.5, envelope_visivel: true, pele_visivel: true, luzes: 0 });
+    await expect(page.getByTestId(`envelope-legenda-${k}`)).toContainText("±4,5 mm");
+  }
+  if (desenho === "B") await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
   await page.getByTestId("comparar").uncheck();
   await page.getByTestId("mostrar-implante-1").check();
   await esperarQuadro(page);

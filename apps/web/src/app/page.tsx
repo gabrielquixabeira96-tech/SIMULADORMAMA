@@ -8,13 +8,13 @@ export default function PaginaConsulta() {
   const config = configPublica();
   return (
     <>
-      <header className="cabecalho">
-        <h1>Consulta — simulador de mamoplastia de aumento</h1>
-        <p className="nota">
-          Desenho {config.desenho}
-          {config.desenho === "A" ? ": o cirurgião digita as medidas e escolhe o implante; nada é calculado a partir do 3D." : ": medição 3D, volume e alertas TEPID ativos."}
-          {" "}Envelope de incerteza da simulação: ±{String(config.envelope_rms_mm).replace(".", ",")} mm RMS.
-        </p>
+      <header className="cabecalho" data-desenho={config.desenho}>
+        <h1>Simulador de mamoplastia de aumento</h1>
+        {config.recursos.medicao_automatica_3d && (
+          <a href="/validacao/bland-altman" className="link-discreto" data-testid="link-validacao">
+            Validação das medidas (pesquisa)
+          </a>
+        )}
       </header>
       <Consulta config={config} />
     </>

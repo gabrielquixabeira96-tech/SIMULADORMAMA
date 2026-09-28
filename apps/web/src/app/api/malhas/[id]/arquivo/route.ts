@@ -8,7 +8,8 @@ import { getDesenho } from "@/config/desenho";
 import { recursoAtivoEm } from "@/config/recursos";
 import { registrarAuditoria } from "@/db/auditoria";
 import { malhaPorId } from "@/db/repositorio";
-import { redigirPrevistoManifest, tipoDoArquivo } from "@/malhas/arquivos";
+import { malhaDeFoto, previstoProibidoPorFoto } from "@/foto/servidor";
+import { arquivoDeFoto, redigirPrevistoManifest, tipoDoArquivo } from "@/malhas/arquivos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,6 +25,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     if (!tipo) return erro(400, "nome_nao_permitido", "arquivo fora da lista permitida");
     const m = await malhaPorId(id);
     if (!m) return erro(404, "malha_nao_encontrada", "malha não encontrada");
+    // fotos e observado.png só de malha reconstruída de fotos (um scan com textura "foto_frente.jpg" não sai)
+    if (arquivoDeFoto(nome) && !(await malhaDeFoto(m.malha_dir, m.meta as { origem?: unknown } | null))) return erro(400, "nome_nao_permitido", "arquivo fora da lista permitida");
     const abs = caminhoEmDataDir(`${m.malha_dir}/${nome}`);
     let tamanho: number;
     try {
@@ -34,9 +37,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       return erro(404, "arquivo_nao_encontrado", "arquivo não encontrado");
     }
     await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "visualizou", entidade: "arquivo", entidadeId: m.id, desenho, detalhes: { nome } });
-    if (nome === "morphs/manifest.json" && !recursoAtivoEm(desenho, "numeros_calculados_no_relatorio")) {
+    if (nome === "morphs/manifest.json" && (!recursoAtivoEm(desenho, "numeros_calculados_no_relatorio") || (await previstoProibidoPorFoto(m.malha_dir)))) {
       // Em A o manifest sai sem `previsto` (números calculados; ADR 0005), mesmo que o arquivo em
-      // disco tenha sido gerado em B.
+      // disco tenha sido gerado em B; idem numa malha de fotos sem perfil (ADR 0021).
       const redigido = JSON.stringify(redigirPrevistoManifest(JSON.parse(await readFile(abs, "utf8")), false));
       return new Response(redigido, {
         status: 200,

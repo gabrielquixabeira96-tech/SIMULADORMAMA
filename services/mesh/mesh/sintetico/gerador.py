@@ -15,11 +15,18 @@ Como o gabarito e calculado
   (Brent) para que esse volume coincida com `volume_ml` pedido (tolerancia 1e-4 mL).
 - `volumes.X.estimado_plano_base_elipse_ml`: estimador do contratos §3.2 aplicado a malha decimada
   com os landmarks do gabarito (referencia do erro do estimador).
+- `textura` (contratos §4.5; ADR 0020): a textura sai de `parametros.textura.realismo` —
+  `"fotografico"` (pele por fototipo, areola e mamilo desenhados pela distancia 3D na superficie,
+  luz SH9 assada; `textura_pele.py`) ou `"esquematico"` (a neutra do Marco 0). O bloco devolvido
+  (esquema `iluminacao_sh9/1.0`, `sh9`, fototipo, resolucao, diametros, `sha256` do PNG) vai para o
+  gabarito. Regerar um torso apaga `morphs/` da pasta: os `.glb` de morph embutem a malha e a textura
+  antigas e ficariam inconsistentes (`sha256_malha_base`).
 """
 
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,12 +38,12 @@ from scipy.spatial import cKDTree
 from mesh import esquemas
 from mesh.malha.geometria import Proximidade, soldar, volume_assinado
 from mesh.malha.glb import escrever_glb
-from mesh.malha.io import MalhaRender, escrever_obj, sha256_arquivo
+from mesh.malha.io import MalhaRender, escrever_obj, png_bytes, sha256_arquivo
 from mesh.medir import antropometria as antro
 from mesh.medir import geodesica as geo
 from mesh.processar.pipeline import decimar, limpar, transferir_atributos
 from mesh.sintetico.superficie import Torso
-from mesh.sintetico.textura import textura_neutra
+from mesh.sintetico.textura_pele import textura_pele
 from mesh.versao import VERSAO_SOFTWARE, versao_pygeodesic
 
 
@@ -115,6 +122,25 @@ def _landmarks_parametricos(torso: Torso) -> dict[str, tuple[float, float]]:
     }
 
 
+ARQUIVOS_TORSO = ("parametros.json", "gabarito.json", "torso.obj", "torso.mtl", "textura.png", "torso.glb")
+
+
+def torso_atualizado(pasta: Path, parametros: dict) -> bool:
+    """A pasta ja tem o torso destes parametros gerado por esta versao, com o bloco `textura` (v0.2.0+)?
+    Usado por `mesh.cli torso --se-desatualizado` (scripts/mesh.sh e demo_sandbox.sh) para regerar so
+    o que ficou para tras — p. ex. torsos da v0.1.x, com a textura neutra e sem `textura.esquema`."""
+    pasta = Path(pasta)
+    if not all((pasta / a).is_file() for a in ARQUIVOS_TORSO):
+        return False
+    try:
+        g = json.loads((pasta / "gabarito.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return (isinstance(g.get("textura"), dict) and g["textura"].get("esquema") == "iluminacao_sh9/1.0"
+            and g.get("versao_software") == VERSAO_SOFTWARE
+            and g.get("parametros") == esquemas.completar_parametros(parametros))
+
+
 def gerar_torso(parametros: dict, saida: Path, escrever_densa: bool = True) -> dict:
     """Gera a pasta <saida>/<nome>/ (contratos §4.2) e devolve o gabarito/1.0."""
     t0 = time.time()
@@ -123,13 +149,20 @@ def gerar_torso(parametros: dict, saida: Path, escrever_densa: bool = True) -> d
     nome = p["nome"]
     pasta = Path(saida) / nome
     pasta.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(pasta / "morphs", ignore_errors=True)  # derivados da malha/textura antigas
 
     torso = Torso(p)
     grade = Grade(torso, int(p["resolucao"]["densa_faces"]))
     volumes_reais = _resolver_amplitudes(torso, grade)
 
     Vd_render = torso.avaliar(grade.S, grade.Y)
-    textura = textura_neutra(int(p["semente"]))
+    tex = p["textura"]
+    t_tex = time.perf_counter()
+    textura, bloco_textura = textura_pele(int(p["semente"]), torso, fototipo=tex["fototipo"],
+                                          px_por_mm=float(tex["px_por_mm"]), realismo=tex["realismo"],
+                                          areola_mm=float(tex["areola_mm"]), mamilo_mm=float(tex["mamilo_mm"]))
+    duracao_textura = time.perf_counter() - t_tex
+    png = png_bytes(textura)
     densa = MalhaRender(V=Vd_render, F=grade.F, uv=grade.uv, textura=textura)
     Vw = grade.soldar(Vd_render)
     Fw = grade.Fw
@@ -151,8 +184,10 @@ def gerar_torso(parametros: dict, saida: Path, escrever_densa: bool = True) -> d
     # arquivos
     escrever_obj(pasta / "torso.obj", decimada, "torso.mtl", "textura.png",
                  cabecalho=f"# torso sintetico {nome} — quadro anatomico (origem na furcula)\n")
-    textura.save(pasta / "textura.png")
-    escrever_glb(pasta / "torso.glb", decimada, quadro="anatomico", extras_asset={"sintetico": True, "nome": nome})
+    (pasta / "textura.png").write_bytes(png)
+    bloco_textura["sha256"] = sha256_arquivo(pasta / "textura.png")
+    escrever_glb(pasta / "torso.glb", decimada, quadro="anatomico", extras_asset={"sintetico": True, "nome": nome},
+                 imagem_png=png)
     if escrever_densa:
         escrever_obj(pasta / "denso.obj", densa, "torso.mtl", "textura.png",
                      cabecalho=f"# malha densa de referencia do gabarito {nome}\n")
@@ -189,6 +224,7 @@ def gerar_torso(parametros: dict, saida: Path, escrever_densa: bool = True) -> d
         },
         "geodesica": {"algoritmo": geo.ALGORITMO, "biblioteca": geo.BIBLIOTECA, "versao": versao_pygeodesic(),
                       "malha": "densa"},
+        "textura": bloco_textura,
     }
     if escrever_densa:
         gabarito["malha"]["densa"]["sha256"] = sha256_arquivo(pasta / "denso.obj")
@@ -199,4 +235,5 @@ def gerar_torso(parametros: dict, saida: Path, escrever_densa: bool = True) -> d
     gabarito_interno = dict(gabarito)
     gabarito_interno["_duracao_s"] = round(time.time() - t0, 2)
     gabarito_interno["_amplitudes_mm"] = {"dir": torso.mama_dir.H, "esq": torso.mama_esq.H}
+    gabarito_interno["_duracao_textura_s"] = round(duracao_textura, 2)
     return gabarito_interno

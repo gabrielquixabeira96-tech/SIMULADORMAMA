@@ -32,9 +32,9 @@ export function caixaObj(caminho: string): { min: V3; max: V3 } {
   return { min, max };
 }
 
-/** "Caixa envolvente: 330,2 × 450,0 × 251,3 mm" → [330.2, 450, 251.3] */
+/** "Caixa envolvente: 330,2 × 450,0 × 251,3 mm" → [330.2, 450, 251.3] (texto em "Avançado", lido mesmo recolhido) */
 export async function dimensoesNaTela(page: Page): Promise<V3> {
-  const t = (await page.getByTestId("caixa-mm").innerText()).replace(/\./g, "");
+  const t = ((await page.getByTestId("caixa-mm").textContent()) ?? "").replace(/\./g, "");
   const m = t.match(/([\d,]+) × ([\d,]+) × ([\d,]+) mm/);
   if (!m) throw new Error(`caixa não encontrada em: ${t}`);
   return [m[1], m[2], m[3]].map((s) => Number(s!.replace(",", "."))) as V3;
@@ -64,6 +64,21 @@ async function doisQuadros(page: Page) {
   await page.evaluate(() => new Promise<void>((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok()))));
 }
 
+/**
+ * O viewer fica no passo 2: deixa-o inteiro na tela e abaixo das barras fixas (aviso + passos);
+ * senão o clique projetado pode cair na barra.
+ */
+export async function alinharViewer(page: Page) {
+  const rolou = await page.evaluate(() => {
+    const v = document.querySelector('[data-testid="viewer"]')!.getBoundingClientRect();
+    const barra = document.querySelector(".passos")?.getBoundingClientRect().bottom ?? 0;
+    if (v.top >= barra + 4 && v.bottom <= window.innerHeight) return false;
+    window.scrollBy(0, v.top - barra - 8);
+    return true;
+  });
+  if (rolou) await doisQuadros(page);
+}
+
 export async function projetar(page: Page, p: V3): Promise<Projecao> {
   const r = await page.evaluate((pp) => {
     const g = (window as unknown as { __simuladorViewer?: { projetar: (x: number[]) => unknown } }).__simuladorViewer;
@@ -74,12 +89,16 @@ export async function projetar(page: Page, p: V3): Promise<Projecao> {
 }
 
 export async function escolherVista(page: Page, v: NomeVista) {
-  await page.getByTestId(`vista-${v}`).click();
+  const botao = page.getByTestId(`vista-${v}`);
+  // vistas inferiores ficam em "Mais vistas" (recolhido)
+  if (!(await botao.isVisible())) await page.getByTestId("mais-vistas").locator("summary").click();
+  await botao.click();
   await doisQuadros(page);
 }
 
 /** Vista em que o ponto está visível e o raio é mais perpendicular à superfície (avaliada no gancho, sem renderizar). */
 export async function melhorVista(page: Page, p: V3): Promise<{ vista: NomeVista; cos: number }> {
+  await alinharViewer(page);
   const r = await page.evaluate((pp) => {
     const g = (window as unknown as { __simuladorViewer?: { melhorVista: (x: number[]) => unknown } }).__simuladorViewer;
     return g ? g.melhorVista(pp) : "sem_gancho";
@@ -100,6 +119,7 @@ const rotuloBotao = (id: LandmarkId) => {
  */
 export async function clicarPonto(page: Page, p: V3, vista: NomeVista, rng: () => number, jitterPx = 1): Promise<{ dx: number; dy: number }> {
   await escolherVista(page, vista);
+  await alinharViewer(page);
   const proj = await projetar(page, p);
   const dx = (rng() * 2 - 1) * jitterPx;
   const dy = (rng() * 2 - 1) * jitterPx;
@@ -111,26 +131,40 @@ export async function clicarLandmark(page: Page, id: LandmarkId, p: V3, vista: N
   const guia = page.getByTestId("landmarks-guia");
   await guia.getByRole("button", { name: rotuloBotao(id), exact: true }).click();
   await clicarPonto(page, p, vista, rng, jitterPx);
-  await expect(guia.locator("li", { has: page.getByRole("button", { name: rotuloBotao(id), exact: true }) })).toContainText(/✓ v\d+/);
+  await expect(guia.locator("li", { has: page.getByRole("button", { name: rotuloBotao(id), exact: true }) })).toContainText("✓");
 }
 
 export const LANDMARKS: readonly LandmarkId[] = LANDMARK_IDS;
 
 export async function novoAtendimento(page: Page): Promise<string> {
-  await page.getByRole("button", { name: /Novo atendimento/ }).click();
+  await page.getByRole("button", { name: /Nova simulação|Novo atendimento/ }).click();
   const ps = page.getByTestId("pseudonimo");
   await expect(ps).toHaveText(/^P-[0-9A-HJ-NP-Z]{6}$/);
   return ps.innerText();
 }
 
+/**
+ * "Usar este torso" (passo 1) → status "Torso <nome> processado". O id da malha não aparece na tela
+ * (sem UUID visível): vem do atributo `data-malha-id` da mensagem. A marcação de pontos já fica
+ * ativa no passo 2 (o botão "Marcar pontos" é conferido, não clicado).
+ */
 export async function importarTorso(page: Page, torso: string): Promise<string> {
+  // depois de uma captura os cards ficam recolhidos em "Trocar de torso sintético"
+  if (!(await page.getByTestId(`importar-${torso}`).isVisible())) await page.getByTestId("torsos-sinteticos").locator("summary").click();
   await page.getByTestId(`importar-${torso}`).click();
   const msg = page.getByRole("status").filter({ hasText: `Torso ${torso} processado` });
   await expect(msg).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByTestId("caixa-mm")).toBeVisible();
-  const malhaId = (await msg.innerText()).match(/malha ([0-9a-f-]{36})/)![1]!;
-  await page.getByRole("button", { name: "Landmarks", exact: true }).click();
+  await expect(page.getByTestId("caixa-mm")).toHaveCount(1);
+  const malhaId = (await msg.getAttribute("data-malha-id"))!;
+  expect(malhaId).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(page.getByRole("button", { name: "Marcar pontos", exact: true })).toHaveAttribute("aria-pressed", "true");
   return malhaId;
+}
+
+/** Abre o bloco "Avançado" do passo 1 (pré-visualização, dados técnicos), se ainda fechado. */
+export async function abrirAvancado(page: Page) {
+  const det = page.getByTestId("avancado-captura");
+  if (!(await det.evaluate((d) => (d as HTMLDetailsElement).open))) await det.locator("summary").click();
 }
 
 export async function medirNoServico(page: Page): Promise<any> {

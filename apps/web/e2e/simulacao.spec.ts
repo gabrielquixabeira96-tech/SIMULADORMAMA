@@ -1,11 +1,12 @@
 /**
  * Marco 2 — interface de simulação contra o stack real (services/mesh gera os morphs):
- * escolha manual do implante, plano × IMF sem recarregar, slider antes/depois, comparação lado
- * a lado com câmeras sincronizadas, envelope de incerteza sempre presente, selo "não calibrado",
- * aviso fixo e ausência de compartilhamento; A/B.
+ * escolha manual do implante, plano × IMF sem recarregar, aba "Fotos" (padrão; ADR 0019) e aba
+ * "Explorar 3D" com slider antes/depois e comparação lado a lado com câmeras sincronizadas,
+ * envelope de incerteza sempre presente, selo "não calibrado", aviso fixo e ausência de
+ * compartilhamento; A/B.
  */
 import { expect, test } from "@playwright/test";
-import { IMPLANTE_1, IMPLANTE_2, esperarQuadro, estadoSim, prepararSimulacao } from "./simulacao-apoio";
+import { IMPLANTE_1, IMPLANTE_2, abrirExplorar3D, esperarQuadro, estadoFotos, estadoSim, prepararSimulacao } from "./simulacao-apoio";
 
 test.use({ viewport: { width: 1600, height: 1000 } });
 
@@ -29,7 +30,13 @@ test("simulação no desenho B: plano/IMF sem recarregar, slider, envelope, selo
   await page.evaluate(() => ((window as any).__semRecarregar = true));
   await expect(page.getByTestId("selo-nao-calibrado")).toContainText("NÃO calibrados");
   await expect(page.getByTestId("aviso-fixo")).toContainText("Ilustração, não previsão de resultado");
+  // aba "Fotos" (padrão): a foto do A, com envelope e sem luz somada; previsto do A
+  expect(await estadoFotos(page)).toMatchObject({ estado: "a", alvo: `mt__${IMPLANTE_1}__subglandular__manter`, envelope_mm: 4.5, envelope_visivel: true, pele_visivel: true, luzes: 0 });
+  await expect(page.getByTestId("previsto-simulacao")).toBeVisible();
+  // aba "Explorar 3D": o viewer orbital de antes, com o mesmo material e o mesmo envelope
+  await abrirExplorar3D(page);
   await envelopePresente(page, ["i1"]);
+  expect((await estadoSim(page)).i1.luzes).toBe(0);
   await expect(page.getByTestId("previsto-simulacao")).toBeVisible();
 
   // slider: "antes" (0) não é imagem simulada → envelope inativo; qualquer peso > 0 → envelope
@@ -69,6 +76,7 @@ test("comparação lado a lado de 2 implantes com câmeras sincronizadas e envel
   test.skip(info.project.name !== "desenho-B", "roda uma vez (B)");
   test.setTimeout(6 * 60_000);
   await prepararSimulacao(page, [IMPLANTE_1, IMPLANTE_2]);
+  await abrirExplorar3D(page);
   await expect(page.getByTestId("simulacao-paineis")).toHaveAttribute("data-n", "2");
   await envelopePresente(page, ["i1", "i2"]);
   let est = await estadoSim(page);
@@ -113,6 +121,9 @@ test("simulação no desenho A: implante escolhido pelo cirurgião, sem sugestã
   test.skip(info.project.name !== "desenho-A", "fluxo A");
   test.setTimeout(6 * 60_000);
   const malhaId = await prepararSimulacao(page, [IMPLANTE_1]);
+  expect(await estadoFotos(page)).toMatchObject({ estado: "a", envelope_visivel: true, luzes: 0 });
+  await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
+  await abrirExplorar3D(page);
   await envelopePresente(page, ["i1"]);
   await expect(page.getByTestId("selo-nao-calibrado")).toBeVisible();
   for (const id of ["previsto-simulacao", "distancias-painel", "volume-painel", "tepid-alertas", "sugestao-implante", "relatorio-numero-calculado"]) {

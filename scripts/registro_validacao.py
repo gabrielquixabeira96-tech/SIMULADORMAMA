@@ -6,7 +6,10 @@ Le SOMENTE saidas de comandos (nada digitado a mao):
   docs/validacao/v<V>-web-marcos-0-1.json     (e2e validacao.spec.ts: Marco 0 no viewer, Marco 1 cliques)
   docs/validacao/v<V>-web-marco2-latencia.json (e2e latencia.spec.ts)
   <artefatos>/pytest.xml, vitest-web.json, vitest-contratos.json, playwright.json
-e grava docs/validacao/v<V>.json (validacao/1.0) e docs/validacao/v<V>.md.
+e os textos versionados docs/validacao/mudancas-v<V>.md ("O que mudou") e docs/validacao/pendencias-v<V>.md
+("Desvios e pendências", completado por linhas com numeros medidos, p.ex. o p95 da latencia);
+grava docs/validacao/v<V>.json (validacao/1.0) e docs/validacao/v<V>.md e insere/atualiza (idempotente)
+a linha da versao no indice docs/validacao/README.md.
 Uso: python3 scripts/registro_validacao.py --artefatos test-results/validacao-v<V>
 """
 
@@ -95,6 +98,97 @@ def contagem_playwright(p: Path) -> tuple[dict | None, dict[str, str]]:
     return {"passaram": st.get("expected", 0) + st.get("flaky", 0), "falharam": st.get("unexpected", 0), "pulados": st.get("skipped", 0)}, casos
 
 
+LIMITE_LATENCIA_MS = 100.0
+ROTULO_LATENCIA = {
+    "slider_comparacao_2_paineis": "A comparação lado a lado (2 painéis)",
+    "geral_1_painel": "A interação com 1 painel (critério do Marco 2)",
+}
+COMPONENTES = ("services-mesh", "web-marcos-0-1", "web-marco2-latencia")
+
+
+def linhas_medidas(lat: dict | None, gltf: dict | None) -> list[str]:
+    """Pendencias que dependem de numeros medidos (nada fixo no texto): latencia p95 >= 100 ms por
+    interacao e resultado do glTF-Validator."""
+    out = []
+    for k, x in ((lat or {}).get("resultados") or {}).items():
+        p95 = x.get("p95_ms")
+        if p95 is not None and p95 >= LIMITE_LATENCIA_MS:
+            rot = ROTULO_LATENCIA.get(k, f"A interação `{k}`")
+            out.append(f"- {rot} fica acima de {LIMITE_LATENCIA_MS:.0f} ms no ambiente medido (p95 = {p95:.1f} ms; "
+                       f"n = {x.get('n')}).")
+    if not gltf:
+        out.append("- glTF-Validator (Khronos) não executado nesta geração (`node scripts/validar_gltf.mjs`).")
+    elif gltf["erros"] or gltf["avisos"]:
+        out.append(f"- glTF-Validator {gltf['versao']}: {gltf['erros']} erros e {gltf['avisos']} avisos em "
+                   f"{gltf['arquivos']} arquivos `.glb`.")
+    return out
+
+
+def texto_pendencias(v: str, docs: Path = DOCS) -> str | None:
+    """Conteudo de docs/validacao/pendencias-v<V>.md (sem um titulo `#`/`##` inicial, se houver)."""
+    p = docs / f"pendencias-v{v}.md"
+    if not p.is_file():
+        return None
+    linhas = p.read_text(encoding="utf-8").strip().splitlines()
+    while linhas and (linhas[0].startswith("#") or not linhas[0].strip()):
+        linhas.pop(0)
+    return "\n".join(linhas).strip()
+
+
+def linha_indice(v: str, data: str, status: str, n_ok: int, n_total: int, docs: Path = DOCS) -> str:
+    comp = []
+    for c in COMPONENTES:
+        if (docs / f"v{v}-{c}.md").is_file():
+            j = f" ([json](v{v}-{c}.json))" if (docs / f"v{v}-{c}.json").is_file() else ""
+            comp.append(f"[{c}](v{v}-{c}.md){j}")
+    return (f"| {v} | {data} | {status} ({n_ok}/{n_total} critérios) | [v{v}.md](v{v}.md) · [json](v{v}.json) | "
+            f"{' · '.join(comp) or '—'} |")
+
+
+def _ident(x: str) -> tuple[int, int, str]:
+    """Identificador comparavel: numerico (pelo valor) < alfanumerico (lexico ASCII), como no SemVer."""
+    # isascii: str.isdigit aceita digitos Unicode ("²", "٣") que int() recusa ou que o SemVer nao considera numericos
+    return (0, int(x), "") if x.isascii() and x.isdigit() else (1, 0, x)
+
+
+def _chave_versao(v: str) -> tuple:
+    """Chave de ordenacao TOTAL estilo SemVer 2.0 para `X.Y.Z[-pre][+build]` (prefixo `v` opcional).
+
+    Nucleo comparado campo a campo (numeros pelo valor; campos ausentes contam como 0), e uma
+    pre-release vem ANTES da release de mesmo nucleo (0.2.0-rc1 < 0.2.0). Entre pre-releases,
+    identificadores separados por `.`: numerico < alfanumerico, e o prefixo mais curto vem antes
+    (rc < rc.1 < rc.2 < rc.10 < rc1). Metadado de build (`+...`) e ignorado. Nunca mistura int com
+    str na mesma posicao (cada campo vira uma tupla de mesmo formato), logo nunca levanta TypeError.
+    """
+    v = v.strip()
+    if v[:1] in ("v", "V"):
+        v = v[1:]
+    v = v.split("+", 1)[0]
+    nucleo, _, pre = v.partition("-")
+    campos = [_ident(x) for x in nucleo.split(".")]
+    campos += [(0, 0, "")] * (3 - len(campos))
+    # release (sem pre) > qualquer pre-release do mesmo nucleo
+    return (tuple(campos), (1,) if not pre else (0, tuple(_ident(x) for x in pre.split("."))))
+
+
+def atualizar_indice(indice: Path, v: str, linha: str) -> None:
+    """Insere ou substitui a linha `| <v> | ...` da tabela do indice, mantendo a ordem decrescente de versao.
+    Idempotente: rodar de novo com a mesma linha nao muda o arquivo."""
+    linhas = indice.read_text(encoding="utf-8").splitlines()
+    try:
+        sep = next(i for i, l in enumerate(linhas) if l.startswith("|---") and i > 0 and linhas[i - 1].startswith("| Versão"))
+    except StopIteration as e:
+        raise SystemExit(f"tabela de versões não encontrada em {indice}") from e
+    fim = sep + 1
+    while fim < len(linhas) and linhas[fim].startswith("|"):
+        fim += 1
+    corpo = [l for l in linhas[sep + 1:fim] if l.split("|")[1].strip() != v]
+    pos = next((i for i, l in enumerate(corpo) if _chave_versao(l.split("|")[1].strip()) < _chave_versao(v)), len(corpo))
+    corpo.insert(pos, linha)
+    novo = linhas[:sep + 1] + corpo + linhas[fim:]
+    indice.write_text("\n".join(novo) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--artefatos", required=True)
@@ -108,6 +202,7 @@ def main() -> int:
     t_web = contagem_vitest(art / "vitest-web.json")
     t_con = contagem_vitest(art / "vitest-contratos.json")
     t_e2e, casos_e2e = contagem_playwright(art / "playwright.json")
+    gltf = mesh.get("gltf_validator") if mesh else None
 
     ba = web01["marco1"]["bland_altman_geral"] if web01 else None
     nimf = web01["marco1"]["n_imf"] if web01 else None
@@ -128,6 +223,7 @@ def main() -> int:
         "M2 simetria < 0,1 mm": bool(m2 and m2["simetria_max_mm"] < 0.1),
         "M2 regressão geométrica": regressao is True,
         "M2b E2E upload→PDF (A e B)": all(s == "expected" for s in e2e_ab.values()),
+        "glTF-Validator: 0 erros e 0 avisos nos .glb": bool(gltf and gltf["arquivos"] > 0 and gltf["erros"] == 0 and gltf["avisos"] == 0),
         "testes sem falha": all(t is not None and t["falharam"] == 0 for t in (t_py, t_web, t_con, t_e2e)),
     }
     commit = commit_descrito()
@@ -199,6 +295,14 @@ def main() -> int:
     esc_l = "\n".join(f"| {t['torso']} | {' × '.join(str(c) for c in t['caixa_obj_mm'])} | {t['erro_caixa_processada_mm']:.3f} | {t['erro_max_distancias_mm']:.3f} |" for t in (R["marco0_escala"]["web_por_torso"] or []))
     vol_l = "\n".join(f"| {k} | {x['dir']:+.1f} % | {x['esq']:+.1f} % |" for k, x in R["volume"].get("por_torso", {}).items())
     crit_l = "\n".join(f"| {k} | {'sim' if ok else 'NÃO'} |" for k, ok in criterios.items())
+    pend_arq = texto_pendencias(v)
+    if pend_arq is None:
+        print(f"AVISO: docs/validacao/pendencias-v{v}.md ausente; a seção 'Desvios e pendências' sai incompleta", file=sys.stderr)
+        pend_arq = f"- **Arquivo `docs/validacao/pendencias-v{v}.md` ausente:** desvios e pendências desta versão não registrados."
+    pend_med = linhas_medidas(lat, gltf)
+    pendencias = pend_arq + ("\n\nMedido nesta execução:\n\n" + "\n".join(pend_med) if pend_med else "")
+    gltf_l = (f"{gltf['versao']}, {gltf['arquivos']} arquivos `.glb` (morphs e torso), {gltf['erros']} erros, {gltf['avisos']} avisos"
+              if gltf else "não executado")
     md = f"""---
 esquema: validacao/1.0
 versao_software: {v}
@@ -258,6 +362,7 @@ Erro relativo contra o volume adicionado real (malha decimada); máx. |erro| = {
 - Monotonicidade (volume maior → mamilo mais projetado, 3 torsos × 2 planos × 2 IMF): {'sim' if R['marco2_monotonicidade'] else 'NÃO'}.
 - Simetria no torso simétrico: máx. {R['marco2_simetria_max_mm']} mm (critério < 0,1 mm).
 - IMF: `manter` move o sulco no máx. {R['marco2_imf'].get('manter_max_mm')} mm (≤ 1); `rebaixar` erra no máx. {R['marco2_imf'].get('rebaixar_erro_max_mm')} mm contra o configurado.
+- glTF-Validator (Khronos, `node scripts/validar_gltf.mjs`): {gltf_l}.
 - Regressão geométrica (snapshot dos morphs do t01, pytest): {'passou' if R['marco2_regressao'] else 'NÃO passou' if R['marco2_regressao'] is False else '—'}.
 - Latência de interação (Chromium headless, **WebGL por software — não é o iPad**), input → quadro rasterizado:
 
@@ -293,12 +398,12 @@ bash scripts/ci.sh                 # CI completo (lint, testes, e2e, licenças)
 
 ## Desvios e pendências
 
-- Operador do Marco 1 simulado; falta sessão com cirurgião (Bland-Altman humano).
-- Latência medida em SwiftShader; falta iPad/GPU. A comparação lado a lado (2 painéis) fica acima de 100 ms no SwiftShader.
-- Coeficientes da simulação `nao_calibrado`; limiares TEPID "conferir no texto original"; catálogo `verificado: false`.
-- Desvios de contrato registrados nos ADRs 0012–0015 e em `v{v}-services-mesh.md` (geodésica a partir da posição exata, 403 do serviço em A).
+{pendencias}
 """
     (DOCS / f"v{v}.md").write_text(md, encoding="utf-8")
+    indice = DOCS / "README.md"
+    if indice.is_file():
+        atualizar_indice(indice, v, linha_indice(v, registro["data"], status, sum(criterios.values()), len(criterios)))
     print(json.dumps({"status": status, "criterios": criterios}, ensure_ascii=False, indent=2))
     return 0 if status == "aprovado" else 1
 

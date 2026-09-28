@@ -8,16 +8,30 @@ import {
   type FiltroCatalogo,
   type ImplanteCatalogo,
 } from "@simulador/contratos";
+import css from "@/simulacao/foto.module.css";
 
 /**
  * Escolha MANUAL de implante (contratos §11; ADR 0005: permitida em A e B). Lista o catálogo na
- * ordem neutra recebida (por id), só filtra; nada de ranking, pontuação ou "recomendado".
+ * ordem neutra recebida (por id), só filtra; nada de ranking, pontuação ou "recomendado". Os
+ * "EXEMPLO NÃO CLÍNICO" vão para o fim da lista. Com a base medida no 3D (só quando a medição
+ * automática existe; o chamador passa null no outro desenho), o catálogo abre filtrado pela base
+ * ±10 mm, e o filtro pode ser desligado com um toque.
  * Os dados vêm do servidor (`GET /api/catalogo` ou prop de Server Component).
  */
 interface Props {
   implantes: readonly ImplanteCatalogo[];
   selecionado: string | null;
   onEscolher: (id: string) => void;
+  /** largura da base medida (mm) por lado; null/ausente = sem filtro pela base */
+  baseMedidaMm?: { dir: number; esq: number } | null;
+}
+
+/** Tolerância do filtro pela base medida (mm). */
+export const TOLERANCIA_BASE_MM = 10;
+
+export function faixaDaBase(b: { dir: number; esq: number } | null | undefined): { min: number; max: number; media: number } | null {
+  if (!b || !Number.isFinite(b.dir) || !Number.isFinite(b.esq) || b.dir <= 0 || b.esq <= 0) return null;
+  return { min: Math.min(b.dir, b.esq) - TOLERANCIA_BASE_MM, max: Math.max(b.dir, b.esq) + TOLERANCIA_BASE_MM, media: (b.dir + b.esq) / 2 };
 }
 
 const ROTULO_PERFIL: Record<string, string> = {
@@ -32,7 +46,7 @@ const ROTULO_PERFIL: Record<string, string> = {
 
 const numero = (s: string) => (s.trim() === "" ? undefined : Number(s.replace(",", ".")));
 
-export function EscolhaImplante({ implantes, selecionado, onEscolher }: Props) {
+export function EscolhaImplante({ implantes, selecionado, onEscolher, baseMedidaMm }: Props) {
   const opcoes = useMemo(() => opcoesDoCatalogo(implantes), [implantes]);
   const [texto, setTexto] = useState("");
   const [fabricante, setFabricante] = useState("");
@@ -40,6 +54,9 @@ export function EscolhaImplante({ implantes, selecionado, onEscolher }: Props) {
   const [perfil, setPerfil] = useState("");
   const [volMin, setVolMin] = useState("");
   const [volMax, setVolMax] = useState("");
+  const [usarBase, setUsarBase] = useState(true);
+  const faixaBase = useMemo(() => faixaDaBase(baseMedidaMm), [baseMedidaMm]);
+  const filtrandoBase = !!faixaBase && usarBase;
 
   const { lista, erro } = useMemo(() => {
     const vmin = numero(volMin);
@@ -50,13 +67,17 @@ export function EscolhaImplante({ implantes, selecionado, onEscolher }: Props) {
       ...(forma && { forma: [forma as ImplanteCatalogo["forma"]] }),
       ...(perfil && { perfil: [perfil as ImplanteCatalogo["perfil"]] }),
       ...((vmin !== undefined || vmax !== undefined) && { volume_ml: { ...(vmin !== undefined && { min: vmin }), ...(vmax !== undefined && { max: vmax }) } }),
+      ...(filtrandoBase && faixaBase && { base_mm: { min: Math.max(0, faixaBase.min), max: faixaBase.max } }),
     };
     try {
-      return { lista: filtrarCatalogo(implantes, filtro), erro: null };
+      const f = filtrarCatalogo(implantes, filtro);
+      // exemplos não clínicos no fim (ordem neutra por id mantida dentro de cada grupo)
+      return { lista: [...f.filter((i) => !i.exemplo_nao_clinico), ...f.filter((i) => i.exemplo_nao_clinico)], erro: null };
     } catch {
       return { lista: [] as ImplanteCatalogo[], erro: "Faixa de volume inválida." };
     }
-  }, [implantes, texto, fabricante, forma, perfil, volMin, volMax]);
+  }, [implantes, texto, fabricante, forma, perfil, volMin, volMax, filtrandoBase, faixaBase]);
+  const mm1 = (v: number) => v.toFixed(1).replace(".", ",");
 
   return (
     <section className="painel" data-testid="escolha-implante" aria-labelledby="titulo-escolha-implante">
@@ -111,9 +132,25 @@ export function EscolhaImplante({ implantes, selecionado, onEscolher }: Props) {
           <input data-testid="catalogo-volume-max" type="number" inputMode="numeric" min={0} value={volMax} onChange={(e) => setVolMax(e.target.value)} />
         </label>
       </div>
+      {faixaBase &&
+        (usarBase ? (
+          <p className={css.filtroBase} data-testid="catalogo-filtro-base">
+            Filtrado pela base medida ({mm1(faixaBase.media)} mm ±{TOLERANCIA_BASE_MM})
+            <button type="button" className="secundario" onClick={() => setUsarBase(false)} data-testid="catalogo-filtro-base-desligar">
+              Mostrar todos
+            </button>
+          </p>
+        ) : (
+          <p className={css.filtroBase} data-testid="catalogo-filtro-base">
+            Sem filtro pela base
+            <button type="button" className="secundario" onClick={() => setUsarBase(true)} data-testid="catalogo-filtro-base-ligar">
+              Filtrar pela base medida ({mm1(faixaBase.media)} mm ±{TOLERANCIA_BASE_MM})
+            </button>
+          </p>
+        ))}
       {erro && <div className="erro">{erro}</div>}
       <p className="nota" aria-live="polite" data-testid="catalogo-contagem">
-        {lista.length} de {implantes.length} implantes (ordem por identificador)
+        {lista.length} de {implantes.length} implantes (ordem por identificador; exemplos não clínicos no fim)
       </p>
       <table className="tabela" data-testid="catalogo-lista">
         <thead>

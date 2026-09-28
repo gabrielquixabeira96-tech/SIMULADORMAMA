@@ -1,6 +1,6 @@
 "use client";
 
-import { Line, OrbitControls } from "@react-three/drei";
+import { Html, Line, OrbitControls } from "@react-three/drei";
 import { Canvas, useThree, type ThreeEvent } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
@@ -13,6 +13,8 @@ export interface Marcador {
   id: string;
   posicao: Vetor3;
   cor: string;
+  /** Rótulo curto mostrado junto do ponto no 3D (ex.: "2 · Mamilo D"). */
+  rotulo?: string;
 }
 
 export interface CliqueNaMalha {
@@ -100,6 +102,10 @@ function GanchoTeste({ carregada }: { carregada: MalhaCarregada }) {
         }
         return melhor;
       },
+      /** Canvas sem tone mapping (`flat`): 0 = THREE.NoToneMapping — a mesma cor em todas as telas. */
+      get toneMapping() {
+        return obter().gl.toneMapping;
+      },
     };
     return () => {
       delete w.__simuladorViewer;
@@ -112,7 +118,7 @@ export default function Visualizador({ carregada, marcadores, linhaRegua, clicav
   const raioMarcador = useMemo(() => {
     if (!carregada) return 3;
     const r = carregada.caixa.getBoundingSphere(new THREE.Sphere()).radius;
-    return Math.max(1, r * 0.012);
+    return Math.max(1.5, r * 0.018);
   }, [carregada]);
 
   const aoClicar = (e: ThreeEvent<MouseEvent>) => {
@@ -128,7 +134,9 @@ export default function Visualizador({ carregada, marcadores, linhaRegua, clicav
   };
 
   return (
+    // flat: sem ACES (NoToneMapping), a textura aparece com a cor do arquivo em qualquer tela
     <Canvas
+      flat
       frameloop="demand"
       data-testid="viewer-canvas"
       camera={OPCOES_CAMERA}
@@ -147,10 +155,17 @@ export default function Visualizador({ carregada, marcadores, linhaRegua, clicav
         </>
       )}
       {marcadores.map((m) => (
-        <mesh key={m.id} position={m.posicao} raycast={() => null}>
-          <sphereGeometry args={[raioMarcador, 16, 12]} />
-          <meshBasicMaterial color={m.cor} depthTest={false} transparent opacity={0.95} />
-        </mesh>
+        <group key={m.id} position={m.posicao}>
+          <mesh raycast={() => null} renderOrder={2}>
+            <sphereGeometry args={[raioMarcador, 16, 12]} />
+            <meshBasicMaterial color={m.cor} depthTest={false} transparent opacity={0.95} />
+          </mesh>
+          {m.rotulo && (
+            <Html className="rotulo-3d" pointerEvents="none" style={{ borderColor: m.cor }} zIndexRange={[20, 0]}>
+              {m.rotulo}
+            </Html>
+          )}
+        </group>
       ))}
       {linhaRegua && <Line points={linhaRegua} color="#1f6feb" lineWidth={2} depthTest={false} />}
     </Canvas>

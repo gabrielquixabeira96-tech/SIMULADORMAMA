@@ -10,13 +10,15 @@ volume `plano_base_elipse` v2 com parede reconstruída, quadro anatômico), `/va
 
 ```bash
 bash scripts/mesh.sh venv                   # cria services/mesh/.venv e instala -e .[dev]
-bash scripts/mesh.sh torsos                 # gera os 3 presets em $DATA_DIR/sinteticos (padrão data/)
+bash scripts/mesh.sh torsos                 # gera os 3 presets em $DATA_DIR/sinteticos (padrão data/), só os desatualizados
+MESH_TORSOS_FORCAR=1 bash scripts/mesh.sh torsos   # regera todos
 bash scripts/mesh.sh dev                    # API em http://127.0.0.1:8765 (só loopback)
-bash scripts/mesh.sh test                   # ruff + pytest (~3 min: gera os 3 torsos em tmp)
+bash scripts/mesh.sh test                   # ruff + pytest (~10 min: gera os 3 torsos e os morphs em tmp)
 
 cd services/mesh
 .venv/bin/python -m mesh.cli torso --preset t01_simetrico_300 --saida ../../data/sinteticos
 .venv/bin/python -m mesh.cli torso --parametros meu_torso.json --saida ../../data/sinteticos
+.venv/bin/python -m mesh.cli torso --todos --saida ../../data/sinteticos --se-desatualizado
 .venv/bin/python -m mesh.cli morphs --todos --sinteticos ../../data/sinteticos   # 4 .glb + manifest por torso
 .venv/bin/python -m mesh.cli morphs --sintetico ../../data/sinteticos/t01_simetrico_300 \
     --catalogo tests/fixtures/catalogo_teste.json --implantes teste-redondo-moderado-300
@@ -39,8 +41,10 @@ mesh/
   malha/             MalhaRender, leitura OBJ/PLY (trimesh), escrita OBJ+MTL, GLB escrito à mão, geometria
   processar/         unidade, recorte abaixo do pescoço, limpeza, decimação (fast-simplification), UV
   medir/             geodésica MMP (pygeodesic), antropometria (distâncias, volume, quadro), Bland-Altman
-  sintetico/         superfície analítica do torso, gerador + gabarito, textura procedural neutra
-  simulacao/         interfaces (§12.1, stubs FEBio/surrogate), catálogo, modelo geométrico, morphs glTF
+  sintetico/         superfície analítica do torso, gerador + gabarito, texturas procedurais (neutra e
+                     "fotográfica": textura_pele.py)
+  simulacao/         interfaces (§12.1, stubs FEBio/surrogate), catálogo, modelo geométrico, morphs glTF,
+                     iluminação SH9 (iluminacao.py: base, luz padrão, ajuste robusto da luz da textura)
   validacao.py       cenários do Marco 0 e relatório para docs/validacao/
 ```
 
@@ -71,6 +75,16 @@ de `S` nos parâmetros do landmark; euclidiana entre posições exatas; **geodé
 (teorema da divergência) entre a superfície com e sem a mama, na malha densa; `vertice` = vértice
 mais próximo em `torso.obj`. A malha decimada sai do mesmo pipeline do `/processar`.
 
+### Textura (contratos §4.5; ADR 0020)
+
+`parametros.textura.realismo`: `"esquematico"` (padrão sem o campo) = a neutra do Marco 0, 1024×1024;
+`"fotografico"` (os 3 presets) = `sintetico/textura_pele.py`, 4 px/mm (t01: 3392×1900, ~4,9 MB),
+periódica em u: pele por fototipo (I–VI), mosqueado, poros, aréola Ø 40 mm e mamilo Ø 10 mm pela
+distância 3D na superfície (`(s, y) → torso.avaliar`), tubérculos de Montgomery, luz de estúdio SH9
+assada (duas fontes frontais simétricas) e sombra do sulco. Tudo por código, nenhuma imagem lida;
+mesma semente → mesmo PNG. O gabarito ganha o bloco `textura` (com os `sh9` assados e o `sha256` do
+PNG). Regerar um torso apaga `morphs/` da pasta.
+
 ## Decisões técnicas
 
 - **Geodésica exata a partir do ponto clicado.** Os extremos (`posicao`) são inseridos como vértices
@@ -95,7 +109,10 @@ na base com a borda inferior no sulco, transmissão pelo tecido mole por plano, 
 atenuado, suavização, ajuste do mamilo e rebaixamento do sulco — coeficientes em
 `config/simulacao.json` (1.1, bloco `modelo_geometrico` novo), todos `nao_calibrado`.
 `mesh/simulacao/morphs.py`: um `.glb` por (plano, imf) com targets esparsos `POSITION`+`NORMAL`,
-`mesh.extras.targetNames`, `manifest.json` (`morphs/1.0`). Catálogo: `config/catalogo/*.json` ou
+`mesh.extras.targetNames`, `manifest.json` (`morphs/1.0`) e `asset.extras.iluminacao`
+(`iluminacao_sh9/1.0`, contratos §10.6): os 9 coeficientes SH9 da luz assada na textura, ajustados por
+IRLS/Huber à luminância nos vértices (`origem: "ajuste"`; t01: R² 0,95, RMS 0,7 % contra a luz
+gravada), ou a luz padrão no quadro anatômico dos landmarks (`origem: "padrao"`). Catálogo: `config/catalogo/*.json` ou
 arquivo explícito (`--catalogo`, `catalogo_arquivo`); testes usam `tests/fixtures/catalogo_teste.json`
 (EXEMPLO NÃO CLÍNICO). Os `.glb` passam no Khronos glTF-Validator sem erros/avisos.
 
@@ -113,4 +130,7 @@ Relatório completo em `docs/validacao/v0.0.1-services-mesh.md`.
   (tratado por rejeição robusta, mas não medido). O id `plano_base_elipse` foi mantido por compatibilidade.
 - Heurística de unidade (ADR 0013): corpo inteiro em cm > 158 cm seria lido como mm (e avisado).
 - Modelo de simulação é ilustração não calibrada (fase 4 calibra); FEBio e surrogate são stubs.
+- Estiramento da textura (T5, ADR 0020): fora da faixa de ±20 mm do sulco, λ = área depois/antes fica
+  entre 0,82 e 1,92 e nenhum triângulo inverte; dentro dela a transição de 12 mm do modelo estica
+  triângulos da prega até ~15× e deixa alguns de lado (lacuna registrada, teste `xfail` estrito).
 - Bland-Altman com cliques humanos (critério real do Marco 1) depende do viewer do `apps/web`.

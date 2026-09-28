@@ -1,12 +1,14 @@
 import { readdir, stat } from "node:fs/promises";
 import { json, tratarErro } from "@/api/respostas";
 import { caminhoEmDataDir } from "@/config/ambiente";
+import { torsoUtilizavel } from "@/config/demo";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/sinteticos — torsos sintéticos gerados pelo services/mesh em DATA_DIR/sinteticos
  * (contratos §4.2). Não são dados de paciente; servem ao critério do Marco 0 (abrir no viewer).
+ * No modo demo sintética (ADR 0018), só os que têm `parametros.json` do gerador.
  */
 export async function GET() {
   try {
@@ -21,8 +23,19 @@ export async function GET() {
     }
     const torsos = [];
     for (const nome of nomes) {
+      // modo demo (ADR 0018): só torsos gerados pelo services/mesh aparecem
+      if (!(await torsoUtilizavel(nome))) continue;
       const tem = async (a: string) => stat(caminhoEmDataDir(`sinteticos/${nome}/${a}`)).then((s) => s.isFile()).catch(() => false);
-      torsos.push({ nome, glb: await tem("torso.glb"), obj: await tem("torso.obj"), gabarito: await tem("gabarito.json") });
+      // `foto`: fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D"; importar-foto)
+      // `foto_frente`: a variante só frontal (t01)
+      torsos.push({
+        nome,
+        glb: await tem("torso.glb"),
+        obj: await tem("torso.obj"),
+        gabarito: await tem("gabarito.json"),
+        foto: await tem("foto/reconstrucao.json"),
+        foto_frente: await tem("foto_frente/reconstrucao.json"),
+      });
     }
     return json({ torsos });
   } catch (e) {

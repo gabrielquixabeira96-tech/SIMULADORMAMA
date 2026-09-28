@@ -1,6 +1,6 @@
 {
   "name": "simulador-mamario",
-  "version": "0.0.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Simulador 3D de mamoplastia de aumento para uso em consulta. Monorepo: apps/web (Next.js + react-three-fiber) e services/mesh (Python).",
   "packageManager": "pnpm@10.28.0",
@@ -17,6 +17,10 @@
     "dev:mesh": "bash scripts/mesh.sh dev",
     "db": "bash scripts/db.sh",
     "licencas": "bash scripts/licencas.sh",
-    "validar:config": "python3 scripts/validar_config.py"
+    "validar:config": "python3 scripts/validar_config.py",
+    "validar:gltf": "node scripts/validar_gltf.mjs"
+  },
+  "devDependencies": {
+    "gltf-validator": "2.0.0-dev.3.10"
   }
 }

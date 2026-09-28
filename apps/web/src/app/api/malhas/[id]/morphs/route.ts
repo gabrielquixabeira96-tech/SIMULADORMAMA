@@ -7,6 +7,7 @@ import { getDesenho } from "@/config/desenho";
 import { recursoAtivoEm } from "@/config/recursos";
 import { registrarAuditoria } from "@/db/auditoria";
 import { malhaPorId } from "@/db/repositorio";
+import { previstoProibidoPorFoto } from "@/foto/servidor";
 import { redigirPrevistoManifest } from "@/malhas/arquivos";
 import { ClienteMesh } from "@/mesh/cliente";
 
@@ -46,8 +47,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       ...(corpo.pinca_polo_superior_mm ? { pinca_polo_superior_mm: corpo.pinca_polo_superior_mm } : {}),
     });
     await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "criou", entidade: "arquivo", entidadeId: m.id, desenho, detalhes: { operacao: "morphs", implantes } });
-    // Em A o `previsto` (números calculados) nunca sai para o cliente (ADR 0005).
-    return json(redigirPrevistoManifest(manifest, recursoAtivoEm(desenho, "numeros_calculados_no_relatorio")));
+    // Em A o `previsto` (números calculados) nunca sai para o cliente (ADR 0005); nem numa malha
+    // reconstruída de fotos sem perfil (profundidade só ilustração, ADR 0021), mesmo em B.
+    const numeros = recursoAtivoEm(desenho, "numeros_calculados_no_relatorio") && !(await previstoProibidoPorFoto(m.malha_dir));
+    return json(redigirPrevistoManifest(manifest, numeros));
   } catch (e) {
     return tratarErro(e, "malhas.morphs");
   }

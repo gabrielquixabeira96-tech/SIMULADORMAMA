@@ -34,7 +34,7 @@ test("fluxo completo no desenho B: upload → processar → régua → landmarks
   await page.getByRole("button", { name: "Gravar registro de medidas" }).click();
   const gravado = page.getByRole("status").filter({ hasText: "Registro de medidas gravado" });
   await expect(gravado).toBeVisible({ timeout: 120_000 });
-  const medidaId = (await gravado.innerText()).match(/\(([0-9a-f-]{36})\)/)![1];
+  const medidaId = await gravado.getAttribute("data-medida-id");
   const reg = await (await page.request.get(`/api/medidas/${medidaId}`)).json();
   expect(reg.desenho).toBe("B");
   expect(reg.escala.metodo).toBe("regua_2_pontos");
@@ -66,7 +66,7 @@ test("fluxo completo no desenho A: medidas digitadas, nada calculado", async ({ 
   await page.getByRole("button", { name: "Gravar registro de medidas" }).click();
   const gravado = page.getByRole("status").filter({ hasText: "Registro de medidas gravado" });
   await expect(gravado).toBeVisible({ timeout: 60_000 });
-  const medidaId = (await gravado.innerText()).match(/\(([0-9a-f-]{36})\)/)![1];
+  const medidaId = await gravado.getAttribute("data-medida-id");
   const reg = await (await page.request.get(`/api/medidas/${medidaId}`)).json();
   expect(reg.desenho).toBe("A");
   expect(reg.distancias).toBeNull();

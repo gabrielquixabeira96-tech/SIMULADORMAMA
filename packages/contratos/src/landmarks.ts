@@ -51,7 +51,7 @@ export const DEFINICOES_LANDMARKS: readonly DefinicaoLandmark[] = [
   { id: "base_lateral_esq", obrigatorio: false, lado: "esq", rotulo: "Base lateral esquerda", instrucao: "Borda lateral da base esquerda, no plano horizontal do mamilo." },
 ];
 
-export const origemLandmarkSchema = z.enum(["clique", "gabarito", "automatico"]);
+export const origemLandmarkSchema = z.enum(["clique", "gabarito", "automatico", "foto"]);
 
 export const landmarkSchema = z.strictObject({
   posicao: vetor3Schema,

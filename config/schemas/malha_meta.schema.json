@@ -15,6 +15,7 @@
     "fator_unidade": { "type": "number", "exclusiveMinimum": 0 },
     "fator_escala_acumulado": { "type": "number", "exclusiveMinimum": 0 },
     "quadro": { "enum": ["scan", "anatomico"] },
+    "origem": { "enum": ["upload", "sintetico", "foto"], "description": "opcional; ausente = upload. \"foto\": malha do template ajustado a fotos (POST /reconstruir-foto; original = foto frontal, n_vertices/n_faces = os da malha gerada)" },
     "original": {
       "type": "object",
       "additionalProperties": false,
@@ -77,6 +78,7 @@
         }
       }
     },
+    "textura": { "$ref": "textura_reconstruida.schema.json", "description": "opcional; so em malha reconstruida por fotos (origem \"foto\"): textura_reconstruida/1.0 (C3, contratos secao 5.5)" },
     "avisos": { "type": "array", "items": { "type": "string" } },
     "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "gerado_em": { "type": "string", "format": "date-time" }

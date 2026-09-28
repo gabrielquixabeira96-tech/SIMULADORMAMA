@@ -1,6 +1,11 @@
 """Textura procedural neutra (contratos §4; ADR 0009 item 5): tom uniforme com ruido leve e
 gradiente vertical sutil. Nenhuma imagem fotografica, nenhum mamilo/areola desenhado.
 Periodica em u (a costura nas costas fica invisivel). Deterministica pela `semente`.
+
+Desde a v0.2.0 (ADR 0020) e o modo `textura.realismo = "esquematico"` do torso sintetico — o padrao
+quando os parametros nao pedem textura, para que parametros antigos gerem o mesmo arquivo. Os presets
+usam `"fotografico"` (`textura_pele.py`: pele por fototipo, areola e mamilo desenhados por codigo, luz
+SH9 assada), tambem sem nenhuma imagem real.
 """
 
 from __future__ import annotations

@@ -1,0 +1,525 @@
+{
+  "esquema": "validacao_componente/web-modo-foto-latencia",
+  "versao_software": "0.2.0",
+  "data": "2026-09-28",
+  "commit_base": "f686df4",
+  "maquina": {
+    "os": "linux",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "n_cpus": 4,
+    "memoria_gb": 15.7,
+    "node": "v22.22.2",
+    "navegador": "chromium 141.0.7390.37 headless",
+    "webgl": "SwiftShader (software) — NÃO é o iPad nem GPU",
+    "viewport": "1600x1000",
+    "canvas_px": "960x720",
+    "carga_media": {
+      "inicio": [
+        3.27,
+        2.56,
+        2.15
+      ],
+      "fim": [
+        3.39,
+        2.81,
+        2.29
+      ]
+    },
+    "quadro_interativo_px": "480x360"
+  },
+  "parametros": {
+    "torso": "t01_simetrico_300 (processado pelo services/mesh, ~40 mil vértices)",
+    "implantes": [
+      "motiva-rsd-300",
+      "polytech-21631-255"
+    ],
+    "desenho": "um contexto WebGL fora do DOM (antialias off, preserveDrawingBuffer false) para todas as fotos; uma cena (pele-foto + halo) por plano × IMF × implante, com o descarte de faces de costas válido entre as trocas; câmera clínica (FOV 15°); quadro interativo com até 480 px de largura, lido na mesma tarefa e copiado para um canvas 2D com o selo nos pixels; com o comparador ocioso, as outras combinações de plano e sulco da vista atual são adiantadas e o quadro final (MSAA 4×, dpr ≤ 2) substitui o interativo — tudo fora da latência",
+    "medida": "clique → foto nova pintada no canvas 2D + leitura de 1 px de cada foto visível (rasterizado, critério); cortina: pointermove alinhado ao início do quadro → quadro pintado (tarefa seguinte)",
+    "pior_caso": "as fotos 'depois' saem do cache antes de cada amostra (o 'antes' fica: não depende de implante, plano nem sulco); o comparador ocioso (sem transição, refinamento nem miniaturas) antes de cada amostra",
+    "aquecimento_descartado": 6,
+    "n_por_interacao": {
+      "foto_troca_1": 24,
+      "foto_troca_2": 20,
+      "cortina": 60
+    },
+    "limite_p95_ms": 100,
+    "limite_p95_2_fotos_ms": 85,
+    "limite_p95_cortina_ms": 16
+  },
+  "resultados": {
+    "foto_troca_1": {
+      "n": 24,
+      "p50_ms": 56,
+      "p95_ms": 69.4,
+      "max_ms": 72.7,
+      "media_ms": 56.72
+    },
+    "foto_troca_2": {
+      "n": 20,
+      "p50_ms": 80.6,
+      "p95_ms": 90.1,
+      "max_ms": 120.9,
+      "media_ms": 81.77
+    },
+    "cortina": {
+      "n": 60,
+      "p50_ms": 5.5,
+      "p95_ms": 7.9,
+      "max_ms": 8.4,
+      "media_ms": 5.72
+    }
+  },
+  "quadro_pintado": {
+    "foto_troca_1": {
+      "n": 24,
+      "p50_ms": 55.5,
+      "p95_ms": 68.5,
+      "max_ms": 72.2,
+      "media_ms": 56.18
+    },
+    "foto_troca_2": {
+      "n": 20,
+      "p50_ms": 79.7,
+      "p95_ms": 89.4,
+      "max_ms": 120.2,
+      "media_ms": 80.97
+    },
+    "cortina": {
+      "n": 60,
+      "p50_ms": 5.5,
+      "p95_ms": 7.9,
+      "max_ms": 8.4,
+      "media_ms": 5.72
+    }
+  },
+  "roteiro_3d": {
+    "geral_1_painel_p95_ms": 85.7,
+    "slider_comparacao_2_paineis_p95_ms": 118.4,
+    "aprovado": false
+  },
+  "amostras_ms": {
+    "foto_troca_1": [
+      {
+        "quadro": 49.90000000037253,
+        "rasterizado": 50.5
+      },
+      {
+        "quadro": 50.20000000111759,
+        "rasterizado": 50.70000000111759
+      },
+      {
+        "quadro": 68.5,
+        "rasterizado": 69.39999999850988
+      },
+      {
+        "quadro": 60.69999999925494,
+        "rasterizado": 61.19999999925494
+      },
+      {
+        "quadro": 60.20000000111759,
+        "rasterizado": 61
+      },
+      {
+        "quadro": 51.90000000037253,
+        "rasterizado": 52.40000000037253
+      },
+      {
+        "quadro": 46,
+        "rasterizado": 46.5
+      },
+      {
+        "quadro": 57.09999999962747,
+        "rasterizado": 57.59999999962747
+      },
+      {
+        "quadro": 60.100000001490116,
+        "rasterizado": 60.70000000111759
+      },
+      {
+        "quadro": 55.90000000037253,
+        "rasterizado": 56.29999999888241
+      },
+      {
+        "quadro": 56.59999999962747,
+        "rasterizado": 57.09999999962747
+      },
+      {
+        "quadro": 55.80000000074506,
+        "rasterizado": 56.30000000074506
+      },
+      {
+        "quadro": 49.59999999962747,
+        "rasterizado": 50
+      },
+      {
+        "quadro": 55.5,
+        "rasterizado": 55.899999998509884
+      },
+      {
+        "quadro": 50.09999999962747,
+        "rasterizado": 50.5
+      },
+      {
+        "quadro": 65.29999999888241,
+        "rasterizado": 65.79999999888241
+      },
+      {
+        "quadro": 49.09999999962747,
+        "rasterizado": 49.59999999962747
+      },
+      {
+        "quadro": 50.69999999925494,
+        "rasterizado": 51.29999999888241
+      },
+      {
+        "quadro": 52.40000000037253,
+        "rasterizado": 53
+      },
+      {
+        "quadro": 66.5,
+        "rasterizado": 67
+      },
+      {
+        "quadro": 55.40000000037253,
+        "rasterizado": 56
+      },
+      {
+        "quadro": 72.20000000111759,
+        "rasterizado": 72.70000000111759
+      },
+      {
+        "quadro": 53.19999999925494,
+        "rasterizado": 53.90000000037253
+      },
+      {
+        "quadro": 55.5,
+        "rasterizado": 56
+      }
+    ],
+    "foto_troca_2": [
+      {
+        "quadro": 63,
+        "rasterizado": 63.70000000111759
+      },
+      {
+        "quadro": 77.20000000111759,
+        "rasterizado": 78.30000000074506
+      },
+      {
+        "quadro": 89.40000000037253,
+        "rasterizado": 90.09999999962747
+      },
+      {
+        "quadro": 77.29999999888241,
+        "rasterizado": 78
+      },
+      {
+        "quadro": 81.5,
+        "rasterizado": 82.19999999925494
+      },
+      {
+        "quadro": 74.40000000037253,
+        "rasterizado": 75
+      },
+      {
+        "quadro": 87.09999999962747,
+        "rasterizado": 89.09999999962747
+      },
+      {
+        "quadro": 120.20000000111759,
+        "rasterizado": 120.90000000037253
+      },
+      {
+        "quadro": 65.40000000037253,
+        "rasterizado": 66
+      },
+      {
+        "quadro": 83.09999999962747,
+        "rasterizado": 83.90000000037253
+      },
+      {
+        "quadro": 82.20000000111759,
+        "rasterizado": 82.90000000037253
+      },
+      {
+        "quadro": 88.90000000037253,
+        "rasterizado": 89.80000000074506
+      },
+      {
+        "quadro": 73.70000000111759,
+        "rasterizado": 74.40000000037253
+      },
+      {
+        "quadro": 88.5,
+        "rasterizado": 89.09999999962747
+      },
+      {
+        "quadro": 74.10000000149012,
+        "rasterizado": 74.80000000074506
+      },
+      {
+        "quadro": 70.40000000037253,
+        "rasterizado": 71.09999999962747
+      },
+      {
+        "quadro": 79.69999999925494,
+        "rasterizado": 80.59999999962747
+      },
+      {
+        "quadro": 87.59999999962747,
+        "rasterizado": 88.5
+      },
+      {
+        "quadro": 81.39999999850988,
+        "rasterizado": 82.09999999962747
+      },
+      {
+        "quadro": 74.20000000111759,
+        "rasterizado": 74.80000000074506
+      }
+    ],
+    "cortina": [
+      {
+        "quadro": 8.400000000372529,
+        "rasterizado": 8.400000000372529
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 7.900000000372529,
+        "rasterizado": 7.900000000372529
+      },
+      {
+        "quadro": 5.400000000372529,
+        "rasterizado": 5.400000000372529
+      },
+      {
+        "quadro": 5.599999999627471,
+        "rasterizado": 5.599999999627471
+      },
+      {
+        "quadro": 6.200000001117587,
+        "rasterizado": 6.200000001117587
+      },
+      {
+        "quadro": 5.400000000372529,
+        "rasterizado": 5.400000000372529
+      },
+      {
+        "quadro": 4.900000000372529,
+        "rasterizado": 4.900000000372529
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 6.399999998509884,
+        "rasterizado": 6.399999998509884
+      },
+      {
+        "quadro": 5.800000000745058,
+        "rasterizado": 5.800000000745058
+      },
+      {
+        "quadro": 5.600000001490116,
+        "rasterizado": 5.600000001490116
+      },
+      {
+        "quadro": 5.700000001117587,
+        "rasterizado": 5.700000001117587
+      },
+      {
+        "quadro": 6.099999999627471,
+        "rasterizado": 6.099999999627471
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 8,
+        "rasterizado": 8
+      },
+      {
+        "quadro": 5.200000001117587,
+        "rasterizado": 5.200000001117587
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 8.200000001117587,
+        "rasterizado": 8.200000001117587
+      },
+      {
+        "quadro": 6.200000001117587,
+        "rasterizado": 6.200000001117587
+      },
+      {
+        "quadro": 6.5,
+        "rasterizado": 6.5
+      },
+      {
+        "quadro": 6.399999998509884,
+        "rasterizado": 6.399999998509884
+      },
+      {
+        "quadro": 6.200000001117587,
+        "rasterizado": 6.200000001117587
+      },
+      {
+        "quadro": 6.5,
+        "rasterizado": 6.5
+      },
+      {
+        "quadro": 6,
+        "rasterizado": 6
+      },
+      {
+        "quadro": 6.800000000745058,
+        "rasterizado": 6.800000000745058
+      },
+      {
+        "quadro": 4.799999998882413,
+        "rasterizado": 4.799999998882413
+      },
+      {
+        "quadro": 5,
+        "rasterizado": 5
+      },
+      {
+        "quadro": 6,
+        "rasterizado": 6
+      },
+      {
+        "quadro": 7,
+        "rasterizado": 7
+      },
+      {
+        "quadro": 5.300000000745058,
+        "rasterizado": 5.300000000745058
+      },
+      {
+        "quadro": 5.799999998882413,
+        "rasterizado": 5.799999998882413
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 5.200000001117587,
+        "rasterizado": 5.200000001117587
+      },
+      {
+        "quadro": 4.800000000745058,
+        "rasterizado": 4.800000000745058
+      },
+      {
+        "quadro": 5.100000001490116,
+        "rasterizado": 5.100000001490116
+      },
+      {
+        "quadro": 6.099999999627471,
+        "rasterizado": 6.099999999627471
+      },
+      {
+        "quadro": 5.5,
+        "rasterizado": 5.5
+      },
+      {
+        "quadro": 6.400000000372529,
+        "rasterizado": 6.400000000372529
+      },
+      {
+        "quadro": 4.699999999254942,
+        "rasterizado": 4.699999999254942
+      },
+      {
+        "quadro": 4.699999999254942,
+        "rasterizado": 4.699999999254942
+      },
+      {
+        "quadro": 6.599999999627471,
+        "rasterizado": 6.599999999627471
+      },
+      {
+        "quadro": 5.599999999627471,
+        "rasterizado": 5.599999999627471
+      },
+      {
+        "quadro": 5.799999998882413,
+        "rasterizado": 5.799999998882413
+      },
+      {
+        "quadro": 5,
+        "rasterizado": 5
+      },
+      {
+        "quadro": 4.900000000372529,
+        "rasterizado": 4.900000000372529
+      },
+      {
+        "quadro": 4.700000001117587,
+        "rasterizado": 4.700000001117587
+      },
+      {
+        "quadro": 4.899999998509884,
+        "rasterizado": 4.899999998509884
+      },
+      {
+        "quadro": 4.699999999254942,
+        "rasterizado": 4.699999999254942
+      },
+      {
+        "quadro": 4.900000000372529,
+        "rasterizado": 4.900000000372529
+      },
+      {
+        "quadro": 4.799999998882413,
+        "rasterizado": 4.799999998882413
+      },
+      {
+        "quadro": 6.300000000745058,
+        "rasterizado": 6.300000000745058
+      },
+      {
+        "quadro": 5,
+        "rasterizado": 5
+      },
+      {
+        "quadro": 6.399999998509884,
+        "rasterizado": 6.399999998509884
+      },
+      {
+        "quadro": 5.200000001117587,
+        "rasterizado": 5.200000001117587
+      },
+      {
+        "quadro": 5.099999999627471,
+        "rasterizado": 5.099999999627471
+      },
+      {
+        "quadro": 5.799999998882413,
+        "rasterizado": 5.799999998882413
+      },
+      {
+        "quadro": 5.400000000372529,
+        "rasterizado": 5.400000000372529
+      },
+      {
+        "quadro": 5.599999999627471,
+        "rasterizado": 5.599999999627471
+      },
+      {
+        "quadro": 5.200000001117587,
+        "rasterizado": 5.200000001117587
+      }
+    ]
+  },
+  "aprovado": false
+}

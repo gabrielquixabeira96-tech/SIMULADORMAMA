@@ -7,6 +7,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { proxy } from "@/proxy";
+import { verificarBenchmarkNaRede } from "@/config/subida";
 import { avaliarRequisicao, tokenIgual } from "@/seguranca/requisicao";
 
 const TOKEN = "tok-teste-0123456789abcdef";
@@ -70,6 +71,33 @@ describe("proxy com APP_TOKEN_LOCAL", () => {
     expect(proxy(req("/?token=errado")).status).toBe(401);
   });
 
+  it("navegação sem token (Accept: text/html) → 401 com página HTML legível, sem versão nem código interno; API continua 401 JSON", async () => {
+    vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
+    const nav = { accept: "text/html,application/xhtml+xml,*/*;q=0.8", "sec-fetch-mode": "navigate" };
+    for (const c of ["/", "/validacao/bland-altman", "/?token=errado"]) {
+      const r = proxy(req(c, { headers: nav }));
+      expect(r.status, c).toBe(401);
+      expect(r.headers.get("content-type"), c).toMatch(/^text\/html/);
+      expect(r.headers.get("cache-control"), c).toContain("no-store");
+      const html = await r.text();
+      expect(html).toContain("Acesso");
+      expect(html).toContain("link enviado pelo administrador");
+      expect(html).not.toMatch(/nao_autenticado|APP_TOKEN|token=|\bv?\d+\.\d+\.\d+\b|bland-altman/i);
+    }
+    // API, fetch (sec-fetch-mode cors) e POST: JSON como antes
+    const api = proxy(req("/api/config", { headers: nav }));
+    expect(api.status).toBe(401);
+    expect(await codigo(api)).toBe("nao_autenticado");
+    const fetchPagina = proxy(req("/", { headers: { accept: "text/html", "sec-fetch-mode": "cors" } }));
+    expect(fetchPagina.headers.get("content-type")).toMatch(/json/);
+    const semAccept = proxy(req("/"));
+    expect(semAccept.status).toBe(401);
+    expect(await codigo(semAccept)).toBe("nao_autenticado");
+    const post = proxy(req("/", { method: "POST", headers: { ...nav, "content-type": "application/json", origin: BASE }, body: "{}" }));
+    expect(post.status).toBe(401);
+    expect(post.headers.get("content-type")).toMatch(/json/);
+  });
+
   it("host fora do loopback → 403 (DNS rebinding), salvo APP_HOSTS_PERMITIDOS", () => {
     vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
     const r = proxy(req("/api/config", { headers: { host: "evil.example", authorization: `Bearer ${TOKEN}` } }));
@@ -77,6 +105,44 @@ describe("proxy com APP_TOKEN_LOCAL", () => {
     vi.stubEnv("APP_HOSTS_PERMITIDOS", "consultorio.local");
     expect(passou(proxy(req("/api/config", { headers: { host: "consultorio.local:3000", authorization: `Bearer ${TOKEN}` } })))).toBe(true);
     expect(passou(proxy(req("/api/config", { headers: { host: "localhost:3000", authorization: `Bearer ${TOKEN}` } })))).toBe(true);
+  });
+
+  it("modo benchmark na rede (pela CONFIGURAÇÃO): só as rotas do benchmark, qualquer Host; resto → 403", async () => {
+    vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "192.168.0.10");
+    vi.stubEnv("BENCHMARK_HABILITADO", "1");
+    const com = (host: string, c: string, method = "GET") =>
+      proxy(req(c, { method, headers: { host, authorization: `Bearer ${TOKEN}`, ...(method === "POST" ? { "content-type": "application/json", origin: `http://${host}` } : {}) } }));
+    // achado da revisão: Host forjado de loopback numa instância exposta NÃO libera rotas de paciente
+    for (const host of ["192.168.0.10:3000", "localhost:3000", "127.0.0.1", "127.0.0.1:3000", "LOCALHOST", "LOCALHOST:3000", "[::1]", "[::1]:3000"]) {
+      const r = com(host, "/api/pacientes");
+      expect(r.status, host).toBe(403);
+      expect(await codigo(r)).toBe("rota_restrita_benchmark");
+      for (const c of ["/benchmark", "/api/benchmark/arquivo?nome=x"]) expect(passou(com(host, c)), `${host} ${c}`).toBe(true);
+      expect(passou(com(host, "/api/benchmark", "POST")), host).toBe(true);
+    }
+    for (const c of ["/", "/api/config", "/api/malhas/1/arquivo?nome=processada.glb", "/api/pdf", "/pacientes/P-ABC123", "/benchmarkx", "/api/benchmark/outra", "/_next/data/x.json"]) {
+      const r = com("192.168.0.10:3000", c);
+      expect(r.status, c).toBe(403);
+      expect(await codigo(r)).toBe("rota_restrita_benchmark");
+    }
+    // fora do modo: benchmark ligado só em loopback, ou host extra sem benchmark → comportamento normal
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "localhost, 127.0.0.1");
+    expect(passou(com("localhost:3000", "/api/pacientes"))).toBe(true);
+    vi.stubEnv("APP_HOSTS_PERMITIDOS", "192.168.0.10");
+    vi.stubEnv("BENCHMARK_HABILITADO", "0");
+    expect(passou(com("192.168.0.10:3000", "/api/pacientes"))).toBe(true);
+  });
+
+  it("subida recusa o modo benchmark na rede com DATABASE_URL ou DATA_DIR/pacientes", () => {
+    const expor = { BENCHMARK_HABILITADO: "1", APP_HOSTS_PERMITIDOS: "localhost, 192.168.0.10", DATABASE_URL: "" };
+    expect(() => verificarBenchmarkNaRede(expor, () => false)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, DATABASE_URL: "postgres://u:s@127.0.0.1/simulador" }, () => false)).toThrow(/DATABASE_URL tem de ficar vazio/);
+    expect(() => verificarBenchmarkNaRede({ ...expor, DATABASE_URL: undefined }, () => false)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede(expor, () => true)).toThrow(/DATA_DIR sem pacientes/);
+    // fora do modo (só loopback, ou benchmark desligado): nada a recusar
+    expect(() => verificarBenchmarkNaRede({ ...expor, APP_HOSTS_PERMITIDOS: "localhost,127.0.0.1", DATABASE_URL: "postgres://x" }, () => true)).not.toThrow();
+    expect(() => verificarBenchmarkNaRede({ ...expor, BENCHMARK_HABILITADO: "", DATABASE_URL: "postgres://x" }, () => true)).not.toThrow();
   });
 
   it("GET não exige Content-Type nem Origin", () => {

@@ -30,6 +30,7 @@ Sumário:
 15. Registro de validação (`docs/validacao/`)
 16. Versão do software
 17. Banco de dados (DDL canônico)
+19. Reconstrução do torso a partir de fotos (`reconstrucao/1.0`)
 
 ---
 
@@ -97,8 +98,8 @@ Conjunto canônico de **10 IDs**. A `PROMPT.md` fala em "6 a 8 landmarks por cli
 
 Regras:
 
-- Um landmark é um ponto **na superfície** da malha processada. É representado por `posicao` `[x, y, z]` em mm (ponto exato do raycast) **e** `vertice` (índice do vértice mais próximo). Distâncias euclidianas usam `posicao`; geodésicas partem de `vertice`. Ambos são obrigatórios.
-- `origem` de cada landmark: `"clique"` (médico), `"gabarito"` (torso sintético), `"automatico"` (fase avançada; DESENHO=B apenas).
+- Um landmark é um ponto **na superfície** da malha processada. É representado por `posicao` `[x, y, z]` em mm (ponto exato do raycast) **e** `vertice` (índice do vértice mais próximo). Distâncias euclidianas e geodésicas usam `posicao`: a geodésica parte do ponto exato, projetado e inserido na malha (seção 3.1; ADR 0016). `vertice` é validado pelo `services/mesh` (índice dentro de `processada.obj`, senão 422 `vertice_invalido`), mas não entra no cálculo. Ambos são obrigatórios.
+- `origem` de cada landmark: `"clique"` (médico), `"gabarito"` (torso sintético), `"automatico"` (fase avançada; DESENHO=B apenas), `"foto"` (clicado em 2D nas fotos pelo médico e levantado a 3D pelo ajuste do template, seção 19; em A o médico confirma cada ponto no passo 2).
 - Nomes fora da tabela DEVEM ser rejeitados por ambos os lados.
 
 ---
@@ -120,7 +121,7 @@ Regras:
 Cada distância tem **dois valores**:
 
 - `euclidiana_mm`: norma do vetor entre as duas `posicao`. Fórmula fechada; qualquer lado calcula.
-- `geodesica_mm`: comprimento do caminho mais curto **sobre a superfície** da malha processada entre os dois `vertice`. **Algoritmo de referência: geodésica discreta exata (MMP — Mitchell, Mount & Papadimitriou)** sobre a malha triangular; implementação sugerida `pygeodesic` (MIT). Alternativa aceita: método do calor (`potpourri3d`, MIT) desde que a diferença contra MMP nos torsos sintéticos fique < 0,5 mm. **Dijkstra puro sobre arestas NÃO é aceito** como valor registrado (superestima até ~8 %); o web PODE mostrá-lo como prévia rotulada `aproximada`, mas o valor gravado vem do `services/mesh` (ADR 0011).
+- `geodesica_mm`: comprimento do caminho mais curto **sobre a superfície** da malha processada (soldada: vértices duplicados em costura de UV fundidos) entre as duas `posicao`. Cada `posicao` é projetada na superfície e inserida como vértice novo (divisão 1→3 do triângulo que a contém); ponto a menos de 2 % (coordenada baricêntrica) de um vértice usa esse vértice, e ponto junto a uma aresta é empurrado 2 % para dentro (deslocamento < 0,1 mm). Partir do vértice mais próximo erraria até ~2 mm por extremo numa malha de 40 mil vértices (ADR 0016). **Algoritmo de referência: geodésica discreta exata (MMP — Mitchell, Mount & Papadimitriou)** sobre a malha triangular; implementação sugerida `pygeodesic` (MIT). Alternativa aceita: método do calor (`potpourri3d`, MIT) desde que a diferença contra MMP nos torsos sintéticos fique < 0,5 mm. **Dijkstra puro sobre arestas NÃO é aceito** como valor registrado (superestima até ~8 %); o web PODE mostrá-lo como prévia rotulada `aproximada`, mas o valor gravado vem do `services/mesh` (ADR 0011).
 
 ### 3.2 Volumes
 
@@ -155,7 +156,7 @@ O gabarito do torso sintético informa o **volume adicionado real** (seção 4),
 
 ## 4. Torso sintético: parâmetros e gabarito (`gabarito/1.0`)
 
-Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`). Determinístico dado `semente`. Sem textura fotográfica: textura **neutra procedural** (tom uniforme com ruído leve, para exercitar o carregamento de `map_Kd`).
+Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`). Determinístico dado `semente`. A textura é **sempre procedural, gerada por código, sem nenhuma imagem real** (ADR 0009 item 5; ADR 0020), em um de dois modos (`textura.realismo`, seção 4.5): `"esquematico"` — a neutra do Marco 0 (tom uniforme com ruído leve), padrão quando os parâmetros não pedem textura — ou `"fotografico"` — pele por fototipo com aréola e mamilo desenhados por código e uma luz de estúdio SH9 conhecida "assada", usada pelos 3 presets para que a demo e o modo foto do web (ADR 0019) tenham o que mostrar.
 
 ### 4.1 Parâmetros de entrada
 
@@ -174,9 +175,18 @@ Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`).
     "delta_altura_mamilo_mm": 0,            // Y(mamilo_esq) − Y(mamilo_dir) além do que ptose/volume já produzem
     "delta_lateral_mamilo_mm": 0            // deslocamento extra de mamilo_esq em X (positivo = mais lateral)
   },
-  "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 }
+  "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 },
+  "textura": {                              // opcional (ADR 0020); ausente = { "realismo": "esquematico" }
+    "realismo": "fotografico",              // "esquematico" | "fotografico"
+    "fototipo": "III",                      // Fitzpatrick "I".."VI"; padrão "III"
+    "px_por_mm": 4,                         // [1, 8]; padrão 4 (só no fotográfico)
+    "areola_mm": 40,                        // diâmetro nominal [25, 70]; padrão 40
+    "mamilo_mm": 10                         // diâmetro nominal [5, 16]; padrão 10
+  }
 }
 ```
+
+**`torso_parametros/1.1`** (template ajustado a fotos, seção 19): os campos acima + `forma` opcional por lado (`{"dir": {...}, "esq": {...}}` com `base_fator` 1,0, `apice_fator` 0,0, `polo_superior_fator` 1,0, `polo_inferior_fator` 1,0, `largura_pegada_fator` 1,0, `projecao_fator` 1,0) e `parede` opcional (`expoente_secao` 3,0, `achatamento_anterior` 0,0). Semântica e limites em `superficie.py` e no esquema. **Ausentes = comportamento da 1.0 byte a byte**: os 3 presets regerados têm `torso.obj`, `textura.png`, `denso.obj` e `torso.glb` com o mesmo sha256 e o `gabarito.json` igual exceto `gerado_em`.
 
 Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona deslocamentos que os três anteriores não capturam. Torso "simétrico" = lados iguais e `assimetria` zerada; os testes de simetria (Marco 2) usam esse caso.
 
@@ -189,9 +199,11 @@ Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona
   denso.obj            # malha densa (~300k faces), mm, quadro anatômico — só para gerar o gabarito; PODE ser apagada
   torso.obj            # malha decimada 30–50k vértices, mm, quadro anatômico
   torso.mtl            # `map_Kd textura.png`
-  textura.png          # 1024×1024, neutra
+  textura.png          # esquemático: 1024×1024 neutra; fotográfico: min(4096, P·px_por_mm) × min(2048, altura·px_por_mm), largura múltipla de 4 (t01: 3392×1900, ~4,9 MB)
   torso.glb            # a mesma malha decimada, com textura embutida, para o viewer (seção 5.3)
 ```
+
+Regerar um torso **apaga** `<saida>/<nome>/morphs/`: os `.glb` de morph embutem a malha e a textura antigas (e `sha256_malha_base` deixaria de bater). `python -m mesh.cli torso ... --se-desatualizado` (usado por `scripts/mesh.sh torsos` e `scripts/demo_sandbox.sh`) só regera o que falta, o que tem gabarito sem `textura.esquema` (torsos da v0.1.x) ou parâmetros/versão diferentes; `MESH_TORSOS_FORCAR=1` regera todos.
 
 ### 4.3 `gabarito.json`
 
@@ -233,7 +245,13 @@ Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona
     "densa":    { "arquivo": "denso.obj", "n_vertices": 150312, "n_faces": 300000 },
     "decimada": { "arquivo": "torso.obj", "n_vertices": 40011, "n_faces": 79802, "sha256": "..." }
   },
-  "geodesica": { "algoritmo": "mmp", "biblioteca": "pygeodesic", "malha": "densa" }
+  "geodesica": { "algoritmo": "mmp", "biblioteca": "pygeodesic", "malha": "densa" },
+  "textura": {                                   // opcional em gabaritos anteriores à v0.2.0; seção 4.5
+    "esquema": "iluminacao_sh9/1.0", "realismo": "fotografico", "origem": "sintetico", "r2": 1.0,
+    "sh9": [2.073771, 0.369248, 0.673878, 0.0, 0.0, 0.226547, 0.13512, 0.0, 0.055279],  // luz assada (seção 10.6)
+    "fototipo": "III", "px_por_mm": 4.0, "largura_px": 3392, "altura_px": 1900,
+    "areola_mm": 40.0, "mamilo_mm": 10.0, "sha256": "..."                                 // sha256 de textura.png
+  }
 }
 ```
 
@@ -242,7 +260,7 @@ Regras do gabarito:
 - `landmarks.*.posicao` são os pontos exatos da superfície paramétrica (não do vértice), em mm, no quadro anatômico (`furcula` = origem exata).
 - `landmarks.*.vertice` é o vértice mais próximo **na malha decimada** `torso.obj`.
 - `distancias.*.euclidiana_mm` é calculada das `posicao` exatas.
-- `distancias.*.geodesica_mm` é calculada por MMP na **malha densa**, entre os vértices mais próximos das posições na malha densa. É a "verdade" de geodésica.
+- `distancias.*.geodesica_mm` é calculada por MMP na **malha densa**, entre as `posicao` exatas inseridas na malha densa (mesmo método da seção 3.1; ADR 0016). É a "verdade" de geodésica.
 - `volumes.X.adicionado_ml` é o volume real adicionado pelo gerador (integração numérica da diferença de altura entre a superfície com mama e a parede sem mama, na malha densa; erro < 0,5 %). `estimado_plano_base_elipse_ml` é o estimador da seção 3.2 aplicado à malha decimada com os landmarks do gabarito, para referência.
 
 ### 4.4 Casos obrigatórios (fixtures)
@@ -255,7 +273,18 @@ Os três torsos do critério do Marco 0, gerados por `python -m mesh.cli torso -
 | `t02_assimetrico` | 320 | 350/280 | 0.3/0.2 | 75/68 | +8 mm altura, +5 mm lateral |
 | `t03_pequeno_ptose` | 280 | 180/180 | 0.6/0.6 | 90/90 | 0 |
 
-Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI).
+Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI). Os 3 presets pedem `"textura": { "realismo": "fotografico", "fototipo": "III" }` (ADR 0020).
+
+### 4.5 Textura do torso sintético (`textura.realismo`; ADR 0020)
+
+Tudo é código determinístico (`services/mesh/mesh/sintetico/textura_pele.py`); nenhum arquivo de imagem é lido. Mesma `semente` e mesmos parâmetros → o mesmo `textura.png` byte a byte (na mesma plataforma); sementes diferentes → texturas diferentes.
+
+- **`"esquematico"`**: `textura_neutra(semente)` (1024×1024; tom `(206, 192, 182)` com ruído de ±3 níveis), sem luz: o bloco do gabarito leva `sh9` de luz uniforme (`[1/0,282095; 0; …; 0]`, E ≡ 1).
+- **`"fotografico"`**: textura não quadrada de `px_por_mm` texels por mm nas duas direções, periódica em u. O centro do texel (linha i de cima para baixo, coluna j) fica em `s = −P/2 + (j + 0,5)/W · P`, `y = y_base + (1 − (i + 0,5)/H) · (y_topo − y_base)` (a mesma UV cilíndrica da malha). Camadas:
+  1. albedo por fototipo (tabela I–VI de pele, aréola e mamilo), com mosqueado de baixa frequência (±3 % de matiz), poros/microtextura (fBm periódico em u), subtom rosado leve nos polos inferiores e esternal e alguns nevos pequenos a mais de 45 mm dos mamilos;
+  2. **aréola** (Ø `areola_mm`, borda suave de 2 mm) e **mamilo** (Ø `mamilo_mm`) desenhados pela distância 3D de cada texel, levado à superfície por `(s, y) → torso.avaliar`, ao ponto do mamilo `torso.ponto(*mama.param_mamilo())` (raio nominal = metade do diâmetro nessa métrica); 8–12 tubérculos de Montgomery e rugas radiais do mamilo como relevo fino (normal perturbada) e cor;
+  3. **luz assada**: `albedo × E_SH9(N) × sombra_do_sulco × brilho`, com `E_SH9` = ambiente 0,36 + duas direcionais de 0,45 vindas de `(±0,55; 0,40; 0,73)` (fotografia clínica com duas fontes simétricas), no quadro anatômico (= espaço do objeto do torso). Os 9 coeficientes vão para `gabarito.textura.sh9` (`origem: "sintetico"`, `r2: 1.0`).
+- Saída em sRGB 8 bits, sem tone mapping; o PNG não tem metadados.
 
 ---
 
@@ -279,6 +308,7 @@ Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI).
 - **Unidade: mm** (desvio consciente da convenção "metros" do glTF; ADR 0010). O arquivo DEVE declarar `asset.extras.unidade = "mm"` e `asset.extras.quadro = "scan" | "anatomico"`. O carregador do web DEVE rejeitar `.glb` sem `asset.extras.unidade == "mm"`.
 - `asset.generator = "simulador-mamario/mesh <versao>"`.
 - Material único, `pbrMetallicRoughness` com `baseColorTexture` (textura embutida como imagem PNG/JPG no GLB), `metallicFactor 0`, `roughnessFactor 0.8`, `doubleSided false`.
+- Os `.glb` de morph (seção 10) levam também `asset.extras.iluminacao` (`iluminacao_sh9/1.0`, seção 10.6): a luz já assada na textura, para o sombreamento por razão do modo foto (ADR 0019/0020).
 - A malha é `Y` para cima, sem nós com transformação (nó raiz com matriz identidade). O web NUNCA aplica escala ao carregar.
 - Ordem dos vértices do `.glb` processado é a **mesma** de `processada.obj` (mesmo índice de vértice nos dois arquivos). Isso permite `landmarks.vertice` valer nos dois.
 
@@ -299,13 +329,40 @@ $DATA_DIR/
       morphs/              # seção 10
         manifest.json
         <plano>__<imf>.glb
+      # malha de origem "foto" (seção 19): em vez do scan em original/
+      original/foto_<vista>.jpg   # foto recortada no navegador (sem rosto, sem EXIF); a captura desta modalidade
+      reconstrucao.json    # reconstrucao/1.0
+      fotos/registro.json  # só o bloco `fotos` (K, R, t por foto)
+      fotos/mascara_<vista>.png   # máscara do torso usada no ajuste (quando segmentada no serviço)
+      observado.png        # seção 5.5 (L 8 bits: fração da cor que veio das fotos; 0 = não observado)
+      avaliacao.json       # só em malha de torso sintético (seção 19.2): erro contra o gabarito
     medidas/<medida_id>.json      # seção 6
     simulacoes/<simulacao_id>.json
     relatorios/<atendimento_id>.pdf
   sinteticos/<nome>/       # seção 4.2
+    fotos/                 # fotos sintéticas (seção 19): foto_<vista>.jpg, mascara_<vista>.png, registro_<vista>.json
+    foto/                  # "fotos de exemplo" (seção 19.2): malha reconstruída de frente + oblíqua D + perfil D
+    foto_frente/           # idem, só a frontal (só no t01)
+  validacao/               # seção 18 (não é dado de paciente)
+    malhas/<uuid>/         # torso sintético processado para a sessão (original/, processada.*, preparo.json)
+    sessoes/<id>.json      # sessao_bland_altman/1.0
 ```
 
 `apps/web` e `services/mesh` rodam na **mesma máquina** nesta fase e trocam **caminhos relativos a `DATA_DIR`** (nunca absolutos, nunca `..`). O Python DEVE recusar caminhos que escapem de `DATA_DIR`.
+
+### 5.5 Textura reconstruída por fotos: `textura.png` + `observado.png` (`textura_reconstruida/1.0`)
+
+Malhas com `origem: "foto"` (reconstrução por ajuste de template, plano foto3d; contrato C3) trocam a textura provisória pela **foto projetada** no atlas UV do template (a UV cilíndrica do gerador, seção 4.5, 4 px/mm). Código: `services/mesh/mesh/foto/projetar.py` (projeção) e `preencher.py` (não observado + gravação, `texturizar_malha`). Nada é sintetizado: cada texel observado é re-amostragem bilinear da foto; o resto é a textura procedural do ADR 0020 com a cor casada.
+
+- **Câmera** (C1, seção 19): `x_cam = R·X + t`, +z para a frente, +x à direita e +y para baixo na imagem; `u = fx·x/z + cx`, `v = fy·y/z + cy` (com `k1`: `x/z, y/z` × `1 + k1·r²`); (u, v) contínuos com origem no canto superior esquerdo: pixel (i, j) com centro em (j + 0,5; i + 0,5), ponto principal no centro = (W/2, H/2). `K`, `R` serializados com 9 números coluna-major; `t` com 3 (mm).
+- **Visibilidade**: z-buffer da malha na resolução da foto; um texel só recebe cor se estiver à frente do z-buffer + 0,5 mm + 1 px·(mm/px)·tan θ (0 texels observados atrás de outra superfície, testado contra um oráculo independente). Peso de fusão entre fotos `cos(θ)³ × feather(12 px da borda da máscara) × visível`; com mais de uma foto, 3 ganhos RGB por foto (mínimos quadrados em luz linear contra a frontal).
+- **`observado.png`**: PNG `L` 8 bits, mesmo tamanho do atlas; valor = fração da cor do texel que veio da(s) foto(s) (255 = foto pura; **0 = preenchido proceduralmente**, "não observado", hachurado no web). Um texel é não observado quando a confiança `1 − Π(1 − c_k)` < 0,15, com `c_k = smoothstep(cos θ / cos 75°) × feather × visível`. Entre observado e preenchido há uma rampa de 10 mm para dentro do observado (mistura em luz linear).
+- **Preenchimento**: baixa frequência da cor observada (células de 1 mm, push-pull, gaussiana de 3 mm) extrapolada para todo o atlas + detalhe da textura procedural (log, passa-alta de 8 mm, amplitude casada com a do detalhe observado). A aréola procedural é apagada do detalhe do lado cujo mamilo foi observado; se o mamilo não foi observado ela é mantida e o aviso `areola_procedural_<lado>` sai em `avisos`. Sem textura base: só a cor casada (aviso `preenchimento_sem_textura_base`).
+- **`cobertura_observada_pct`**: % dos texels do atlas (W × H) com confiança ≥ 0,15. Uma foto frontal clínica cobre 35–41 % (t01–t03; máximo físico ~38–41 %: só a metade anterior dentro do quadro).
+- **`processada.glb`**: `asset.extras.reconstrucao = {fotos: N, cobertura_observada_pct}`; `asset.extras.textura = {origem: "foto_projetada", observado: "observado.png", cobertura_observada_pct, limiar_nao_observado: 0.15}`; `asset.extras.iluminacao` = `ajustar_sh9` (seção 10.6) só nos vértices com `observado ≥ 0,5`.
+- **`meta.json.textura`** = o bloco `textura_reconstruida/1.0` (`config/schemas/textura_reconstruida.schema.json`): `origem`, `arquivo`, `observado`, cobertura, limiar, tamanho, `px_por_mm`, por foto (`vista`, texels na imagem/visíveis/oclusos, `ganhos_rgb`, `cobertura_pct`), `sha256` de `textura.png` e de `observado.png`, `iluminacao`, `avisos`.
+- **LGPD**: na projeção (P2) o único leitor de imagem é `projetar.ler_foto(malha_dir, "original/foto_<vista>.jpg")` (lista fixa de vistas, sem `..`); nada é gravado fora de `malha_dir` (só `textura.png`, `observado.png` e o `.glb`). Em todo `mesh/foto/` há só 4 leitores de imagem, listados por função em `tests/test_projetar.py::test_image_open_so_no_caminho_de_entrada` (qualquer outro falha o teste): `projetar.ler_foto`; `reconstruir._carregar_foto` e `reconstruir._carregar_mascara` (caminhos da requisição resolvidos dentro de `malha_dir` por `caminhos.resolver`); `sintetica.foto_sintetica` (só a textura do torso sintético; grava as fotos sintéticas em `fotos/`).
+- **Web**: `original/foto_<vista>.*` e `observado.png` só saem pela rota de arquivo de uma malha reconstruída de fotos (`reconstrucao.json` na pasta ou `meta.origem = "foto"`); num scan enviado, os mesmos nomes dão 400. Sem foto de perfil, o servidor anula `previsto` em `/morphs`, em `morphs/manifest.json` e em `GET /simulacoes`, e `POST /simulacoes` com `previsto` não nulo dá 422 `previsto_sem_perfil` (também em B).
 
 ---
 
@@ -370,9 +427,9 @@ Regras:
 
 ## 7. API HTTP do `services/mesh`
 
-Servidor FastAPI (MIT) em `MESH_SERVICE_URL` (padrão `http://127.0.0.1:8765`). JSON UTF-8. Erros seguem `{"erro": {"codigo": "...", "mensagem": "...", "detalhes": {}}}` com status 400 (entrada inválida), 404 (arquivo não encontrado), 422 (validação de contrato), 500. Sem autenticação nesta fase (só escuta em 127.0.0.1); o web é o único cliente. Todas as rotas são síncronas; `/morphs` pode levar minutos — o web usa timeout de 30 min.
+Servidor FastAPI (MIT) em `MESH_SERVICE_URL` (padrão `http://127.0.0.1:8765`). JSON UTF-8. Erros seguem `{"erro": {"codigo": "...", "mensagem": "...", "detalhes": {}}}` com status 400 (entrada inválida), 403 (rota desligada no desenho A), 404 (arquivo não encontrado), 422 (validação de contrato), 500. Sem autenticação nesta fase (só escuta em 127.0.0.1); o web é o único cliente. Todas as rotas são síncronas; `/morphs` pode levar minutos — o web usa timeout de 30 min.
 
-Cabeçalho obrigatório em toda requisição: `X-Desenho: A|B` (o Python não decide nada com ele, apenas o grava no log estruturado e o ecoa na resposta — permite auditar que em A nenhum volume foi pedido).
+Cabeçalho obrigatório em toda requisição, exceto `GET /saude`: `X-Desenho: A|B`. Ausente → `400 desenho_ausente`; outro valor → `400 desenho_invalido`. O serviço o grava no log estruturado e o ecoa na resposta. Com `X-Desenho: A`, o serviço recusa `POST /medir` com `403 desligado_no_desenho_a` (e ecoa `X-Desenho: A`) antes de calcular qualquer coisa, e registra no log o evento `desligado_no_desenho_a` com o `incluir_volume` recebido. É defesa em profundidade: o web já não chama `/medir` em A (seção 13; ADRs 0005 e 0016). Em `/morphs` com `X-Desenho: A`, `previsto` sai `null` (seção 10.4). As demais rotas funcionam igual nos dois desenhos.
 
 ### 7.1 `GET /saude`
 
@@ -443,7 +500,7 @@ Multiplica todas as coordenadas de `processada.obj`/`.glb` por `fator` (em torno
 }
 ```
 
-→ `200` com `{ "distancias": {...}, "volumes": {...} | null, "quadro_anatomico": {...} | null, "geodesica": {...}, "avisos": [] }` nos formatos da seção 6. Erro 422 `euclidiana_divergente` se alguma euclidiana do web diferir > 0,01 mm da recalculada.
+→ `200` com `{ "distancias": {...}, "volumes": {...} | null, "quadro_anatomico": {...} | null, "geodesica": {...}, "avisos": [] }` nos formatos da seção 6. Erro 422 `euclidiana_divergente` se alguma euclidiana do web diferir > 0,01 mm da recalculada. Com `X-Desenho: A` → `403 desligado_no_desenho_a`, sem corpo de medida (ver início desta seção).
 
 ### 7.5 `POST /torso-sintetico`
 
@@ -459,7 +516,11 @@ Ver seção 10.4.
 { "pares": [ { "medida": "ssn_n_dir", "referencia_mm": 212.30, "medido_mm": 213.1, "torso": "t01_simetrico_300", "operador": "op1" } ] }
 ```
 
-→ `{ "n": 30, "vies_mm": 0.4, "dp_mm": 0.9, "loa_inferior_mm": -1.36, "loa_superior_mm": 2.16, "dentro_de_2mm": true, "por_medida": { ... } }`. LoA = viés ± 1,96·DP. Usado para gerar o registro de validação (seção 15).
+→ `{ "n": 30, "vies_mm": 0.4, "dp_mm": 0.9, "loa_inferior_mm": -1.36, "loa_superior_mm": 2.16, "dentro_de_2mm": true, "por_medida": { ... } }`. LoA = viés ± 1,96·DP. Usado pelo e2e `apps/web/e2e/validacao.spec.ts` para o Bland-Altman do Marco 1, que vai para o registro de componente `v<versao>-web-marcos-0-1.json` (seção 15).
+
+### 7.8 `POST /reconstruir-foto`
+
+Ver seção 19. Funciona em A e em B; em A o bloco `estimado` (medidas calculadas no modelo) volta vazio.
 
 ---
 
@@ -592,6 +653,7 @@ mt__<implante_id>__<plano>__<imf>
 - `asset.extras.unidade = "mm"`, `asset.extras.quadro` igual ao da malha base, `asset.extras.esquema = "morphs/1.0"`, `asset.extras.versao_config_simulacao = "1.0"`.
 - Pesos: o web usa `morphTargetInfluences[i] ∈ [0, 1]`; **1 = implante inteiro**. Interpolação entre dois volumes vizinhos do mesmo modelo/plano/imf é permitida com pesos `w` e `1−w` (documentada na UI como "interpolado"). Somar targets de planos diferentes é proibido.
 - O envelope de incerteza (±`envelope_rms_mm`) é renderizado pelo web deslocando a superfície deformada ao longo das normais (shader ou segunda malha translúcida), não é um morph target.
+- `asset.extras.iluminacao` (seção 10.6) em todo `.glb` de morph, igual nos 4 arquivos da mesma malha.
 
 ### 10.4 `manifest.json`
 
@@ -632,6 +694,25 @@ Requisição `POST /morphs`:
 2. Carrega o `.glb` do (plano, imf) selecionado com `GLTFLoader`; confere `asset.extras.unidade === "mm"` e `esquema === "morphs/1.0"`.
 3. Seleciona targets por nome via `morphTargetDictionary`; slider antes/depois = peso 0 → 1; comparação lado a lado = dois `<Canvas>`/viewports com a mesma câmera sincronizada, cada um com seu target (ou `__dir`/`__esq` em um viewport).
 4. Troca de plano/imf = troca de `.glb` (pré-carregar os 4).
+
+### 10.6 `asset.extras.iluminacao` (`iluminacao_sh9/1.0`; contrato C1 do ADR 0020)
+
+```jsonc
+"iluminacao": { "esquema": "iluminacao_sh9/1.0", "sh9": [9 floats], "r2": 0.95, "origem": "ajuste" }   // ou "padrao"
+```
+
+- **Para que serve**: o modo foto do web (ADR 0019) desenha a textura sem somar luz e aplica depois do morph só a mudança de sombreamento, `R = E(N_depois) / E(N_antes)`. `E` é a irradiância da luz que já está na textura; a escala de `sh9` não importa (só a razão), e no ajuste ela carrega o albedo médio.
+- **Base e convenção** (idênticas no Python e no web): harmônicos esféricos reais de ordem 2, sem fase de Condon-Shortley, ordem `(l, m)` com `m = −l..l`, `n = (x, y, z)` unitário **no espaço do objeto do `.glb`** (a luz acompanha a paciente, não a câmera); normalização de Ramamoorthi & Hanrahan (2001). `sh9` são coeficientes de **irradiância** (já convoluídos com o cosseno: A0 = π, A1 = 2π/3, A2 = π/4), `E(n) = Σ sh9[i] · Y_i(n)`, luminância linear em [0, 1]:
+
+  | i | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Y_i(n) | 0,282095 | 0,488603·y | 0,488603·z | 0,488603·x | 1,092548·xy | 1,092548·yz | 0,315392·(3z²−1) | 1,092548·xz | 0,546274·(x²−y²) |
+
+  (a mesma base e ordem de `THREE.SphericalHarmonics3`). Luz ambiente `a` + direcional `d` vinda de `L`: `sh9[i] = d · A_l(i) · Y_i(L)` e `sh9[0] += a / 0,282095`.
+- **`origem: "ajuste"`**: `services/mesh/mesh/simulacao/iluminacao.py` (`ajustar_sh9`) amostra a luminância linear da textura (bilinear, REPEAT em u e CLAMP em v, como o sampler) na UV de cada vértice da malha lida, só onde `N · z_anatômico > −0,2` (sem landmarks: `N · (0,0,1)_obj`), e ajusta os 9 coeficientes por mínimos quadrados robustos (IRLS com peso de Huber, k = 1,345·MAD). `r2` é o R² ponderado pelos pesos finais, em [0, 1].
+- **`origem: "padrao"`**: sem textura/UV, menos de 500 amostras, textura lisa, R² < 0,3 ou irradiância ajustada ≤ 0 em alguma normal amostrada. `sh9` = ambiente 0,45 + direcional 0,55 com `L = normalizar(0; 0,35; 0,94)` **no quadro anatômico dos landmarks** (seção 1.1), levada ao espaço do objeto (`L_obj = [x y z] · L`); `r2` = 0 quando não houve ajuste. O web trata ausente ou `"padrao"` do mesmo jeito (luz padrão calculada por ele a partir dos landmarks).
+- **Números de referência**: luz padrão no quadro identidade (torsos sintéticos), `sh9 = [2,082632; 0,196393; 0,527454; 0; 0; 0,154329; 0,222715; 0; −0,028731]`, E mínima ≈ 0,43 e E(L) = 0,45 + 0,55 × 1,0625; vetor de conferência para outra implementação: E(0,0,1) = 0,985701, E(0,1,0) = 0,628911, E(1,0,0) = 0,501563, E(0,−1,0) = 0,436995, E(normalizar(0,3; −0,2; 0,93)) = 0,889187. No t01 fotográfico (catálogo de teste): `origem: "ajuste"`, R² ≈ 0,95, `E` ajustada = `E` assada a menos da escala com RMS de 0,7 % sobre os vértices (teste T11).
+- Nada muda em nomes de targets, `manifest.json` ou API HTTP.
 
 ---
 
@@ -803,7 +884,7 @@ O web monta `dados_travados` (números e rótulos vindos do banco), renderiza as
 
 ## 15. Registro de validação — `docs/validacao/`
 
-Um arquivo por versão: `docs/validacao/v<versao>.md` com front matter YAML + tabelas, **e** o sidecar `docs/validacao/v<versao>.json` (`validacao/1.0`) gerado pela CI (`scripts/ci.sh` → `services/mesh` → `/validar-bland-altman`). O `.md` é o documento humano; o `.json` é o que a fase 3 agrega.
+Um arquivo por versão: `docs/validacao/v<versao>.md` com front matter YAML + tabelas, **e** o sidecar `docs/validacao/v<versao>.json` (`validacao/1.0`). Os dois são gerados por comando, com a árvore limpa: `bash scripts/validacao.sh` captura o commit (`git describe --always --dirty`), gera os registros de componente (`v<versao>-services-mesh.*` pelo `mesh.validacao`; `v<versao>-web-marcos-0-1.*`, cujo Bland-Altman do Marco 1 vem de `POST /validar-bland-altman`, e `v<versao>-web-marco2-latencia.*` pelos e2e) e chama `scripts/registro_validacao.py`, que consolida `v<versao>.{md,json}` a partir dessas saídas e das de pytest, Vitest e Playwright (nada digitado à mão; ADR 0016). `scripts/ci.sh` não gera o registro: confere que `v<VERSION>.md` existe e, por `scripts/validar_config.py`, valida `v*.json` contra `validacao/1.0` e exige `versao_software` igual a `VERSION`. O `.md` é o documento humano; o `.json` é o que a fase 3 agrega.
 
 ```yaml
 ---
@@ -934,3 +1015,97 @@ create index auditoria_entidade_idx on auditoria (entidade, entidade_id, ocorrid
 ```
 
 Toda leitura de malha, medida, simulação, relatório ou PDF por rota do Next.js insere uma linha em `auditoria`. Logs de aplicação (stdout, Sentry no futuro) só contêm IDs e pseudônimos, nunca `detalhes` de anamnese.
+
+---
+
+## 18. Validação humana: sessão de Bland-Altman e planilha do art. 5º (ADR 0017)
+
+Só no desenho B (recurso `medicao_automatica_3d`); em A toda rota abaixo responde `403 desligado_no_desenho_a` antes de tocar banco, disco ou rede. Mutações seguem o §7 do proxy (JSON, Origin, token local). Tudo em `DATA_DIR/validacao/` (§5.4), nunca em `pacientes/`.
+
+| Rota | Faz | Cliente recebe |
+|---|---|---|
+| `POST /api/validacao/sessoes` | `{ operador, tipo_operador?: "humano"\|"simulado", repeticoes?: 2..5, torsos?: [nome], semente? }`. Abre a sessão com os torsos sintéticos que têm gabarito | vista pública (201) |
+| `GET /api/validacao/sessoes[/<id>]` | lista ou lê | vista pública |
+| `GET /api/validacao/sessoes/<id>/itens/<i>/malha` | GLB processado do scan do item (sessão aberta) | `model/gltf-binary` |
+| `POST /api/validacao/sessoes/<id>/itens/<i>` | `{ landmarks }` com os 10 landmarks, `origem: "clique"`; só o próximo item pendente; uma vez por item (409 `fora_de_ordem` / `item_ja_registrado`; 422 `landmarks_incompletos` / `origem_invalida`) | vista pública |
+| `POST /api/validacao/sessoes/<id>/encerrar` | `{ observacoes? }` (≤ 500, sem `@`); exige todos os itens (409 `sessao_incompleta`) | vista pública com `scans` e `resultado` |
+| `POST /api/validacao/sessoes/<id>/cancelar` | abandona sem resultado | vista pública |
+| `GET /api/validacao/planilha?formato=csv\|json[&separador=virgula\|ponto-e-virgula]` | planilha art. 5º; audita `exportou` | CSV (anexo) ou JSON |
+
+**Vista pública** (sessão aberta ou cancelada): `id`, `estado`, `operador` (código pseudônimo `^[A-Z0-9][A-Z0-9-]{1,15}$`), `tipo_operador`, `repeticoes`, `versao_software`, datas, `landmarks_exigidos`, `itens[] { indice, scan_id, repeticao, concluido }` e `proximo_indice`. **Nunca** traz nome do torso, gabarito, landmarks gravados ou distâncias. Com sessão aberta sobre um torso:
+- `GET /api/sinteticos/<nome>/gabarito.json` → `403 gabarito_oculto_sessao_aberta`;
+- `POST /api/sinteticos/<nome>/importar` devolve `gabarito: null` e `gabarito_bloqueado: true`;
+- sessões encerradas com esse torso saem sem `scans` nem `resultado` (`resultado_oculto: "sessao_aberta_com_mesmo_torso"`) na lista, no GET e no encerramento;
+- `POST /api/benchmark` e `GET /api/benchmark/arquivo` → `409 benchmark_indisponivel_sessao_aberta` (se o torso for o do benchmark).
+
+Com **qualquer** sessão aberta, a planilha → `409 planilha_indisponivel_sessao_aberta`. Arquivo de sessão inválido → fail closed: tudo bloqueado até correção ou remoção manual (ADR 0017).
+
+**`sessao_bland_altman/1.0`** (arquivo `validacao/sessoes/<id>.json`, só no servidor): campos da vista + `desenho`, `semente`, `scans[] { scan_id, torso, sha256_gabarito, sha256_obj }`, `itens[] { ..., registrado_em, landmarks, distancias (§3.1, do /medir), avisos }`, `observacoes`, `resultado`.
+
+**`resultado`**: `pares[] { medida: "<distancia>:<tipo>", distancia, tipo, referencia_mm, medido_mm, desvio_mm, scan_id, torso, repeticao }`, Bland-Altman `geral`, `n_imf` (à parte), `sem_n_imf`, `euclidiana`, `geodesica` (cada um: `n`, `vies_mm`, `dp_mm`, `loa_inferior_mm`, `loa_superior_mm`, `erro_abs_max_mm`, `dentro_de_2mm`, `dentro_de_3mm`, `por_medida`; fórmula do §7.7), `intra_operador { n_grupos, dp_intra_mm, coeficiente_repetibilidade_mm, bland_altman_rep2_rep1 }`, `notas` (pseudo-replicação; pares ≠ sujeitos) e `criterios { n_pares, n_pares_min_30, loa_dentro_3mm, loa_dentro_2mm, n_imf_relatado_a_parte, scans_distintos, vale_para_fase1 (false com torso sintético), motivo_fase1 }`.
+
+**Planilha `planilha_validacao_art5/1.0`**: uma linha por par. As fontes são `docs/validacao/v<versao>-web-marcos-0-1.json` (`fonte = registro_e2e`, operador simulado) e as sessões encerradas (`fonte = sessao_bland_altman`). Colunas, nesta ordem: `versao_software, data, fonte, registro, commit, desenho, operador, tipo_operador, scan_id, sintetico, repeticao, medida, tipo_distancia, n_imf, referencia_mm, medido_mm, desvio_mm, observacoes`. `scan_id = sintetico:<nome>`. `desvio_mm = medido − referência`. CSV em RFC 4180, UTF-8 com BOM e CRLF; células de texto iniciadas por `= + - @` ganham `'`. O JSON acrescenta `resumo[]` por registro ou sessão (geral, N-IMF, sem N-IMF) e `notas`. Nenhuma linha tem nome, pseudônimo de paciente, caminho absoluto ou e-mail.
+
+---
+
+## 19. Reconstrução do torso a partir de fotos (`reconstrucao/1.0`)
+
+`services/mesh/mesh/foto/` (plano foto3d, pacote P1): de 1–5 fotos recortadas (a frontal obrigatória) + landmarks 2D clicados + uma referência de escala, ajusta o template paramétrico (`torso_parametros/1.1`) por mínimos quadrados robustos (reprojeção dos landmarks, silhueta contra a máscara, escala, prior fraco) e gera a malha pelo mesmo caminho do gerador de torsos (grade densa → decimação 30–50 mil vértices, UV cilíndrica), no **quadro anatômico** (`scan ≡ anatomico`). A malha entra no fluxo de hoje (`/medir`, `/morphs` sem mudança). Esquema executável: `config/schemas/reconstrucao.schema.json`.
+
+**Câmera** (convenção OpenCV): `x_cam = R·X + t` (X no quadro anatômico, mm); `u = fx·x/z + cx`, `v = fy·y/z + cy`, com distorção radial opcional `k1` nas coordenadas normalizadas; eixos da câmera x → direita da imagem, y → para baixo, z → para a frente. Pixel contínuo com origem no canto superior esquerdo (centro do pixel i em i + 0,5). `K` e `R` em 9 números **coluna-major** (como `THREE.Matrix3.elements`), `t` em 3. `f_px = max(W, H) · focal_35mm / 36`; ponto principal no centro; lente < 20 mm equivalente é recusada. Para three.js: `R_three = diag(1, −1, −1) · R`, `t_three = diag(1, −1, −1) · t` (a câmera three olha para −z com y para cima); FOV vertical = `2·atan(H / (2·fy))`.
+
+**Requisição** `POST /reconstruir-foto` (cabeçalho `X-Desenho` como nas outras rotas):
+
+```jsonc
+{
+  "malha_dir": "pacientes/P-XXXXXX/malhas/<uuid>",
+  "fotos": [                                    // 1..5, vistas distintas; "frente" obrigatória
+    { "vista": "frente",                        // frente | obliqua_dir | obliqua_esq | perfil_dir | perfil_esq
+      "arquivo": "original/foto_frente.jpg",    // relativo a malha_dir
+      "largura_px": 3000, "altura_px": 2400,    // conferidos contra a imagem
+      "focal_35mm": 26.0,                       // do EXIF, lido no navegador; null -> 26 mm e f_origem "estimado"
+      "landmarks_2d": { "furcula": [1502.3, 60.1], "mamilo_dir": [1180.0, 900.5] /* ... */ },  // frontal: >= 6, com furcula, mamilos e linha_media_inferior
+      "mascara": "original/mascara_frente.png", // opcional (L, > 127 = torso); sem ela o serviço segmenta
+      "k1": 0.0 }                               // opcional
+  ],
+  "escala": { "metodo": "ssn_n_fita", "valor_mm": 198.0, "lado": "dir" },   // ou regua_foto (+ pontos_px [[u,v],[u,v]] na frontal) ou base_digitada
+  "opcoes": { "segmentacao": "onnx" },          // onnx (cai em template sem pesos, com aviso) | template
+  "malha_id": null
+}
+```
+
+**Resposta 200**: `{ "reconstrucao": <reconstrucao/1.0>, "meta": <malha_meta/1.0 com "origem": "foto", "quadro": "anatomico" e "textura" = textura_reconstruida/1.0> }`. Grava `processada.obj/.mtl`; `textura.png` = as fotos **projetadas** no atlas UV + preenchimento do não observado (seção 5.5: `projetar.fotos_do_registro` com as câmeras recém-ajustadas → `preencher.texturizar_malha`; a `textura_pele` fotográfica no fototipo mais próximo da pele observada é só a base do preenchimento); `observado.png`; `processada.glb` (`asset.extras.origem = "foto"`, `reconstrucao = {fotos, cobertura_observada_pct}`, `textura = {origem: "foto_projetada", …}`, `textura_provisoria` (a base), `iluminacao`); `meta.json`, `reconstrucao.json`, `fotos/registro.json` e `fotos/mascara_<vista>.png` das máscaras segmentadas. Em `meta.original`: `arquivo` e `sha256` da foto frontal; `n_vertices`/`n_faces` da malha gerada (não há malha original). A projeção só lê `original/foto_<vista>.jpg`; um `arquivo` fora desse layout usa as imagens já decodificadas na validação.
+
+**`reconstrucao/1.0`** (campos principais):
+
+| Campo | Conteúdo |
+|---|---|
+| `fotos[]` | `vista, arquivo, sha256, largura_px, altura_px, K[9], R[9], t[3], k1, f_origem ("exif"\|"estimado"), focal_35mm, landmarks_2d, residuos_px {id: px}, rms_px, mascara {arquivo, modo: "fornecida"\|"onnx"\|"template"}` |
+| `parametros` | `torso_parametros/1.1` ajustado (regera a mesma superfície com o gerador) |
+| `escala` | `{metodo, valor_mm, fator, lado?, medido_no_modelo_mm}`; `fator = valor_mm / medida no modelo` (~1) |
+| `landmarks` | os 10, `{posicao, vertice (em processada.obj), origem: "foto"}` |
+| `estimado` | "gabarito estimado": `distancias.<id>.euclidiana_mm` e `volumes.<lado>.adicionado_ml` no modelo; **vazio em DESENHO=A** |
+| `reprojecao_rms_px`, `residuo_silhueta_mm`, `forma_fora_do_modelo` | qualidade do ajuste; `forma_fora_do_modelo` quando > 10 % dos pontos de silhueta ficam a > 4 mm |
+| `incerteza_por_eixo_mm {x,y,z}`, `incerteza_volume_pct` | covariância do ajuste propagada à região das mamas, com piso de 4,5 mm; z: piso 12 mm só com a frontal, 8 mm com oblíqua sem perfil; volume: piso 25/20/15 % |
+| `profundidade_confiavel` | `false` sem foto de perfil: profundidade só ilustração e **nenhum número de projeção** (o web deixa `previsto` nulo mesmo em B) |
+| `qualidade` | `boa` (rms ≤ 3 px e silhueta ≤ 2 mm) \| `regular` (≤ 6 px, ≤ 4 mm) \| `ruim` |
+| `avisos` | p. ex. `sem_perfil:profundidade_so_ilustracao`, `forma_fora_do_modelo`, `refazer_ponto:<vista>:<id>` (resíduo isolado > 6 px), `segmentacao_onnx_indisponivel`, `focal_35mm_ausente:<vista>:padrao_26mm`, `desenho_a:medidas_estimadas_omitidas` |
+| `cobertura_observada_pct` | % dos texels do atlas com `observado ≥ 0,15` (seção 5.5; a mesma do `meta.textura`) |
+| `malha` | `{obj, glb, textura, textura_provisoria (false: a foto foi projetada), observado: "observado.png", n_vertices, n_faces}` |
+| `diagnostico` | etapas e custos do otimizador, tempos (inclui `textura_s`), incerteza bruta do ajuste (sem piso), parâmetros no limite, `cobertura_area_vista_pct` (% da área da malha vista de frente em alguma foto, z-buffer) |
+
+**Erros**: 422 `landmarks_2d_incompletos` (sem frontal, frontal com < 6 pontos ou sem os obrigatórios, outra vista sem pontos nem máscara), `landmark_desconhecido`, `pontos_colineares`, `registro_ruim` (reprojeção > 12 px), `rosto_possivelmente_visivel` (fúrcula a mais de 12 % da altura a partir do topo numa foto frontal/oblíqua — **as fotos da requisição são apagadas**), `foto_sem_torso`, `escala_ausente`, `lente_grande_angular`, `dimensoes_divergentes`, `vista_invalida`; 404 `arquivo_nao_encontrado`; 400 `caminho_invalido`, `foto_ilegivel`.
+
+**Fotos sintéticas** (dados de teste e fotos de exemplo; nunca versionadas): `python -m mesh.cli foto-sintetica --todos --sinteticos data/sinteticos` grava em `sinteticos/<nome>/fotos/` `foto_<vista>.jpg` (câmera clínica do web: FOV 15°, 4:3, recortada 15 mm acima da fúrcula, sem EXIF), `mascara_<vista>.png` (exata) e `registro_<vista>.json` (`registro_foto_sintetica/1.0`: K, R, t exatos, `focal_35mm`, `landmarks_2d` de todos os 10 e `visiveis`). `python -m mesh.cli reconstruir --sintetico <pasta> --saida <dir>` roda a rota de ponta a ponta.
+
+### 19.1 Câmera no web e paridade
+
+O web (`apps/web/src/simulacao/cameraDaFoto.ts`) monta a `PerspectiveCamera` direto de K, R, t (projeção a partir de K, sem aproximar por FOV) e a textura projetiva do material (`matrizTexturaFoto`) na **mesma** coordenada contínua do Python: não há meio pixel entre os dois lados (`MEIO_PIXEL = 0`). A fixture `apps/web/tests/fixtures/foto3d/paridade_camera.json` (câmeras e landmarks 3D de uma reconstrução real do t01 com 3 fotos, e os pixels do `camera.projetar`) é conferida em `services/mesh/tests/test_paridade_camera.py` (P1 `camera.projetar` × P2 `projetar.Camera`) e em `apps/web/tests/unit/cameraParidade.test.ts` (P3), com tolerância de 0,5 px; medido ~5·10⁻⁷ px.
+
+### 19.2 Fotos de exemplo e avaliação contra o gabarito (`avaliacao_reconstrucao/1.0`)
+
+`python -m mesh.cli fotos-exemplo --todos --sinteticos <DATA_DIR>/sinteticos [--se-desatualizado]` (`scripts/mesh.sh fotos`; a CI e o `scripts/demo_sandbox.sh preparar` rodam depois dos torsos) prepara, pelo pipeline real, `sinteticos/<nome>/foto/` (frente + oblíqua D + perfil D) e `sinteticos/t01_simetrico_300/foto_frente/` (só a frontal): fotos sintéticas (`fotos/`) → `POST /reconstruir-foto` (DESENHO=B; landmarks 2D exatos — todos na frontal, os visíveis nas outras —, máscara exata, escala `ssn_n_fita` = SSN–N direita euclidiana do gabarito) → `avaliacao.json`. A pasta tem o layout de uma malha (`original/foto_<vista>.jpg`, `reconstrucao.json`, `processada.obj/.mtl/.glb`, `textura.png`, `observado.png`, `meta.json`). `--se-desatualizado` pula a pasta cuja `avaliacao.json` tem o mesmo `gabarito_sha256` e o mesmo `codigo_sha256` (impressão de `mesh/foto/*.py`, `superficie.py`, `textura_pele.py`, `gerador.py`).
+
+`avaliacao.json` (`config/schemas/avaliacao_reconstrucao.schema.json`; `mesh/foto/avaliar.py`): `rms_mm {x, y, z, total}` — RMS ponto–superfície por eixo, da superfície verdadeira (pegadas das mamas do gabarito dilatadas 20 mm, a cada 2 mm) para `processada.obj`; `volume_erro_pct {dir, esq}` — `estimado.volumes` contra o volume adicionado do gabarito; `landmarks_erro_mm {medio, max, por_landmark}`; `reprojecao_rms_px` — landmarks 3D reconstruídos pelas câmeras estimadas contra os 2D exatos das fotos sintéticas (visíveis); `pose_erro_mm` por vista; `incerteza_por_eixo_mm` e `profundidade_confiavel` copiados do C1; `gabarito_sha256`, `codigo_sha256`, versão e data.
+
+No web: `GET /api/sinteticos` lista `foto` e `foto_frente` por torso; `POST /api/sinteticos/<nome>/importar-foto` (`{paciente_id, variante?: "foto" | "foto_frente"}`) registra a malha reconstruída pelo caminho de um upload (ADR 0003 item 9) e copia fotos, `reconstrucao.json`, `observado.png` e `avaliacao.json`; `GET /api/malhas/<id>/foto-real` devolve câmeras, halo = max(envelope; incerteza z), incerteza por eixo e o erro contra o gabarito **só em B** (`foto_real/1.0`); a rota de arquivo serve `original/foto_<vista>.jpg|png` e `observado.png`, nunca `reconstrucao.json`/`avaliacao.json`.

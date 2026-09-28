@@ -73,6 +73,15 @@ describe("UI em DESENHO=A", () => {
     expect(screen.getByTestId("tepid-nota").textContent).toMatch(/conferir no texto original/);
     expect(screen.getByTestId("tepid-apss_mm-dir")).toBeTruthy();
   });
+
+  it("a base do TEPID nunca aparece como pré-preenchida pelo 3D (prop ignorada em A)", () => {
+    const valores = valoresTepidVazios();
+    valores.base_mm = { dir: "113.5", esq: "113.5" };
+    const { container } = render(
+      <FormularioTepid recursos={recursosDoDesenho("A")} tepid={tepid} valores={valores} onChange={() => undefined} onAvaliar={() => undefined} avaliando={false} resultado={null} erros={[]} basePreenchida={{ dir: "113.5", esq: "113.5" }} />,
+    );
+    expect(container.textContent).not.toMatch(/pré-preenchid/i);
+  });
 });
 
 describe("UI em DESENHO=B", () => {
@@ -93,6 +102,13 @@ describe("UI em DESENHO=B", () => {
 describe("aviso fixo", () => {
   it("exibe 'Ilustração, não previsão de resultado'", () => {
     render(<AvisoFixo versao="0.0.1" desenho="B" />);
+    expect(screen.getByTestId("aviso-fixo").textContent).toContain("Ilustração, não previsão de resultado");
+    expect(screen.queryByTestId("faixa-demo")).toBeNull(); // sem DEMO_SINTETICA: nada muda
+  });
+
+  it("modo demo sintética (ADR 0018): faixa 'DEMONSTRAÇÃO' junto do aviso", () => {
+    render(<AvisoFixo versao="0.1.2" desenho="B" demo />);
+    expect(screen.getByTestId("faixa-demo").textContent).toBe("DEMONSTRAÇÃO — dados sintéticos, não é previsão clínica");
     expect(screen.getByTestId("aviso-fixo").textContent).toContain("Ilustração, não previsão de resultado");
   });
 });

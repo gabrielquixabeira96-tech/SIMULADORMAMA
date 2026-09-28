@@ -1,5 +1,6 @@
 import { PDFDocument, PDFName, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { AVISO_FIXO } from "@/config/aviso";
+import { AVISO_FIXO, TEXTO_FAIXA_DEMO } from "@/config/aviso";
+import { demoAtiva } from "@/config/demo";
 import { ROTULO_IMF, ROTULO_LADO, ROTULO_PLANO, fmtNum, type RelatorioFinal } from "@/llm/relatorio";
 
 /**
@@ -113,12 +114,20 @@ class Escritor {
     this.y -= altura + 6;
   }
 
-  rodapes(versao: string): void {
+  rodapes(versao: string, demo = false): void {
     const total = this.paginas.length;
     this.paginas.forEach((p, i) => {
       const t = paraWinAnsi(`${AVISO_FIXO} · versão do software ${versao} · página ${i + 1} de ${total}`);
       p.drawText(t, { x: MARGEM, y: MARGEM - 12, size: 8, font: this.fonte, color: COR_CINZA });
       p.drawText(paraWinAnsi(RODAPE_SEM_COMPARTILHAMENTO), { x: MARGEM, y: MARGEM - 22, size: 7, font: this.fonte, color: COR_CINZA });
+      if (demo) {
+        // modo demonstração sintética (ADR 0018): tarja no topo e linha no rodapé de TODAS as páginas
+        const faixa = paraWinAnsi(TEXTO_FAIXA_DEMO);
+        p.drawRectangle({ x: 0, y: A4[1] - 38, width: A4[0], height: 26, color: COR_TARJA });
+        const largura = this.negrito.widthOfTextAtSize(faixa, 11);
+        p.drawText(faixa, { x: (A4[0] - largura) / 2, y: A4[1] - 29, size: 11, font: this.negrito, color: rgb(1, 1, 1) });
+        p.drawText(faixa, { x: MARGEM, y: MARGEM - 32, size: 7, font: this.negrito, color: COR_TARJA });
+      }
     });
   }
 }
@@ -131,6 +140,8 @@ function dataHoraLegivel(iso: string): string {
 const ROTULO_DESENHO = { A: "A (medidas digitadas pelo cirurgião; sem números calculados)", B: "B (medição automática e volume calculado ativos)" } as const;
 
 export async function gerarPdfAtendimento(r: RelatorioFinal, geradoEm: string): Promise<Uint8Array> {
+  // demo: relatório gerado na demo OU instância em modo demo (ADR 0018)
+  const demo = r.demo === true || demoAtiva();
   const doc = await PDFDocument.create();
   doc.setTitle(paraWinAnsi("Registro do atendimento"));
   doc.setSubject(paraWinAnsi(`Atendimento ${r.atendimento_id}`));
@@ -146,6 +157,7 @@ export async function gerarPdfAtendimento(r: RelatorioFinal, geradoEm: string): 
   const w = new Escritor(doc, await doc.embedFont(StandardFonts.Helvetica), await doc.embedFont(StandardFonts.HelveticaBold));
 
   w.texto(TITULO_PDF, { tamanho: 15, negrito: true, depois: 6 });
+  if (demo) w.caixa([TEXTO_FAIXA_DEMO], { cor: COR_TARJA, tamanho: 13, negrito: true });
   w.caixa([AVISO_FIXO], { cor: COR_TARJA, tamanho: 13, negrito: true });
 
   w.titulo("Identificação (pseudonimizada)");
@@ -198,7 +210,7 @@ export async function gerarPdfAtendimento(r: RelatorioFinal, geradoEm: string): 
   w.titulo("Assinatura");
   w.caixa([PLACEHOLDER_ASSINATURA, "Responsável técnico: ______________________________   CRM: __________"], { cor: COR_TEXTO, tamanho: 10 });
 
-  w.rodapes(r.versao_software);
+  w.rodapes(r.versao_software, demo);
   // Nenhuma anotação (link, formulário, anexo): remove até o /Annots vazio que o pdf-lib cria.
   for (const p of doc.getPages()) p.node.delete(PDFName.of("Annots"));
   return doc.save({ useObjectStreams: false });
