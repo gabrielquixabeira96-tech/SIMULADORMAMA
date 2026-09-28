@@ -6,13 +6,16 @@
  *  - só torsos gerados pelo services/mesh listados (os tetraedros-fixture do e2e somem);
  *  - `?token=` atrás de proxy TLS → 303 para https:// e cookie Secure; sem token → 401;
  *  - fluxo com torso sintético: paciente → importar t01 → landmarks do gabarito → medidas B
- *    (geodésica e volume pelo serviço) → relatório (mock).
+ *    (geodésica e volume pelo serviço) → relatório (mock);
+ *  - "Fotos de exemplo" (plano "foto → 3D", P4-lite): cards t01–t03, a reconstrução importada com o
+ *    cartão "Erro contra o gabarito" e o passo 3 editando a própria foto.
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { importarTorso, lerGabarito, medirNoServico, novoAtendimento } from "./apoio";
+import { IMPLANTE_1, escolherImplante, esperarFotos, estadoFotos } from "./simulacao-apoio";
 
 const TOKEN = process.env.E2E_APP_TOKEN!;
 const PUBLICO = process.env.E2E_HOST_PUBLICO_DEMO!;
@@ -132,4 +135,33 @@ test("sessão de Bland-Altman na demo: operador OP-NN, marcada demo e sem observ
   const pl = await (await request.get("/api/validacao/planilha?formato=json")).json();
   expect(pl.demo).toBe(true);
   expect(pl.linhas.every((l: { fonte: string }) => l.fonte.startsWith("demo:"))).toBe(true);
+});
+
+test("fotos de exemplo: cards t01–t03, reconstrução importada com erro contra o gabarito e a própria foto editada", async ({ page, request }) => {
+  test.setTimeout(6 * 60_000);
+  const torsos = (await (await request.get("/api/sinteticos")).json()).torsos as { nome: string; foto: boolean }[];
+  expect(torsos.map((t) => [t.nome, t.foto])).toEqual([
+    ["t01_simetrico_300", true],
+    ["t02_assimetrico", true],
+    ["t03_pequeno_ptose", true],
+  ]);
+  await page.goto("/");
+  await expect(page.getByTestId("fotos-exemplo")).toBeVisible();
+  for (const t of torsos) await expect(page.getByTestId(`importar-foto-${t.nome}`)).toBeVisible();
+  await page.getByTestId(`importar-foto-${TORSO}`).click();
+  await expect(page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de 1 foto` })).toBeVisible({ timeout: 120_000 });
+  const erro = page.getByTestId("foto-erro-gabarito");
+  await expect(erro).toContainText("Erro contra o gabarito");
+  await expect(erro).toContainText(/RMS na região das mamas: x \d+,\d mm · y \d+,\d mm · z \d+,\d mm/);
+  await expect(erro).toContainText("Volume");
+  await page.getByTestId("aplicar-gabarito").click();
+  await escolherImplante(page, 1, IMPLANTE_1);
+  await page.getByTestId("gerar-simulacao").click();
+  await expect(page.getByTestId("simulacao-pronta")).toBeVisible({ timeout: 240_000 });
+  await esperarFotos(page, { estado: "a" });
+  const e = await estadoFotos(page);
+  expect(e).toMatchObject({ vista: "foto:frente", envelope_visivel: true, preserveDrawingBuffer: false });
+  expect((e.selo as string[]).join(" ")).toContain("MODELO 3D ESTIMADO DE 1 FOTO");
+  expect((e.selo as string[]).join(" ")).toContain("DEMONSTRAÇÃO — FOTOS SINTÉTICAS");
+  await expect(page.getByTestId("foto-incerteza")).toContainText("Profundidade");
 });

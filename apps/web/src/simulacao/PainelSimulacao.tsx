@@ -17,6 +17,7 @@ import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EscolhaImplante } from "@/catalogo/EscolhaImplante";
 import type { MapaRecursos } from "@/config/recursos";
+import { carregarFotoReal, type FotoRealCliente } from "@/foto/cliente";
 import { NOMES_VISTAS, VISTAS, type NomeVista } from "@/viewer/vistas";
 import type { EstadoFoto, ModoFoto } from "./ComparadorFotos";
 import css from "./foto.module.css";
@@ -76,7 +77,7 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
   const [escolhidos, setEscolhidos] = useState<[string | null, string | null]>([null, null]);
   const [slot, setSlot] = useState<0 | 1>(0);
   const [gaveta, setGaveta] = useState(true);
-  const [gerada, setGerada] = useState<{ chave: string; manifest: ManifestMorphs; conjuntos: ConjuntoMorph[]; landmarks: Landmarks } | null>(null);
+  const [gerada, setGerada] = useState<{ chave: string; manifest: ManifestMorphs; conjuntos: ConjuntoMorph[]; landmarks: Landmarks; fotoReal: FotoRealCliente | null } | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [plano, setPlano] = useState<Plano>("subglandular");
@@ -108,6 +109,11 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
   const valida = gerada && gerada.chave === chaveAtual ? gerada : null;
   const manifest = valida?.manifest ?? null;
   const conjuntos = valida?.conjuntos ?? null;
+  // malha reconstruída de fotos (plano "foto → 3D"): vista "Foto real" e halo = max(envelope; z)
+  const fotoReal = valida?.fotoReal ?? null;
+  const envelopeSim = fotoReal ? Math.max(envelopeMm, fotoReal.publica.halo_mm) : envelopeMm;
+  // sem foto de perfil a profundidade é o prior do template: nenhum número de projeção, nem em B
+  const semProfundidade = fotoReal?.publica.profundidade_so_ilustracao === true;
 
   const porId = useMemo(() => new Map(catalogo.map((i) => [i.id, i])), [catalogo]);
   const idsGerados = useMemo(() => [...new Set(manifest?.arquivos[0]?.targets.map((t) => t.implante_id) ?? [])], [manifest]);
@@ -128,6 +134,8 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
       if (!r.ok) throw new Error(j?.erro?.mensagem ?? j?.erro?.codigo ?? `erro ${r.status}`);
       const m = j as ManifestMorphs;
       const { carregarGlb } = await import("@/viewer/carregar");
+      // a reconstrução por fotos (se a malha veio de fotos) carrega junto com os morphs
+      const fotoPromessa = carregarFotoReal(malhaId);
       // pré-carrega os 4 (plano × IMF): a troca depois é instantânea
       const cs = await Promise.all(
         m.arquivos.map(async (a) => ({
@@ -140,8 +148,9 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
         const dic = c.carregada.malha.morphTargetDictionary ?? {};
         for (const id of ids) if (!(nomeTarget(id, c.plano, c.imf) in dic)) throw new Error(`simulação incompleta para ${id} (${ROTULOS_PLANO[c.plano]}, ${ROTULOS_IMF[c.imf]})`);
       }
+      const fr = await fotoPromessa;
       registradas.current.clear();
-      setGerada({ chave: chaveAtual, manifest: m, conjuntos: cs, landmarks });
+      setGerada({ chave: chaveAtual, manifest: m, conjuntos: cs, landmarks, fotoReal: fr });
       setMostrado(0);
       setComparar(ids.length === 2);
       setPeso(1);
@@ -174,11 +183,11 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
 
   const previstoDe = useCallback(
     (id: string | null | undefined): Previsto | null => {
-      if (!manifest || !id || !recursos.numeros_calculados_no_relatorio) return null;
+      if (!manifest || !id || !recursos.numeros_calculados_no_relatorio || semProfundidade) return null;
       const arq = manifest.arquivos.find((a) => a.plano === plano && a.imf === imf);
       return arq?.targets.find((t) => t.implante_id === id && t.lado === "ambos")?.previsto ?? null;
     },
-    [manifest, recursos.numeros_calculados_no_relatorio, plano, imf],
+    [manifest, recursos.numeros_calculados_no_relatorio, plano, imf, semProfundidade],
   );
   const previsto = useMemo(() => previstoDe(implanteMostrado), [previstoDe, implanteMostrado]);
 
@@ -200,13 +209,13 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
       comparacao,
       plano,
       imf,
-      envelope_rms_mm: envelopeMm,
+      envelope_rms_mm: envelopeSim,
       nao_calibrado: naoCalibrado,
       modelo,
       versao_config_simulacao: manifest.versao_config_simulacao,
       previsto,
     });
-  }, [onEstado, manifest, malhaId, implantesGerados, implanteMostrado, comparacao, plano, imf, envelopeMm, naoCalibrado, modelo, previsto]);
+  }, [onEstado, manifest, malhaId, implantesGerados, implanteMostrado, comparacao, plano, imf, envelopeSim, naoCalibrado, modelo, previsto]);
 
   // cada combinação MOSTRADA (peso > 0) vira uma linha em `simulacoes`, uma vez por combinação
   const registrar = useCallback(
@@ -220,7 +229,7 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
         void fetch(`/api/malhas/${malhaId}/simulacoes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ implante_id: id, plano: p, imf: i, lado: "ambos", versao_config_simulacao: manifest.versao_config_simulacao, nao_calibrado: naoCalibrado, previsto: recursos.numeros_calculados_no_relatorio ? (alvo?.previsto ?? null) : null }),
+          body: JSON.stringify({ implante_id: id, plano: p, imf: i, lado: "ambos", versao_config_simulacao: manifest.versao_config_simulacao, nao_calibrado: naoCalibrado, previsto: recursos.numeros_calculados_no_relatorio && !semProfundidade ? (alvo?.previsto ?? null) : null }),
         })
           .then((r) => {
             if (!r.ok) registradas.current.delete(chave);
@@ -228,7 +237,7 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
           .catch(() => registradas.current.delete(chave));
       }
     },
-    [manifest, malhaId, naoCalibrado, recursos.numeros_calculados_no_relatorio],
+    [manifest, malhaId, naoCalibrado, recursos.numeros_calculados_no_relatorio, semProfundidade],
   );
   // aba 3D: os painéis visíveis com peso > 0
   useEffect(() => {
@@ -254,7 +263,11 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
   };
 
   const implantesFoto = useMemo(() => implantesGerados.map((i) => ({ id: i.id, rotulo: rotuloImplante(i) })), [implantesGerados]);
-  const selo: ConfigSelo = useMemo(() => ({ envelopeMm, versao: configSelo?.versao || manifest?.versao_software || "", demo: configSelo?.demo ?? false }), [envelopeMm, configSelo, manifest?.versao_software]);
+  const nFotos = fotoReal?.publica.n_fotos ?? null;
+  const selo: ConfigSelo = useMemo(
+    () => ({ envelopeMm: envelopeSim, versao: configSelo?.versao || manifest?.versao_software || "", demo: configSelo?.demo ?? false, fotos: nFotos }),
+    [envelopeSim, configSelo, manifest?.versao_software, nFotos],
+  );
   const baseFiltro = recursos.medicao_automatica_3d ? (baseMedidaMm ?? null) : null;
   const aoSelecao = useCallback((s: { estado: EstadoFoto; modo: ModoFoto }) => setSelecao((x) => (x.estado === s.estado && x.modo === s.modo ? x : s)), []);
 
@@ -367,17 +380,18 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
                 imf={imf}
                 rotuloPlano={ROTULOS_PLANO[plano]}
                 rotuloImf={ROTULOS_IMF[imf]}
-                envelopeMm={envelopeMm}
+                envelopeMm={envelopeSim}
                 volumeFator={configSelo?.volumeFator ?? 0.15}
                 landmarks={valida!.landmarks}
                 selo={selo}
                 onMostradas={registrar}
                 onSelecao={aoSelecao}
+                fotoReal={fotoReal}
               />
               {diferencas && (
                 <table className={`tabela ${css.diferencas}`} data-testid="foto-diferencas">
                   <caption className="nota">
-                    Diferenças entre A e B ({ROTULOS_PLANO[plano]}, {ROTULOS_IMF[imf]}). Previstos pelo modelo não calibrado, cada um com faixa ±{mm1(envelopeMm)} mm.
+                    Diferenças entre A e B ({ROTULOS_PLANO[plano]}, {ROTULOS_IMF[imf]}). Previstos pelo modelo não calibrado, cada um com faixa ±{mm1(envelopeSim)} mm.
                   </caption>
                   <thead>
                     <tr>
@@ -465,12 +479,12 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
                   </button>
                 ))}
               </div>
-              <VisualizadorSimulacao conjuntos={conjuntos} paineis={paineis} plano={plano} imf={imf} peso={peso} envelopeMm={envelopeMm} vista={vista} landmarks={valida!.landmarks} />
+              <VisualizadorSimulacao conjuntos={conjuntos} paineis={paineis} plano={plano} imf={imf} peso={peso} envelopeMm={envelopeSim} vista={vista} landmarks={valida!.landmarks} />
             </div>
           )}
           {previsto && (
             <p className="nota" data-testid="previsto-simulacao">
-              Previsto pelo modelo não calibrado para {implanteMostrado === implantesGerados[0]?.id ? "A" : "B"} (mm, faixa ±{mm1(envelopeMm)}): avanço do mamilo {sinal(previsto.delta_projecao_mamilo_mm.dir)} D / {sinal(previsto.delta_projecao_mamilo_mm.esq)} E; sulco{" "}
+              Previsto pelo modelo não calibrado para {implanteMostrado === implantesGerados[0]?.id ? "A" : "B"} (mm, faixa ±{mm1(envelopeSim)}): avanço do mamilo {sinal(previsto.delta_projecao_mamilo_mm.dir)} D / {sinal(previsto.delta_projecao_mamilo_mm.esq)} E; sulco{" "}
               {sinal(previsto.delta_y_sulco_mm.dir)} D / {sinal(previsto.delta_y_sulco_mm.esq)} E.
             </p>
           )}

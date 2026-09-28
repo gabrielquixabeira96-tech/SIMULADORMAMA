@@ -14,6 +14,7 @@ import {
   FRACAO_MAX_FAIXA,
   linhasDoSelo,
   quebrarLinha,
+  textoMarcaDiagonal,
   type Contexto2D,
 } from "@/simulacao/marcaDagua";
 
@@ -68,6 +69,27 @@ describe("selo nos pixels", () => {
     expect(c.join(" ")).toContain("±4,5 mm");
     expect(c).toContain("DEMONSTRAÇÃO — TORSO SINTÉTICO");
     for (const x of [l, d, c]) expect(x.join(" ")).not.toMatch(PROMESSA);
+  });
+
+  it("malha reconstruída de fotos: 'modelo 3D estimado de N foto(s)' na versão cheia e na compacta; demo = fotos sintéticas", () => {
+    const l = linhasDoSelo({ ...base, fotos: 1 });
+    expect(l).toContain("MODELO 3D ESTIMADO DE 1 FOTO");
+    expect(linhasDoSelo({ ...base, fotos: 3 }, { compacto: true })).toEqual(["ILUSTRAÇÃO — NÃO É PREVISÃO · ±4,5 mm", "MODELO 3D ESTIMADO DE 3 FOTOS"]);
+    const d = linhasDoSelo({ ...base, fotos: 1, demo: true }, { compacto: true });
+    expect(d).toEqual(["ILUSTRAÇÃO — NÃO É PREVISÃO · ±4,5 mm", "MODELO 3D ESTIMADO DE 1 FOTO", "DEMONSTRAÇÃO — FOTOS SINTÉTICAS"]);
+    expect(linhasDoSelo({ ...base, fotos: 0 })).toEqual(linhasDoSelo(base));
+    // miniatura (320 × 240): a faixa cabe nos 30 % e o aviso e o "modelo estimado" ficam
+    const { ctx, chamadas } = contextoFalso();
+    const cfg = { ...base, fotos: 1, demo: true };
+    const r = desenharSelo(ctx, 320, 240, linhasDoSelo(cfg, { compacto: true }), 1, linhasDoSelo(cfg, { compacto: true }), textoMarcaDiagonal(cfg));
+    expect(r.alturaFaixa).toBeLessThanOrEqual(240 * FRACAO_MAX_FAIXA);
+    const faixa = chamadas.filter((c) => c.op === "fillText" && c.estado.globalAlpha === 1).map((c) => c.args[0] as string).join(" ");
+    expect(faixa).toContain("NÃO É PREVISÃO");
+    // a marca diagonal (imagem inteira) leva o "modelo 3D estimado" mesmo quando a faixa só comporta o aviso
+    const marca = chamadas.filter((c) => c.op === "fillText" && c.estado.globalAlpha === ALFA_MARCA_DIAGONAL);
+    expect(marca.length).toBeGreaterThan(4);
+    for (const m of marca) expect(m.args[0]).toBe("ILUSTRAÇÃO · NÃO É PREVISÃO · MODELO 3D ESTIMADO");
+    expect(textoMarcaDiagonal(base)).toBe("ILUSTRAÇÃO · NÃO É PREVISÃO");
   });
 
   it("faixa inferior sólida #1c2128 com texto branco ≥ 16 px (contraste > 7:1)", () => {

@@ -9,6 +9,13 @@ export interface ConfigSelo {
   envelopeMm: number;
   versao: string;
   demo: boolean;
+  /** malha reconstruída de fotos (plano "foto → 3D"): nº de fotos do ajuste → "modelo 3D estimado de N foto(s)" */
+  fotos?: number | null;
+}
+
+/** Linha do selo de uma malha reconstruída de fotos (vai também na versão compacta). */
+export function linhaModeloEstimado(n: number): string {
+  return `MODELO 3D ESTIMADO DE ${n} FOTO${n === 1 ? "" : "S"}`;
 }
 
 export const COR_FAIXA_SELO = "#1c2128";
@@ -26,18 +33,31 @@ export const FRACAO_MAX_FAIXA = 0.3;
  * ("ILUSTRAÇÃO — NÃO É PREVISÃO · ±4,5 mm") e, na demo, a linha da demonstração. Nunca promete resultado.
  */
 export function linhasDoSelo(c: ConfigSelo, opts: { compacto?: boolean } = {}): string[] {
+  const fotos = c.fotos && c.fotos > 0 ? c.fotos : null;
+  const demo = fotos ? "DEMONSTRAÇÃO — FOTOS SINTÉTICAS" : "DEMONSTRAÇÃO — TORSO SINTÉTICO";
   if (opts.compacto) {
     const l = [`ILUSTRAÇÃO — NÃO É PREVISÃO · ±${mm(c.envelopeMm)} mm`];
-    if (c.demo) l.push("DEMONSTRAÇÃO — TORSO SINTÉTICO");
+    if (fotos) l.push(linhaModeloEstimado(fotos));
+    if (c.demo) l.push(demo);
     return l;
   }
   const l = ["ILUSTRAÇÃO — NÃO É PREVISÃO DE RESULTADO", `simulação geométrica não generativa · modelo não calibrado · faixa ±${mm(c.envelopeMm)} mm · v${c.versao}`];
-  if (c.demo) l.push("DEMONSTRAÇÃO — TORSO SINTÉTICO");
+  if (fotos) l.push(linhaModeloEstimado(fotos));
+  if (c.demo) l.push(demo);
   return l;
 }
 
 /** Texto da marca diagonal. */
 export const TEXTO_MARCA_DIAGONAL = "ILUSTRAÇÃO · NÃO É PREVISÃO";
+
+/**
+ * Texto da marca diagonal de uma configuração: com malha reconstruída de fotos, acrescenta
+ * "MODELO 3D ESTIMADO" (a marca cobre a imagem inteira, inclusive miniaturas em que a faixa só
+ * comporta o aviso).
+ */
+export function textoMarcaDiagonal(c: ConfigSelo): string {
+  return c.fotos && c.fotos > 0 ? `${TEXTO_MARCA_DIAGONAL} · MODELO 3D ESTIMADO` : TEXTO_MARCA_DIAGONAL;
+}
 
 /** Subconjunto do CanvasRenderingContext2D usado aqui (permite testar sem navegador). */
 export interface Contexto2D {
@@ -91,7 +111,15 @@ export function quebrarLinha(ctx: Pick<Contexto2D, "measureText">, texto: string
  * A faixa é desenhada por último, por cima de tudo. `escala` = pixels da imagem por px de
  * referência (CSS): o quadro interativo reduzido e o final em dpr 2 saem com o mesmo desenho.
  */
-export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, linhas: readonly string[], escala = 1, reserva?: readonly string[]): { alturaFaixa: number; fontePx: number } {
+export function desenharSelo(
+  ctx: Contexto2D,
+  largura: number,
+  altura: number,
+  linhas: readonly string[],
+  escala = 1,
+  reserva?: readonly string[],
+  marca: string = TEXTO_MARCA_DIAGONAL,
+): { alturaFaixa: number; fontePx: number } {
   const fonte = tamanhoFonteSelo(largura, escala);
   const pad = Math.round(fonte * 0.6);
   const familia = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -106,12 +134,12 @@ export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, l
   ctx.textBaseline = "middle";
   ctx.translate(largura / 2, altura / 2);
   ctx.rotate(-Math.PI / 6);
-  const passoX = ctx.measureText(TEXTO_MARCA_DIAGONAL).width + fonteMarca * 3;
+  const passoX = ctx.measureText(marca).width + fonteMarca * 3;
   const passoY = fonteMarca * 6;
   const alcance = Math.hypot(largura, altura);
   for (let y = -alcance, linha = 0; y <= alcance; y += passoY, linha++) {
     const desloc = (linha % 2) * (passoX / 2);
-    for (let x = -alcance - desloc; x <= alcance; x += passoX) ctx.fillText(TEXTO_MARCA_DIAGONAL, x, y);
+    for (let x = -alcance - desloc; x <= alcance; x += passoX) ctx.fillText(marca, x, y);
   }
   ctx.restore();
 

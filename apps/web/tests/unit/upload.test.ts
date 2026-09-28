@@ -79,6 +79,15 @@ describe("lista fixa de arquivos servidos", () => {
     ["../meta.json", null],
     ["morphs/outro__manter.glb", null],
     ["toString", null],
+    // malha reconstruída de fotos (C4): só as fotos da própria malha, pela lista fixa
+    ["original/foto_frente.jpg", "image/jpeg"],
+    ["original/foto_perfil_dir.png", "image/png"],
+    ["observado.png", "image/png"],
+    ["original/foto_costas.jpg", null],
+    ["original/foto_frente.jpeg", null],
+    ["original/../original/foto_frente.jpg", null],
+    ["reconstrucao.json", null],
+    ["textura.png", null],
   ])("%s → %s", (nome, tipo) => {
     expect(tipoDoArquivo(nome)).toBe(tipo);
   });
