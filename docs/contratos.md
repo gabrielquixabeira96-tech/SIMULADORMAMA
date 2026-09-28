@@ -30,6 +30,7 @@ Sumário:
 15. Registro de validação (`docs/validacao/`)
 16. Versão do software
 17. Banco de dados (DDL canônico)
+19. Reconstrução do torso a partir de fotos (`reconstrucao/1.0`)
 
 ---
 
@@ -98,7 +99,7 @@ Conjunto canônico de **10 IDs**. A `PROMPT.md` fala em "6 a 8 landmarks por cli
 Regras:
 
 - Um landmark é um ponto **na superfície** da malha processada. É representado por `posicao` `[x, y, z]` em mm (ponto exato do raycast) **e** `vertice` (índice do vértice mais próximo). Distâncias euclidianas e geodésicas usam `posicao`: a geodésica parte do ponto exato, projetado e inserido na malha (seção 3.1; ADR 0016). `vertice` é validado pelo `services/mesh` (índice dentro de `processada.obj`, senão 422 `vertice_invalido`), mas não entra no cálculo. Ambos são obrigatórios.
-- `origem` de cada landmark: `"clique"` (médico), `"gabarito"` (torso sintético), `"automatico"` (fase avançada; DESENHO=B apenas).
+- `origem` de cada landmark: `"clique"` (médico), `"gabarito"` (torso sintético), `"automatico"` (fase avançada; DESENHO=B apenas), `"foto"` (clicado em 2D nas fotos pelo médico e levantado a 3D pelo ajuste do template, seção 19; em A o médico confirma cada ponto no passo 2).
 - Nomes fora da tabela DEVEM ser rejeitados por ambos os lados.
 
 ---
@@ -184,6 +185,8 @@ Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`).
   }
 }
 ```
+
+**`torso_parametros/1.1`** (template ajustado a fotos, seção 19): os campos acima + `forma` opcional por lado (`{"dir": {...}, "esq": {...}}` com `base_fator` 1,0, `apice_fator` 0,0, `polo_superior_fator` 1,0, `polo_inferior_fator` 1,0, `largura_pegada_fator` 1,0, `projecao_fator` 1,0) e `parede` opcional (`expoente_secao` 3,0, `achatamento_anterior` 0,0). Semântica e limites em `superficie.py` e no esquema. **Ausentes = comportamento da 1.0 byte a byte**: os 3 presets regerados têm `torso.obj`, `textura.png`, `denso.obj` e `torso.glb` com o mesmo sha256 e o `gabarito.json` igual exceto `gerado_em`.
 
 Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona deslocamentos que os três anteriores não capturam. Torso "simétrico" = lados iguais e `assimetria` zerada; os testes de simetria (Marco 2) usam esse caso.
 
@@ -326,6 +329,11 @@ $DATA_DIR/
       morphs/              # seção 10
         manifest.json
         <plano>__<imf>.glb
+      # malha de origem "foto" (seção 19): em vez do scan em original/
+      original/foto_<vista>.jpg   # foto recortada no navegador (sem rosto, sem EXIF); a captura desta modalidade
+      reconstrucao.json    # reconstrucao/1.0
+      fotos/registro.json  # só o bloco `fotos` (K, R, t por foto)
+      fotos/mascara_<vista>.png   # máscara do torso usada no ajuste (quando segmentada no serviço)
     medidas/<medida_id>.json      # seção 6
     simulacoes/<simulacao_id>.json
     relatorios/<atendimento_id>.pdf
@@ -490,6 +498,10 @@ Ver seção 10.4.
 ```
 
 → `{ "n": 30, "vies_mm": 0.4, "dp_mm": 0.9, "loa_inferior_mm": -1.36, "loa_superior_mm": 2.16, "dentro_de_2mm": true, "por_medida": { ... } }`. LoA = viés ± 1,96·DP. Usado pelo e2e `apps/web/e2e/validacao.spec.ts` para o Bland-Altman do Marco 1, que vai para o registro de componente `v<versao>-web-marcos-0-1.json` (seção 15).
+
+### 7.8 `POST /reconstruir-foto`
+
+Ver seção 19. Funciona em A e em B; em A o bloco `estimado` (medidas calculadas no modelo) volta vazio.
 
 ---
 
@@ -1014,3 +1026,56 @@ Com **qualquer** sessão aberta, a planilha → `409 planilha_indisponivel_sessa
 **`resultado`**: `pares[] { medida: "<distancia>:<tipo>", distancia, tipo, referencia_mm, medido_mm, desvio_mm, scan_id, torso, repeticao }`, Bland-Altman `geral`, `n_imf` (à parte), `sem_n_imf`, `euclidiana`, `geodesica` (cada um: `n`, `vies_mm`, `dp_mm`, `loa_inferior_mm`, `loa_superior_mm`, `erro_abs_max_mm`, `dentro_de_2mm`, `dentro_de_3mm`, `por_medida`; fórmula do §7.7), `intra_operador { n_grupos, dp_intra_mm, coeficiente_repetibilidade_mm, bland_altman_rep2_rep1 }`, `notas` (pseudo-replicação; pares ≠ sujeitos) e `criterios { n_pares, n_pares_min_30, loa_dentro_3mm, loa_dentro_2mm, n_imf_relatado_a_parte, scans_distintos, vale_para_fase1 (false com torso sintético), motivo_fase1 }`.
 
 **Planilha `planilha_validacao_art5/1.0`**: uma linha por par. As fontes são `docs/validacao/v<versao>-web-marcos-0-1.json` (`fonte = registro_e2e`, operador simulado) e as sessões encerradas (`fonte = sessao_bland_altman`). Colunas, nesta ordem: `versao_software, data, fonte, registro, commit, desenho, operador, tipo_operador, scan_id, sintetico, repeticao, medida, tipo_distancia, n_imf, referencia_mm, medido_mm, desvio_mm, observacoes`. `scan_id = sintetico:<nome>`. `desvio_mm = medido − referência`. CSV em RFC 4180, UTF-8 com BOM e CRLF; células de texto iniciadas por `= + - @` ganham `'`. O JSON acrescenta `resumo[]` por registro ou sessão (geral, N-IMF, sem N-IMF) e `notas`. Nenhuma linha tem nome, pseudônimo de paciente, caminho absoluto ou e-mail.
+
+---
+
+## 19. Reconstrução do torso a partir de fotos (`reconstrucao/1.0`)
+
+`services/mesh/mesh/foto/` (plano foto3d, pacote P1): de 1–5 fotos recortadas (a frontal obrigatória) + landmarks 2D clicados + uma referência de escala, ajusta o template paramétrico (`torso_parametros/1.1`) por mínimos quadrados robustos (reprojeção dos landmarks, silhueta contra a máscara, escala, prior fraco) e gera a malha pelo mesmo caminho do gerador de torsos (grade densa → decimação 30–50 mil vértices, UV cilíndrica), no **quadro anatômico** (`scan ≡ anatomico`). A malha entra no fluxo de hoje (`/medir`, `/morphs` sem mudança). Esquema executável: `config/schemas/reconstrucao.schema.json`.
+
+**Câmera** (convenção OpenCV): `x_cam = R·X + t` (X no quadro anatômico, mm); `u = fx·x/z + cx`, `v = fy·y/z + cy`, com distorção radial opcional `k1` nas coordenadas normalizadas; eixos da câmera x → direita da imagem, y → para baixo, z → para a frente. Pixel contínuo com origem no canto superior esquerdo (centro do pixel i em i + 0,5). `K` e `R` em 9 números **coluna-major** (como `THREE.Matrix3.elements`), `t` em 3. `f_px = max(W, H) · focal_35mm / 36`; ponto principal no centro; lente < 20 mm equivalente é recusada. Para three.js: `R_three = diag(1, −1, −1) · R`, `t_three = diag(1, −1, −1) · t` (a câmera three olha para −z com y para cima); FOV vertical = `2·atan(H / (2·fy))`.
+
+**Requisição** `POST /reconstruir-foto` (cabeçalho `X-Desenho` como nas outras rotas):
+
+```jsonc
+{
+  "malha_dir": "pacientes/P-XXXXXX/malhas/<uuid>",
+  "fotos": [                                    // 1..5, vistas distintas; "frente" obrigatória
+    { "vista": "frente",                        // frente | obliqua_dir | obliqua_esq | perfil_dir | perfil_esq
+      "arquivo": "original/foto_frente.jpg",    // relativo a malha_dir
+      "largura_px": 3000, "altura_px": 2400,    // conferidos contra a imagem
+      "focal_35mm": 26.0,                       // do EXIF, lido no navegador; null -> 26 mm e f_origem "estimado"
+      "landmarks_2d": { "furcula": [1502.3, 60.1], "mamilo_dir": [1180.0, 900.5] /* ... */ },  // frontal: >= 6, com furcula, mamilos e linha_media_inferior
+      "mascara": "original/mascara_frente.png", // opcional (L, > 127 = torso); sem ela o serviço segmenta
+      "k1": 0.0 }                               // opcional
+  ],
+  "escala": { "metodo": "ssn_n_fita", "valor_mm": 198.0, "lado": "dir" },   // ou regua_foto (+ pontos_px [[u,v],[u,v]] na frontal) ou base_digitada
+  "opcoes": { "segmentacao": "onnx" },          // onnx (cai em template sem pesos, com aviso) | template
+  "malha_id": null
+}
+```
+
+**Resposta 200**: `{ "reconstrucao": <reconstrucao/1.0>, "meta": <malha_meta/1.0 com "origem": "foto", "quadro": "anatomico"> }`. Grava `processada.obj/.mtl`, `textura.png` (**provisória**: `textura_pele` fotográfica no fototipo mais próximo da pele observada; o P2 troca pela foto projetada), `processada.glb` (`asset.extras.reconstrucao = {fotos, cobertura_observada_pct}`, `asset.extras.textura.provisoria = true`), `meta.json`, `reconstrucao.json`, `fotos/registro.json` e `fotos/mascara_<vista>.png` das máscaras segmentadas. Em `meta.original`: `arquivo` e `sha256` da foto frontal; `n_vertices`/`n_faces` da malha gerada (não há malha original).
+
+**`reconstrucao/1.0`** (campos principais):
+
+| Campo | Conteúdo |
+|---|---|
+| `fotos[]` | `vista, arquivo, sha256, largura_px, altura_px, K[9], R[9], t[3], k1, f_origem ("exif"\|"estimado"), focal_35mm, landmarks_2d, residuos_px {id: px}, rms_px, mascara {arquivo, modo: "fornecida"\|"onnx"\|"template"}` |
+| `parametros` | `torso_parametros/1.1` ajustado (regera a mesma superfície com o gerador) |
+| `escala` | `{metodo, valor_mm, fator, lado?, medido_no_modelo_mm}`; `fator = valor_mm / medida no modelo` (~1) |
+| `landmarks` | os 10, `{posicao, vertice (em processada.obj), origem: "foto"}` |
+| `estimado` | "gabarito estimado": `distancias.<id>.euclidiana_mm` e `volumes.<lado>.adicionado_ml` no modelo; **vazio em DESENHO=A** |
+| `reprojecao_rms_px`, `residuo_silhueta_mm`, `forma_fora_do_modelo` | qualidade do ajuste; `forma_fora_do_modelo` quando > 10 % dos pontos de silhueta ficam a > 4 mm |
+| `incerteza_por_eixo_mm {x,y,z}`, `incerteza_volume_pct` | covariância do ajuste propagada à região das mamas, com piso de 4,5 mm; z: piso 12 mm só com a frontal, 8 mm com oblíqua sem perfil; volume: piso 25/20/15 % |
+| `profundidade_confiavel` | `false` sem foto de perfil: profundidade só ilustração e **nenhum número de projeção** (o web deixa `previsto` nulo mesmo em B) |
+| `qualidade` | `boa` (rms ≤ 3 px e silhueta ≤ 2 mm) \| `regular` (≤ 6 px, ≤ 4 mm) \| `ruim` |
+| `avisos` | p. ex. `sem_perfil:profundidade_so_ilustracao`, `forma_fora_do_modelo`, `refazer_ponto:<vista>:<id>` (resíduo isolado > 6 px), `segmentacao_onnx_indisponivel`, `focal_35mm_ausente:<vista>:padrao_26mm`, `desenho_a:medidas_estimadas_omitidas` |
+| `cobertura_observada_pct` | % da área da malha vista de frente em alguma foto (z-buffer; o P2 refina com `observado.png`) |
+| `malha` | `{obj, glb, textura, textura_provisoria, n_vertices, n_faces}` |
+| `diagnostico` | etapas e custos do otimizador, tempos, incerteza bruta do ajuste (sem piso), parâmetros no limite |
+
+**Erros**: 422 `landmarks_2d_incompletos` (sem frontal, frontal com < 6 pontos ou sem os obrigatórios, outra vista sem pontos nem máscara), `landmark_desconhecido`, `pontos_colineares`, `registro_ruim` (reprojeção > 12 px), `rosto_possivelmente_visivel` (fúrcula a mais de 12 % da altura a partir do topo numa foto frontal/oblíqua — **as fotos da requisição são apagadas**), `foto_sem_torso`, `escala_ausente`, `lente_grande_angular`, `dimensoes_divergentes`, `vista_invalida`; 404 `arquivo_nao_encontrado`; 400 `caminho_invalido`, `foto_ilegivel`.
+
+**Fotos sintéticas** (dados de teste e fotos de exemplo; nunca versionadas): `python -m mesh.cli foto-sintetica --todos --sinteticos data/sinteticos` grava em `sinteticos/<nome>/fotos/` `foto_<vista>.jpg` (câmera clínica do web: FOV 15°, 4:3, recortada 15 mm acima da fúrcula, sem EXIF), `mascara_<vista>.png` (exata) e `registro_<vista>.json` (`registro_foto_sintetica/1.0`: K, R, t exatos, `focal_35mm`, `landmarks_2d` de todos os 10 e `visiveis`). `python -m mesh.cli reconstruir --sintetico <pasta> --saida <dir>` roda a rota de ponta a ponta.
+
