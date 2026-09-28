@@ -110,13 +110,10 @@ if [[ -f apps/web/package.json ]]; then
       # banco obrigatorio: sem ele o globalSetup do Vitest tambem falha (nada de auto-pular)
       if bash scripts/db.sh start criar >/dev/null 2>&1; then ok "postgres local pronto"; else falha "postgres local indisponivel (use --sem-db so para rodar sem validar o banco)"; fi
       # Integracao real (tests/integracao/meshReal.test.ts) e obrigatoria: gera os torsos
-      # sinteticos que faltarem (data/ nao e versionado; ~1 min) e exige-os no Vitest.
-      TORSOS_OK=1
-      for t in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do
-        for a in torso.obj torso.mtl textura.png gabarito.json; do [[ -f "data/sinteticos/$t/$a" ]] || TORSOS_OK=0; done
-      done
-      if [[ $TORSOS_OK -eq 1 ]]; then ok "torsos sinteticos presentes (data/sinteticos)"
-      elif DATA_DIR="$RAIZ/data" bash scripts/mesh.sh torsos >/dev/null; then ok "torsos sinteticos gerados (bash scripts/mesh.sh torsos)"
+      # sinteticos que faltarem ou estiverem desatualizados (data/ nao e versionado; ~1 min) e exige-os no Vitest.
+      # `mesh.sh torsos` regera so o que estiver desatualizado (versao, parametros ou sem o bloco
+      # `textura` da v0.2.0+, ADR 0020) e apaga os morphs do torso regerado; confere tambem os presentes.
+      if DATA_DIR="$RAIZ/data" bash scripts/mesh.sh torsos >/dev/null; then ok "torsos sinteticos atualizados (bash scripts/mesh.sh torsos)"
       else falha "geracao dos torsos sinteticos (bash scripts/mesh.sh torsos)"; fi
       # glTF-Validator (Khronos) nos torso.glb e morphs/*.glb: gera os morphs do catalogo de teste que
       # faltarem (como o scripts/validacao.sh) e exige 0 erros e 0 avisos.

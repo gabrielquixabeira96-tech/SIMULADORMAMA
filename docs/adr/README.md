@@ -22,3 +22,5 @@ Formato: contexto, decisão, alternativas consideradas, consequências. Um ADR �
 | [0016](0016-desvios-aceitos-v0-1.md) | Desvios aceitos na v0.1.x: geodésica a partir da `posicao`, 403 do `services/mesh` em A, registro gerado por `scripts/validacao.sh` | aceito |
 | [0017](0017-sessao-bland-altman-e-planilha-art5.md) | Sessão de Bland-Altman com operador humano (cega ao gabarito, só em B) e planilha de validação do art. 5º | aceito |
 | [0018](0018-demo-sintetica-na-rede.md) | Modo "demonstração sintética" na rede (`DEMO_SINTETICA=1`): instância dedicada só com torsos sintéticos, upload e anamnese fechados, proxy TLS | aceito |
+| [0019](0019-modo-foto-do-scan.md) | Modo foto: a textura do scan como fotografia, editada pela simulação (câmera clínica, material fotográfico, comparador Antes \| A \| B, selo nos pixels) | aceito |
+| [0020](0020-textura-procedural-de-pele-e-iluminacao-sh9.md) | Textura procedural "fotográfica" de pele no torso sintético e iluminação SH9 nos morphs (aval do Gabriel pendente sobre o realismo na demo) | aceito |

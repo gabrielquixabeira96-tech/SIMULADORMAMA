@@ -26,10 +26,11 @@ bash scripts/db.sh start criar >/dev/null
 
 echo "== 1/4 services/mesh: Marco 0, volume, Marco 2, glTF-Validator"
 SINT="$RAIZ/data/sinteticos"
-# Torsos e morphs (catalogo de teste, nao clinico) que o glTF-Validator (Khronos) confere; gera so o que faltar.
+# Torsos e morphs (catalogo de teste, nao clinico) que o glTF-Validator (Khronos) confere; regera so o que
+# estiver desatualizado ou faltar.
 for p in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do
-  [[ -f "$SINT/$p/gabarito.json" && -f "$SINT/$p/torso.glb" && -f "$SINT/$p/denso.obj" ]] \
-    || ( cd services/mesh && "$PY" -m mesh.cli torso --preset "$p" --saida "$SINT" )
+  # --se-desatualizado: regera se faltar arquivo, mudar versao/parametros ou faltar o bloco `textura` (ADR 0020)
+  ( cd services/mesh && "$PY" -m mesh.cli torso --preset "$p" --saida "$SINT" --se-desatualizado )
   compgen -G "$SINT/$p/morphs/*.glb" >/dev/null \
     || ( cd services/mesh && "$PY" -m mesh.cli morphs --sintetico "$SINT/$p" --catalogo tests/fixtures/catalogo_teste.json )
 done
