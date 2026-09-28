@@ -638,7 +638,7 @@ export function ComparadorFotos(props: Props) {
       const mostrado = q.segurando ? "antes" : q.estado;
       return {
         pronto: true,
-        ...r.estadoDe(q.plano, q.imf, ctrl.id(mostrado, q)),
+        ...r.estadoDe(q.plano, q.imf, ctrl.id(mostrado, q), q.vista),
         estado: q.estado,
         mostrado,
         modo: q.modo,

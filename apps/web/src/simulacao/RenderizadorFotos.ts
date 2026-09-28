@@ -427,9 +427,13 @@ export class RenderizadorFotos {
     return this.rascunho;
   }
 
-  /** Estado da cena de uma combinação (a que aparece na tela), como ficou no último desenho dela. */
-  estadoDe(plano: Plano, imf: Imf, implanteId: string | null) {
-    return this.cena(plano, imf, implanteId).estado();
+  /**
+   * Estado da cena de uma combinação (a que aparece na tela), como ficou no último desenho dela. Na
+   * vista "Foto real" é a cena da foto (o "antes" dela não usa cena: é a própria foto).
+   */
+  estadoDe(plano: Plano, imf: Imf, implanteId: string | null, vista?: VistaRender) {
+    const real = vista && ehVistaFotoReal(vista) && implanteId !== null;
+    return this.cena(plano, imf, implanteId, real ? `real:${vistaDaFotoReal(vista)}` : "foto").estado();
   }
 
   /** Tamanho em pixels de uma foto: quadro final em dpr ≤ 2; interativo limitado a `larguraInterativaMax`. */
