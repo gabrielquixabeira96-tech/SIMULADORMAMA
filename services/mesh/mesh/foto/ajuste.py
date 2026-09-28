@@ -38,7 +38,7 @@ from mesh.foto import camera as cam
 from mesh.foto import template as tpl
 
 SIGMA_LM_PX = 2.0
-SIGMA_SIL_PX = 1.0
+SIGMA_SIL_PX = 2.0
 SIGMA_ESCALA_MM = 0.5
 F_SCALE = 3.0
 N_LINHAS = 40
@@ -53,6 +53,7 @@ PISO_VOLUME_PCT = {"perfil": 15.0, "obliqua": 20.0, "frente": 25.0}
 PASSO_TEMPLATE = 1e-3  # fracao da escala tipica de cada parametro no jacobiano
 PASSO_ROT = 1e-5
 PASSO_T = 1e-2
+GIROS_PARTIDA = (0.0, -12.0, 12.0, -25.0, 25.0)
 MAX_ITER = int(os.environ.get("MESH_FOTO_MAX_ITER", "60"))
 
 
@@ -401,7 +402,14 @@ def ajustar(fotos: list[FotoAjuste], escala: EscalaAjuste | None, max_iter: int 
         po = Problema([f], escala)
         po.so_poses, po.com_silhueta, po.theta_fixo = True, f.sdf is not None, theta
         po.definir_linhas(theta)
-        _, (pose,), sol = po.resolver(theta, [pose_inicial_orbital(*pose_f, centro, _giro(f.vista))], 40)
+        # varios pontos de partida em torno do giro nominal (a paciente nunca gira exatamente 45/90 graus;
+        # o perfil tem poucos landmarks e a silhueta sozinha tem minimos locais): fica o de menor custo
+        melhor = None
+        for dg in GIROS_PARTIDA:
+            _, (pose,), sol = po.resolver(theta, [pose_inicial_orbital(*pose_f, centro, _giro(f.vista) + dg)], 12)
+            if melhor is None or sol.cost < melhor[1].cost:
+                melhor = (pose, sol)
+        _, (pose,), sol = po.resolver(theta, [melhor[0]], 40)
         etapas.append((f"pose_{f.vista}", float(sol.cost), int(sol.nfev)))
         poses.append(pose)
     tempos["poses_s"] = time.perf_counter() - t0
