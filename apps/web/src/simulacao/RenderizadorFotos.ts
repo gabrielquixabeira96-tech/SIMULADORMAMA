@@ -17,8 +17,9 @@ import type { ConjuntoMorph } from "./VisualizadorSimulacao";
  */
 
 export const FUNDO_ESTUDIO = "#3b4450";
-/** Entradas máximas do cache de imagens (LRU simples). */
+/** Limites do cache de imagens (LRU simples): entradas e pixels (~4 bytes cada; 24 Mpx ≈ 96 MB, cabe no iPad). */
 const MAX_CACHE = 72;
+const MAX_PIXELS_CACHE = 24e6;
 
 export type QualidadeFoto = "interativa" | "final";
 
@@ -194,8 +195,20 @@ export class RenderizadorFotos {
     this.desenhar(p, p.implanteId === null ? 0 : 1, c);
     this.cache.delete(k);
     this.cache.set(k, c);
-    while (this.cache.size > MAX_CACHE) this.cache.delete(this.cache.keys().next().value!);
+    this.aparar(k);
     return c;
+  }
+
+  /** Tira as entradas mais antigas até caber nos limites (nunca a recém-criada). */
+  private aparar(manter: string): void {
+    let pixels = 0;
+    for (const c of this.cache.values()) pixels += c.width * c.height;
+    for (const [k, c] of this.cache) {
+      if (this.cache.size <= MAX_CACHE && pixels <= MAX_PIXELS_CACHE) break;
+      if (k === manter) continue;
+      this.cache.delete(k);
+      pixels -= c.width * c.height;
+    }
   }
 
   /** Quadro intermediário de transição (peso entre 0 e 1), fora do cache; reusa um canvas de rascunho. */
