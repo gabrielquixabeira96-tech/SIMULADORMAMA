@@ -30,6 +30,7 @@ export function proxy(req: NextRequest): NextResponse {
     parametro,
   );
   if (!r.ok) {
+    if (r.recusa.status === 401 && navegacaoHtml(req)) return paginaAcesso();
     return NextResponse.json(
       { erro: { codigo: r.recusa.codigo, mensagem: r.recusa.mensagem } },
       { status: r.recusa.status, headers: { "Cache-Control": "private, no-store" } },
@@ -57,6 +58,32 @@ export function proxy(req: NextRequest): NextResponse {
     return resp;
   }
   return NextResponse.next();
+}
+
+/**
+ * Navegação de página (barra de endereço/link) de quem chega sem token: GET fora de /api/ que aceita
+ * HTML. Só essa resposta vira página legível; fetch/XHR, /api/* e qualquer outro método continuam
+ * com o 401 JSON de sempre.
+ */
+function navegacaoHtml(req: NextRequest): boolean {
+  if (req.method !== "GET" && req.method !== "HEAD") return false;
+  if (req.nextUrl.pathname.startsWith("/api/")) return false;
+  const modo = req.headers.get("sec-fetch-mode");
+  if (modo && modo !== "navigate") return false;
+  return (req.headers.get("accept") ?? "").toLowerCase().includes("text/html");
+}
+
+/**
+ * Página 401 mínima (P3): instrução legível, sem versão, caminho, código interno nem detalhes do
+ * servidor. Status 401 mantido (o token continua obrigatório em todas as rotas).
+ */
+const HTML_ACESSO = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>Acesso</title>
+<style>body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#f6f7f9;color:#1c2128;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:1rem;box-sizing:border-box}main{max-width:32rem;background:#fff;border:1px solid #d0d7de;border-radius:12px;padding:1.5rem 1.75rem}h1{font-size:1.4rem;margin:0 0 .75rem}p{margin:.5rem 0;line-height:1.5}</style>
+</head><body><main><h1>Acesso</h1><p>Abra o link enviado pelo administrador para entrar.</p><p>Se o link não funcionar, peça um novo ao administrador.</p></main></body></html>`;
+
+function paginaAcesso(): NextResponse {
+  return new NextResponse(HTML_ACESSO, { status: 401, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" } });
 }
 
 export const config = {

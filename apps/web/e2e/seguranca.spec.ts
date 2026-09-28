@@ -61,6 +61,31 @@ test("proxy: sem token → 401; com ?token= grava cookie HttpOnly e a página fu
   await ctx.close();
 });
 
+test("proxy: navegação sem token → 401 com página de acesso legível (HTML), sem versão nem código interno", async ({ browser, baseURL }) => {
+  const ctx = await browser.newContext({ baseURL, extraHTTPHeaders: {} });
+  const page = await ctx.newPage();
+  const r = await page.goto("/");
+  expect(r!.status()).toBe(401);
+  expect(r!.headers()["content-type"]).toMatch(/^text\/html/);
+  await expect(page.getByRole("heading", { name: "Acesso" })).toBeVisible();
+  await expect(page.locator("body")).toContainText("link enviado pelo administrador");
+  const html = await r!.text();
+  expect(html).not.toMatch(/nao_autenticado|APP_TOKEN|\d+\.\d+\.\d+/);
+  // API sem token: 401 JSON como sempre
+  const api = await ctx.request.get("/api/config", { headers: { Accept: "text/html" } });
+  expect(api.status()).toBe(401);
+  expect((await api.json()).erro.codigo).toBe("nao_autenticado");
+  await ctx.close();
+});
+
+test("ícone do app: /icon.svg 200 e <link rel=icon> na página", async ({ page, request }) => {
+  const r = await request.get("/icon.svg");
+  expect(r.status()).toBe(200);
+  expect(r.headers()["content-type"]).toContain("image/svg+xml");
+  await page.goto("/");
+  await expect(page.locator('link[rel="icon"]').first()).toHaveAttribute("href", /icon\.svg/);
+});
+
 test("proxy: POST de outra origem ou text/plain é recusado (CSRF), host estranho também", async ({ baseURL }) => {
   const api = await novoRequest.newContext({ baseURL, extraHTTPHeaders: { Authorization: `Bearer ${TOKEN}` } });
   const origemAlheia = await api.post("/api/pacientes", { headers: { "Content-Type": "text/plain", Origin: "http://evil.example" }, data: "{}" });
