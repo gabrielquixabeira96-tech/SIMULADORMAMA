@@ -4,7 +4,26 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ARQUIVOS_BENCHMARK, benchmarkHabilitado, caminhoArquivoBenchmark } from "@/benchmark/servidor";
-import { AQUECIMENTO_DESCARTADO, CRITERIOS, LIMITE_P95_2_PAINEIS_MS, ROTEIRO, TOTAL_INTERACOES, dentroDoCriterio, percentil, resumir, resumo, rodarRoteiro, type Acao } from "@/simulacao/benchmark";
+import {
+  AQUECIMENTO_DESCARTADO,
+  CRITERIOS,
+  CRITERIOS_FOTO,
+  LIMITE_P95_2_PAINEIS_MS,
+  LIMITE_P95_CORTINA_MS,
+  ROTEIRO,
+  ROTEIRO_FOTO,
+  TOTAL_INTERACOES,
+  TOTAL_INTERACOES_FOTO,
+  dentroDoCriterio,
+  percentil,
+  resumir,
+  resumirFoto,
+  resumo,
+  rodarRoteiro,
+  rodarRoteiroFoto,
+  type Acao,
+  type AcaoFoto,
+} from "@/simulacao/benchmark";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -61,6 +80,45 @@ describe("roteiro único (e2e e /benchmark)", () => {
     expect(acoes.slice(-ROTEIRO.slider_comparacao_2_paineis.n).every((a) => a.startsWith("2:s"))).toBe(true);
     const res = resumir(r);
     expect(res.geral_1_painel.n).toBe(ROTEIRO.slider.n + ROTEIRO.troca_plano_imf.n + ROTEIRO.troca_implante.n);
+  });
+});
+
+describe("roteiro do modo foto (ADR 0019; e2e e /benchmark)", () => {
+  it("1 foto, depois 2 fotos lado a lado, depois a cortina; aquecimento descartado; critérios < 100, ≤ 85 e < 16 ms", async () => {
+    const acoes: string[] = [];
+    const modos: string[] = [];
+    let modo = "?";
+    const progresso: number[] = [];
+    const r = await rodarRoteiroFoto({
+      medir: async (a: AcaoFoto) => {
+        acoes.push(`${modo}:${a.tipo === "cortina" ? `c${a.posicao}` : a.testid}`);
+        return { quadro: 1, rasterizado: acoes.length };
+      },
+      modo: async (m) => {
+        modo = m;
+        modos.push(m);
+      },
+      progresso: (f) => progresso.push(f),
+    });
+    expect(modos).toEqual(["foto", "lado", "cortina", "foto"]);
+    expect(acoes).toHaveLength(TOTAL_INTERACOES_FOTO);
+    expect(progresso.at(-1)).toBe(TOTAL_INTERACOES_FOTO);
+    expect(r.foto_troca_1).toHaveLength(ROTEIRO_FOTO.foto_troca_1.n);
+    expect(r.foto_troca_2).toHaveLength(ROTEIRO_FOTO.foto_troca_2.n);
+    expect(r.cortina).toHaveLength(ROTEIRO_FOTO.cortina.n);
+    // aquecimento fora das amostras; troca de implante (A ↔ B) faz parte do cenário de 1 foto
+    expect(r.foto_troca_1[0]!.rasterizado).toBe(ROTEIRO_FOTO.aquecimento.length + 1);
+    expect(acoes.filter((a) => a.startsWith("foto:foto-estado-")).length).toBeGreaterThan(2);
+    expect(acoes.filter((a) => a.startsWith("lado:"))).toHaveLength(ROTEIRO_FOTO.foto_troca_2.n);
+    expect(acoes.filter((a) => a.startsWith("cortina:c"))).toHaveLength(ROTEIRO_FOTO.cortina.n);
+    expect(Object.keys(resumirFoto(r))).toEqual(["foto_troca_1", "foto_troca_2", "cortina"]);
+    const c = Object.fromEntries(CRITERIOS_FOTO.map((x) => [x.chave, x]));
+    expect(c.foto_troca_1).toMatchObject({ limite: 100, estrito: true });
+    expect(c.foto_troca_2).toMatchObject({ limite: LIMITE_P95_2_PAINEIS_MS, estrito: false });
+    expect(c.cortina).toMatchObject({ limite: LIMITE_P95_CORTINA_MS, estrito: true });
+    expect(LIMITE_P95_CORTINA_MS).toBe(16);
+    expect(dentroDoCriterio(c.cortina!, 15.99)).toBe(true);
+    expect(dentroDoCriterio(c.cortina!, 16)).toBe(false);
   });
 });
 
