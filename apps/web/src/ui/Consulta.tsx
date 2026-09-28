@@ -407,6 +407,11 @@ export function Consulta({ config }: { config: ConfigPublica }) {
 
   // Euclidianas SÓ quando medicao_automatica_3d está ativo (DESENHO=B).
   const euclidianas = useMemo(() => (recursos.medicao_automatica_3d ? distanciasEuclidianas(landmarks) : null), [landmarks, recursos.medicao_automatica_3d]);
+  // base medida em mm para o filtro do catálogo (P1); memoizada para não invalidar o catálogo a cada render
+  const baseMedidaMm = useMemo(
+    () => (euclidianas && euclidianas.base_dir != null && euclidianas.base_esq != null ? { dir: euclidianas.base_dir, esq: euclidianas.base_esq } : null),
+    [euclidianas],
+  );
 
   const obrigatoriosOk = LANDMARKS_OBRIGATORIOS.every((id) => landmarks[id]);
   const indicesOk = !!carregada?.indicesCanonicos && fonte?.tipo === "servidor";
@@ -795,13 +800,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           </span>{" "}
           Simulação
         </h2>
-        {/*
-          SLOT DO PAINEL DE SIMULAÇÃO (pacote P1). O P3 só moveu o componente para o passo 3; a chamada
-          e as props são as de antes (contrato C2). INTEGRAÇÃO: acrescentar aqui a prop opcional
-            baseMedidaMm={euclidianas ? { dir: euclidianas.base_dir, esq: euclidianas.base_esq } : null}
-          (só valores em mm; `euclidianas` é null em DESENHO=A, então o filtro pela base nunca existe em A;
-          se o P1 exigir números, filtrar null: base_dir/base_esq podem faltar sem os pontos da base).
-        */}
+        {/* SLOT DO PAINEL DE SIMULAÇÃO (pacote P1): chamada do contrato C2 + base medida (só no desenho B). */}
         <PainelSimulacao
           recursos={recursos}
           envelopeMm={config.envelope_rms_mm}
@@ -811,6 +810,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           motivoBloqueio={motivoBloqueioSimulacao}
           pincaPoloSuperiorMm={tepidValidado?.pinca_polo_superior_mm ?? null}
           onEstado={setEstadoSimulacao}
+          baseMedidaMm={baseMedidaMm}
         />
         {paciente && (
           <div className="paineis-atendimento" id="registro">

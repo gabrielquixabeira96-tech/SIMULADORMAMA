@@ -109,8 +109,6 @@ body {
 .passo-cabecalho > .nota { margin: 0; }
 .passo-secao + .passo-secao { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--borda); }
 .passo-simulacao { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--borda); }
-/* o painel da simulação traz o próprio título numerado; no passo 3 o título do passo já basta */
-.passo-simulacao #titulo-simulacao { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
 /* ---- passo 2 (e página de validação): viewer à esquerda (fixo), pontos e medidas à direita ---- */
 .consulta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr); gap: 1rem; align-items: start; }
