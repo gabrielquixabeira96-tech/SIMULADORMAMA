@@ -28,6 +28,13 @@ const MAX_CACHE = 72;
 const MAX_PIXELS_CACHE = 24e6;
 /** Largura máxima do quadro interativo (px): na GPU fraca o preenchimento cai ~2× numa foto de 960 px CSS. */
 export const LARGURA_INTERATIVA_MAX = 480;
+/**
+ * Largura máxima do quadro interativo de CADA foto do lado a lado (px). Com as 3 fotos na largura
+ * toda (~370–410 px cada), 480 px não reduziria nada e 2 fotos novas custariam ~2,3× o quadro de
+ * antes (~270 px); 240 px mantém o custo da troca, e o quadro final (150 ms depois) sai na
+ * resolução cheia.
+ */
+export const LARGURA_INTERATIVA_LADO_MAX = 240;
 /** Anisotropia da textura nas fotos (limitada: o ganho acima de 4× é pequeno e o custo em GPU fraca, não). */
 export const ANISOTROPIA_MAX = 4;
 
@@ -48,6 +55,8 @@ export interface PedidoFoto {
   /** selo compacto (miniaturas e fotos estreitas) */
   compacto?: boolean;
   papel?: PapelFoto;
+  /** limite próprio do quadro interativo (lado a lado); ausente = `larguraInterativaMax` do renderizador */
+  larguraInterativaMax?: number;
 }
 
 export interface OpcoesRenderizador {
@@ -224,7 +233,7 @@ export class RenderizadorFotos {
   chave(p: PedidoFoto): string {
     const depois = p.implanteId !== null;
     // papel (foto/tira) e as linhas do selo entram na chave: selo diferente = imagem diferente
-    return [p.vista, depois ? p.implanteId : "antes", depois ? `${p.plano}__${p.imf}` : "-", `${p.largura}x${p.altura}`, p.qualidade, p.compacto ? "c" : "n", depois && this.margem ? "m" : "-", p.papel ?? "foto", this.hashSelo()].join("|");
+    return [p.vista, depois ? p.implanteId : "antes", depois ? `${p.plano}__${p.imf}` : "-", `${p.largura}x${p.altura}`, p.qualidade, p.compacto ? "c" : "n", depois && this.margem ? "m" : "-", p.papel ?? "foto", p.larguraInterativaMax ?? "-", this.hashSelo()].join("|");
   }
 
   /** Foto em cache (ou null). */
@@ -276,8 +285,8 @@ export class RenderizadorFotos {
   }
 
   /** Tamanho em pixels de uma foto: quadro final em dpr ≤ 2; interativo limitado a `larguraInterativaMax`. */
-  tamanhoPixels(p: Pick<PedidoFoto, "largura" | "altura" | "qualidade">): { largura: number; altura: number; escala: number } {
-    const escala = p.qualidade === "final" ? this.dprFinal : Math.min(1, this.larguraInterativaMax / Math.max(1, p.largura));
+  tamanhoPixels(p: Pick<PedidoFoto, "largura" | "altura" | "qualidade" | "larguraInterativaMax">): { largura: number; altura: number; escala: number } {
+    const escala = p.qualidade === "final" ? this.dprFinal : Math.min(1, (p.larguraInterativaMax ?? this.larguraInterativaMax) / Math.max(1, p.largura));
     return { largura: Math.max(1, Math.round(p.largura * escala)), altura: Math.max(1, Math.round(p.altura * escala)), escala };
   }
 

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { ROTULOS_VISTAS_CLINICAS, VISTAS_CLINICAS, type VistaClinica } from "./cameraClinica";
 import css from "./foto.module.css";
 import { linhasDoSelo, type ConfigSelo } from "./marcaDagua";
-import { FUNDO_ESTUDIO, RenderizadorFotos, type PedidoFoto, type QualidadeFoto } from "./RenderizadorFotos";
+import { FUNDO_ESTUDIO, LARGURA_INTERATIVA_LADO_MAX, RenderizadorFotos, type PedidoFoto, type QualidadeFoto } from "./RenderizadorFotos";
 import type { ConjuntoMorph } from "./VisualizadorSimulacao";
 
 /**
@@ -215,7 +215,8 @@ class Controlador {
   }
 
   pedido(vista: VistaClinica, e: EstadoFoto, largura: number, altura: number, qualidade: QualidadeFoto = "interativa", compacto = largura < 560, q = this.q!): PedidoFoto {
-    return { vista, plano: q.plano, imf: q.imf, implanteId: this.id(e, q), largura, altura, qualidade, compacto };
+    const lado = q.modo === "lado" && largura === q.larguraLado;
+    return { vista, plano: q.plano, imf: q.imf, implanteId: this.id(e, q), largura, altura, qualidade, compacto, ...(lado ? { larguraInterativaMax: LARGURA_INTERATIVA_LADO_MAX } : {}) };
   }
 
   /** melhor imagem disponível: a refinada do cache ou a interativa (renderizada agora se faltar) */

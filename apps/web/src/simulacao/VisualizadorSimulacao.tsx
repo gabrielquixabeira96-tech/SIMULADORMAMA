@@ -11,7 +11,7 @@ import type { NomeVista } from "@/viewer/vistas";
 import { quadroClinico } from "./cameraClinica";
 import { criarCenaSimulada, garantirEnvelope, type CenaSimulada } from "./cena";
 import { shDaCena } from "./materialFoto";
-import { FUNDO_ESTUDIO, LARGURA_INTERATIVA_MAX } from "./RenderizadorFotos";
+import { FUNDO_ESTUDIO } from "./RenderizadorFotos";
 
 export interface ConjuntoMorph {
   plano: Plano;
@@ -99,11 +99,12 @@ const OPCOES_GL = { antialias: false, alpha: false, stencil: false, desynchroniz
 const ESTILO_CANVAS = { background: FUNDO_ESTUDIO };
 /**
  * Resolução dinâmica na comparação lado a lado (2 painéis): enquanto o slider, o plano, o sulco
- * ou o implante mudam, cada painel desenha no máximo LARGURA_INTERATIVA_MAX px de largura (o mesmo
- * quadro interativo do modo foto) e o navegador amplia o canvas; REFINO_MS depois da última
- * mudança o quadro é refeito na resolução cheia (dpr 1). A cena é a mesma; só o número de pixels
- * do quadro intermediário cai (~35 % a menos em 592 px de largura).
+ * ou o implante mudam, cada painel desenha no máximo LARGURA_INTERATIVA_PAINEL px de largura (os 2
+ * juntos, 720 px: o orçamento de 1,5 quadro interativo do modo foto) e o navegador amplia o canvas;
+ * REFINO_MS depois da última mudança o quadro é refeito na resolução cheia (dpr 1). A cena é a
+ * mesma; só o número de pixels do quadro intermediário cai (~63 % a menos em 592 px de largura).
  */
+const LARGURA_INTERATIVA_PAINEL = 360;
 const REFINO_MS = 250;
 const chaveConjunto = (p: Plano, i: Imf) => `${p}__${i}`;
 const olhoTmp = new THREE.Vector3();
@@ -269,7 +270,7 @@ export default function VisualizadorSimulacao(props: Props) {
     const t = setTimeout(() => setInteragindo(false), REFINO_MS); // volta ao dpr 1: o R3F redimensiona e redesenha
     return () => clearTimeout(t);
   }, [interagindo, assinatura]);
-  const dpr = comparacao && interagindo && larguraCss > LARGURA_INTERATIVA_MAX ? LARGURA_INTERATIVA_MAX / larguraCss : 1;
+  const dpr = comparacao && interagindo && larguraCss > LARGURA_INTERATIVA_PAINEL ? LARGURA_INTERATIVA_PAINEL / larguraCss : 1;
   return (
     <div className="sim-paineis" data-testid="simulacao-paineis" data-n={props.paineis.length}>
       {props.paineis.map((p, k) => (
