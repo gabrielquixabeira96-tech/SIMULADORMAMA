@@ -335,34 +335,61 @@ def validar_entrada(fotos: list[FotoAjuste]) -> int:
     return frentes[0]
 
 
-def ajustar(fotos: list[FotoAjuste], escala: EscalaAjuste | None, max_iter: int = MAX_ITER,
-            theta0: np.ndarray | None = None) -> ResultadoAjuste:
-    t_ini = time.perf_counter()
+def _etapa_frontal(fotos, escala, theta):
+    """Etapa 1: so a foto frontal (template + pose) com landmarks, escala e prior."""
     i_f = validar_entrada(fotos)
-    if escala is None:
-        raise ErroAjuste("escala_ausente", "informe a referencia de escala (ssn_n_fita, regua_foto ou base_digitada)")
-    for f in fotos:
-        f.preparar()
-    tempos = {}
-    theta = tpl.vetor_media() if theta0 is None else np.asarray(theta0, float)
+    ff = fotos[i_f]
     torso = tpl.torso_rapido(tpl.parametros_de_vetor(theta))
     L = tpl.landmarks_do_template(torso)
-    ff = fotos[i_f]
     ids = [k for k in ff.landmarks_2d if k in L]
     try:
         pnp = cam.resolver_pnp(np.array([L[k] for k in ids]), np.array([ff.landmarks_2d[k] for k in ids]), ff.K,
                                ff.k1, giros_graus=[0.0])
     except cam.ErroCamera as e:
         raise ErroAjuste(e.codigo, e.mensagem) from e
-    etapas = []
-    # etapa 1: so a frontal (template + pose) com landmarks, escala e prior: escala e disposicao
-    t0 = time.perf_counter()
     pf = Problema([ff], escala)
     theta, (pose_f,), sol = pf.resolver(theta, [(pnp.R, pnp.t)], 30)
-    etapas.append(("frontal_landmarks", float(sol.cost), int(sol.nfev)))
     torso = tpl.torso_rapido(tpl.parametros_de_vetor(theta))
     L = tpl.landmarks_do_template(torso)
     centro = 0.5 * (L["mamilo_dir"] + L["mamilo_esq"])
+    return ff, theta, pose_f, centro, sol
+
+
+def preliminar(fotos: list[FotoAjuste], escala: EscalaAjuste, theta0=None):
+    """Template e poses preliminares (sem silhueta) — para projetar o template na segmentacao sem pesos.
+    Devolve (theta, poses): a frontal pela etapa 1; as outras por PnP (>= 6 landmarks) ou pela orbita."""
+    theta = tpl.vetor_media() if theta0 is None else np.asarray(theta0, float)
+    ff, theta, pose_f, centro, _ = _etapa_frontal(fotos, escala, theta)
+    L = tpl.landmarks_do_template(tpl.torso_rapido(tpl.parametros_de_vetor(theta)))
+    poses = []
+    for f in fotos:
+        if f is ff:
+            poses.append(pose_f)
+            continue
+        pose = pose_inicial_orbital(*pose_f, centro, _giro(f.vista))
+        ids = [k for k in f.landmarks_2d if k in L]
+        if len(ids) >= 6:
+            r = cam.refinar(np.array([L[k] for k in ids]), np.array([f.landmarks_2d[k] for k in ids]), f.K, *pose,
+                            f.k1)
+            pose = (r.R, r.t)
+        poses.append(pose)
+    return theta, poses
+
+
+def ajustar(fotos: list[FotoAjuste], escala: EscalaAjuste | None, max_iter: int = MAX_ITER,
+            theta0: np.ndarray | None = None) -> ResultadoAjuste:
+    t_ini = time.perf_counter()
+    validar_entrada(fotos)
+    if escala is None:
+        raise ErroAjuste("escala_ausente", "informe a referencia de escala (ssn_n_fita, regua_foto ou base_digitada)")
+    for f in fotos:
+        f.preparar()
+    tempos = {}
+    theta = tpl.vetor_media() if theta0 is None else np.asarray(theta0, float)
+    etapas = []
+    t0 = time.perf_counter()
+    ff, theta, pose_f, centro, sol = _etapa_frontal(fotos, escala, theta)
+    etapas.append(("frontal_landmarks", float(sol.cost), int(sol.nfev)))
     tempos["frontal_s"] = time.perf_counter() - t0
     # etapa 2: pose de cada outra foto (template fixo) com landmarks + silhueta, a partir da orbita
     t0 = time.perf_counter()

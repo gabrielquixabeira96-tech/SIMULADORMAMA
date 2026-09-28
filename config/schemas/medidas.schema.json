@@ -160,7 +160,7 @@
       "properties": {
         "posicao": { "$ref": "#/$defs/vetor3" },
         "vertice": { "type": "integer", "minimum": 0 },
-        "origem": { "enum": ["clique", "gabarito", "automatico"] }
+        "origem": { "enum": ["clique", "gabarito", "automatico", "foto"] }
       }
     },
     "distanciaOuNulo": {
