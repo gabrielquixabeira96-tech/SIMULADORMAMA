@@ -37,6 +37,7 @@ from PIL import Image
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
+from mesh import esquemas
 from mesh.foto.projetar import (
     LIMIAR_NAO_OBSERVADO,
     FotoRegistrada,
@@ -55,6 +56,7 @@ from mesh.simulacao.iluminacao import (
     srgb_para_linear,
 )
 
+ESQUEMA = "textura_reconstruida/1.0"
 PX_POR_MM = 4.0
 CELULA_MM = 1.0               # celula da baixa frequencia
 SIGMA_M_MM = 3.0              # suavizacao da baixa frequencia observada
@@ -313,11 +315,12 @@ def preencher(proj: ProjecaoAtlas, textura_base=None, px_por_mm: float = PX_POR_
 def texturizar_malha(malha_dir: Path, malha: MalhaRender, fotos: list[FotoRegistrada], textura_base=None,
                      landmarks: dict | None = None, px_por_mm: float = PX_POR_MM,
                      tamanho_atlas: tuple[int, int] | None = None, arquivo_glb: str = "processada.glb",
-                     quadro: str = "anatomico", extras_asset: dict | None = None) -> dict:
+                     quadro: str = "anatomico", extras_asset: dict | None = None, detalhes: bool = False):
     """Projeta -> preenche -> grava em `malha_dir`: `textura.png` (a mesma que `processada.obj/.mtl`
     referenciam), `observado.png` (L) e `arquivo_glb` com `asset.extras.reconstrucao`,
     `asset.extras.textura` e `asset.extras.iluminacao` (ajuste SH9 so nos vertices observados).
-    Devolve o bloco `textura` para `meta.json` (o P1 grava o meta.json). Nao cria nada fora de
+    Devolve o bloco `textura` (`textura_reconstruida/1.0`) para `meta.json` (o P1 grava o meta.json);
+    com `detalhes=True`, `(bloco, ProjecaoAtlas, TexturaReconstruida)`. Nao cria nada fora de
     `malha_dir` e nao le imagem nenhuma (as fotos chegam decodificadas; ver `projetar.ler_foto`)."""
     t0 = time.perf_counter()
     malha_dir = Path(malha_dir)
@@ -345,16 +348,19 @@ def texturizar_malha(malha_dir: Path, malha: MalhaRender, fotos: list[FotoRegist
     extras = {**(extras_asset or {}), "reconstrucao": bloco_rec, "textura": bloco_tex, "iluminacao": iluminacao}
     escrever_glb(malha_dir / arquivo_glb, render, quadro=quadro, extras_asset=extras, imagem_png=png,
                  normais=m.N)
-    return {
+    bloco = {
+        "esquema": ESQUEMA,
         **bloco_tex,
         "arquivo": "textura.png",
         "largura_px": int(tamanho_atlas[0]),
         "altura_px": int(tamanho_atlas[1]),
         "px_por_mm": float(px_por_mm),
-        "fotos": [{k: v for k, v in f.items()} for f in proj.por_foto],
+        "fotos": [dict(f) for f in proj.por_foto],
         "sha256": sha256_arquivo(malha_dir / "textura.png"),
         "sha256_observado": sha256_arquivo(malha_dir / "observado.png"),
         "iluminacao": iluminacao,
         "avisos": rec.avisos,
         "duracao_s": {"projecao": round(t_proj, 2), "total": round(time.perf_counter() - t0, 2)},
     }
+    esquemas.validar("textura_reconstruida", bloco)
+    return (bloco, proj, rec) if detalhes else bloco

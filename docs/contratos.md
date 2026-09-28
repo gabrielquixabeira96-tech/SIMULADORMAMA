@@ -337,6 +337,19 @@ $DATA_DIR/
 
 `apps/web` e `services/mesh` rodam na **mesma máquina** nesta fase e trocam **caminhos relativos a `DATA_DIR`** (nunca absolutos, nunca `..`). O Python DEVE recusar caminhos que escapem de `DATA_DIR`.
 
+### 5.5 Textura reconstruída por fotos: `textura.png` + `observado.png` (`textura_reconstruida/1.0`)
+
+Malhas com `origem: "foto"` (reconstrução por ajuste de template, plano foto3d; contrato C3) trocam a textura provisória pela **foto projetada** no atlas UV do template (a UV cilíndrica do gerador, seção 4.5, 4 px/mm). Código: `services/mesh/mesh/foto/projetar.py` (projeção) e `preencher.py` (não observado + gravação, `texturizar_malha`). Nada é sintetizado: cada texel observado é re-amostragem bilinear da foto; o resto é a textura procedural do ADR 0020 com a cor casada.
+
+- **Câmera** (C1): `x_cam = R·X + t`, +z para a frente, +x à direita e +y para baixo na imagem; `u = fx·x/z + cx`, `v = fy·y/z + cy` (com `k1`: `x/z, y/z` × `1 + k1·r²`); pixel (i, j) com centro em (j + 0,5; i + 0,5), ponto principal no centro = (W/2, H/2). `K`, `R` serializados com 9 números coluna-major; `t` com 3 (mm).
+- **Visibilidade**: z-buffer da malha na resolução da foto; um texel só recebe cor se estiver à frente do z-buffer + 0,5 mm + 1 px·(mm/px)·tan θ (0 texels observados atrás de outra superfície, testado contra um oráculo independente). Peso de fusão entre fotos `cos(θ)³ × feather(12 px da borda da máscara) × visível`; com mais de uma foto, 3 ganhos RGB por foto (mínimos quadrados em luz linear contra a frontal).
+- **`observado.png`**: PNG `L` 8 bits, mesmo tamanho do atlas; valor = fração da cor do texel que veio da(s) foto(s) (255 = foto pura; **0 = preenchido proceduralmente**, "não observado", hachurado no web). Um texel é não observado quando a confiança `1 − Π(1 − c_k)` < 0,15, com `c_k = smoothstep(cos θ / cos 75°) × feather × visível`. Entre observado e preenchido há uma rampa de 10 mm para dentro do observado (mistura em luz linear).
+- **Preenchimento**: baixa frequência da cor observada (células de 1 mm, push-pull, gaussiana de 3 mm) extrapolada para todo o atlas + detalhe da textura procedural (log, passa-alta de 8 mm, amplitude casada com a do detalhe observado). A aréola procedural é apagada do detalhe do lado cujo mamilo foi observado; se o mamilo não foi observado ela é mantida e o aviso `areola_procedural_<lado>` sai em `avisos`. Sem textura base: só a cor casada (aviso `preenchimento_sem_textura_base`).
+- **`cobertura_observada_pct`**: % dos texels do atlas (W × H) com confiança ≥ 0,15. Uma foto frontal clínica cobre 35–41 % (t01–t03; máximo físico ~38–41 %: só a metade anterior dentro do quadro).
+- **`processada.glb`**: `asset.extras.reconstrucao = {fotos: N, cobertura_observada_pct}`; `asset.extras.textura = {origem: "foto_projetada", observado: "observado.png", cobertura_observada_pct, limiar_nao_observado: 0.15}`; `asset.extras.iluminacao` = `ajustar_sh9` (seção 10.6) só nos vértices com `observado ≥ 0,5`.
+- **`meta.json.textura`** = o bloco `textura_reconstruida/1.0` (`config/schemas/textura_reconstruida.schema.json`): `origem`, `arquivo`, `observado`, cobertura, limiar, tamanho, `px_por_mm`, por foto (`vista`, texels na imagem/visíveis/oclusos, `ganhos_rgb`, `cobertura_pct`), `sha256` de `textura.png` e de `observado.png`, `iluminacao`, `avisos`.
+- **LGPD**: o único leitor de imagem é `projetar.ler_foto(malha_dir, "original/foto_<vista>.jpg")` (lista fixa de vistas, sem `..`); nada é gravado fora de `malha_dir` (só `textura.png`, `observado.png` e o `.glb`).
+
 ---
 
 ## 6. Registro de medidas (`medidas/1.0`)

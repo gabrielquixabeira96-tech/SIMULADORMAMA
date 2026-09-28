@@ -9,8 +9,11 @@ sintetico, restricao 2). Quando o `raster.py` do P1 existir, ele pode substituir
 from __future__ import annotations
 
 import io
+import json
+import time
 
 import numpy as np
+import pytest
 from PIL import Image
 from scipy import ndimage
 
@@ -154,3 +157,67 @@ def ssim(a: np.ndarray, b: np.ndarray, regiao: np.ndarray | None = None, sigma: 
         mapas.append(((2 * mx * my + C1) * (2 * sxy + C2)) / ((mx * mx + my * my + C1) * (sxx + syy + C2)))
     mapa = np.mean(mapas, axis=0)
     return float(mapa[regiao].mean() if regiao is not None else mapa.mean())
+
+
+# ----------------------------------------------------------------------------- fixtures (P2)
+# Importadas por test_projetar.py e test_preencher.py. O substituto do template do P1 e o torso
+# sintetico t01 (mesma UV cilindrica do gerador): o de DATA_DIR/sinteticos se ja existir (CI/demo),
+# senao o gerado pela fixture `torsos` num diretorio temporario.
+
+T01 = "t01_simetrico_300"
+LARGURA_FOTO = 2000
+
+
+def pasta_torso(request, nome: str):
+    from mesh.caminhos import data_dir
+
+    local = data_dir() / "sinteticos" / nome
+    if all((local / a).is_file() for a in ("torso.obj", "textura.png", "gabarito.json")):
+        return local
+    request.getfixturevalue("torsos")
+    return request.getfixturevalue("dir_sinteticos") / nome
+
+
+def base_recolorida(atlas01: np.ndarray) -> Image.Image:
+    """Textura "procedural" substituta: a do torso com outro tom (mais escura e mais vermelha, gama
+    1,4) — o preenchimento precisa casar a cor com a foto, nao copiar a verdade."""
+    return Image.fromarray(np.round(np.clip(atlas01 ** 1.4 * np.array([0.95, 0.8, 0.75]), 0, 1) * 255)
+                           .astype(np.uint8))
+
+
+@pytest.fixture(scope="session")
+def cena_t01(request) -> dict:
+    """Foto frontal sintetica do t01 pela camera clinica (render do oraculo + JPEG q=92 em memoria)."""
+    from mesh.foto.projetar import malha_uv
+    from mesh.malha.io import ler_malha
+
+    pasta = pasta_torso(request, T01)
+    m = ler_malha(pasta / "torso.obj")
+    gab = json.loads((pasta / "gabarito.json").read_text(encoding="utf-8"))
+    cam = camera_clinica(gab["landmarks"], "frente", LARGURA_FOTO)
+    atlas = np.asarray(m.textura, dtype=np.float64) / 255.0
+    raster = rasterizar_por_face(m.V, m.F, cam)
+    img, msk, uvp = renderizar(m.V, m.F, m.uv, atlas, cam, raster=raster)
+    foto = jpeg_em_memoria(np.round(np.clip(img, 0, 1) * 255).astype(np.uint8))
+    return {"malha": m, "mu": malha_uv(m), "gab": gab, "cam": cam, "atlas": atlas, "raster": raster,
+            "foto": foto, "mascara": msk, "uv_px": uvp, "pasta": pasta}
+
+
+def texturizar_cena(cena: dict, destino, **kw):
+    """`texturizar_malha` na cena (foto frontal + base recolorida); devolve ((bloco, proj, rec), s)."""
+    from mesh.foto.preencher import texturizar_malha
+    from mesh.foto.projetar import FotoRegistrada
+
+    t0 = time.perf_counter()
+    out = texturizar_malha(destino, cena["malha"], [FotoRegistrada(cena["foto"], cena["cam"], cena["mascara"])],
+                           textura_base=base_recolorida(cena["atlas"]), landmarks=cena["gab"]["landmarks"],
+                           detalhes=True, **kw)
+    return out, time.perf_counter() - t0
+
+
+@pytest.fixture(scope="session")
+def reconstrucao_t01(cena_t01, tmp_path_factory) -> dict:
+    """Projecao + preenchimento + gravacao do t01 (frontal), com o tempo de parede medido."""
+    d = tmp_path_factory.mktemp("malha_foto_a")
+    (bloco, proj, rec), dur = texturizar_cena(cena_t01, d)
+    return {"bloco": bloco, "proj": proj, "rec": rec, "dir": d, "duracao_s": dur}
