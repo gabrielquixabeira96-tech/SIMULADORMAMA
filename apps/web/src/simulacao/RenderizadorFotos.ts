@@ -635,13 +635,17 @@ export class RenderizadorFotos {
    * Máscara da região que a simulação pode alterar numa vista (testes de localidade): pegada, antes
    * e depois, dos triângulos que algum dos alvos move (posição ou normal) e do halo, desenhada com
    * teste de profundidade contra a pele. `largura` × `altura` em pixels. 1 = região; linhas de cima
-   * para baixo, como as imagens.
+   * para baixo, como as imagens. Na vista "Foto real" (critério de 0 pixels alterados fora dela) a
+   * máscara é desenhada com o mesmo MSAA 4× do quadro final e qualquer cobertura parcial conta:
+   * lascas de halo mais finas que 1 px, que só as amostras do MSAA pegam, entram na região.
    */
   mascaraRegiao(vista: VistaRender, plano: Plano, imf: Imf, implantes: readonly string[], largura: number, altura: number): Uint8Array {
     const w = Math.round(largura), h = Math.round(altura);
-    if (!this.rtMascara || this.rtMascara.width !== w || this.rtMascara.height !== h) {
+    const amostras = ehVistaFotoReal(vista) ? 4 : 0;
+    const limiar = amostras ? 0 : 127;
+    if (!this.rtMascara || this.rtMascara.width !== w || this.rtMascara.height !== h || this.rtMascara.samples !== amostras) {
       this.rtMascara?.dispose();
-      this.rtMascara = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true });
+      this.rtMascara = new THREE.WebGLRenderTarget(w, h, { depthBuffer: true, samples: amostras });
     }
     const saida = new Uint8Array(w * h);
     const px = new Uint8Array(w * h * 4);
@@ -673,7 +677,7 @@ export class RenderizadorFotos {
             r.readRenderTargetPixels(this.rtMascara, 0, 0, w, h, px);
             for (let y = 0; y < h; y++) {
               const lin = (h - 1 - y) * w;
-              for (let x = 0; x < w; x++) if (px[(lin + x) * 4]! > 127) saida[y * w + x] = 1;
+              for (let x = 0; x < w; x++) if (px[(lin + x) * 4]! > limiar) saida[y * w + x] = 1;
             }
           }
         } finally {

@@ -85,6 +85,7 @@ async function localidade(page: Page, estado: "a" | "b", qualidade: Qualidade) {
           dil[y * w + x] = s;
         }
       let fora = 0, foraDif = 0, regiao = 0, regiaoDif = 0;
+      const exemplos: string[] = [];
       for (let i = 0; i < w * h; i++) {
         const mudou = a.dados[4 * i] !== d.dados[4 * i] || a.dados[4 * i + 1] !== d.dados[4 * i + 1] || a.dados[4 * i + 2] !== d.dados[4 * i + 2];
         if (m[i]) {
@@ -93,10 +94,13 @@ async function localidade(page: Page, estado: "a" | "b", qualidade: Qualidade) {
         }
         if (!dil[i]) {
           fora++;
-          if (mudou) foraDif++;
+          if (mudou) {
+            foraDif++;
+            if (exemplos.length < 8) exemplos.push(`(${i % w},${Math.floor(i / w)}) Δ${Math.max(...[0, 1, 2].map((c) => Math.abs(a.dados[4 * i + c] - d.dados[4 * i + c])))}`);
+          }
         }
       }
-      return { w, h, fora, foraDif, regiao, regiaoDif };
+      return { w, h, fora, foraDif, regiao, regiaoDif, exemplos };
     },
     [VISTA, estado, qualidade] as const,
   );
@@ -106,7 +110,7 @@ async function sha(page: Page, vista: string, estado: string, o: { peso?: number
   return (await page.evaluate(([v, e, oo]) => (window as any).__simuladorSim.fotos.renderizar(v, e, oo), [vista, estado, o] as const)).sha256;
 }
 
-/** Pixels "listrados" do não observado (cinza-azulado sobre a pele: r − b < 30) acima da faixa do selo, fora do fundo. */
+/** Pixels "listrados" do não observado (cinza-azulado sobre a pele: r > g, r − b < 30) acima da faixa do selo, fora do fundo. */
 async function pixelsNaoObservado(page: Page, vista: string): Promise<number> {
   return page.evaluate((v) => {
     const im = (window as any).__simuladorSim.fotos.imagem(v, "antes", { qualidade: "final" });
@@ -115,7 +119,8 @@ async function pixelsNaoObservado(page: Page, vista: string): Promise<number> {
     for (let i = 0; i < im.largura * linhas; i++) {
       const r = im.dados[4 * i], g = im.dados[4 * i + 1], b = im.dados[4 * i + 2];
       const fundo = Math.abs(r - 0x3b) + Math.abs(g - 0x44) + Math.abs(b - 0x50) < 24;
-      if (!fundo && r - b < 30 && r > 70) n++;
+      // listra: cinza-azulado misturado à pele (r > g, r − b < 30); o fundo da foto e o do estúdio têm g > r
+      if (!fundo && r > g && r - b < 30 && r > 70) n++;
     }
     return n;
   }, vista);
@@ -147,6 +152,7 @@ test("foto real no desenho B: antes = a foto, edição só na região (também c
   await expect(page.getByTestId("foto-rotulo")).toContainText("A ·");
   await expect(page.getByTestId("foto-legenda")).toContainText("±12,4 mm");
 
+  if (process.env.E2E_CAPTURA_DIR) await page.getByTestId("foto-comparador").screenshot({ path: `${process.env.E2E_CAPTURA_DIR}/foto-real-B-A.png` });
   // cartão de incerteza por eixo, sempre visível; sem perfil, profundidade "só ilustração" e nenhum previsto
   const card = page.getByTestId("foto-incerteza");
   await expect(card).toBeVisible();
@@ -177,7 +183,7 @@ test("foto real no desenho B: antes = a foto, edição só na região (também c
   for (const q of ["interativa", "final"] as const)
     for (const e of ["a", "b"] as const) {
       const l = await localidade(page, e, q);
-      console.log(`[fotoReal] ${e}/${q}: ${l.w}×${l.h}, fora ${l.fora} (mudaram ${l.foraDif}), região ${l.regiao} (mudaram ${l.regiaoDif})`);
+      console.log(`[fotoReal] ${e}/${q}: ${l.w}×${l.h}, fora ${l.fora} (mudaram ${l.foraDif}${l.exemplos.length ? `: ${l.exemplos.join(" ")}` : ""}), região ${l.regiao} (mudaram ${l.regiaoDif})`);
       expect(l.foraDif, `${e}/${q}: pixels alterados fora da região`).toBe(0);
       expect(l.regiaoDif, `${e}/${q}: a edição aparece na região`).toBeGreaterThan(200);
     }
@@ -202,6 +208,7 @@ test("foto real no desenho B: antes = a foto, edição só na região (também c
   await esperarFotos(page);
   await expect(page.getByTestId("foto-legenda-nao-observado")).toBeVisible();
   await expect(page.getByTestId("foto-rotulo")).toContainText("A ·");
+  if (process.env.E2E_CAPTURA_DIR) await page.getByTestId("foto-comparador").screenshot({ path: `${process.env.E2E_CAPTURA_DIR}/foto-real-B-obliqua.png` });
   const hachura = await pixelsNaoObservado(page, "obliqua_dir");
   console.log(`[fotoReal] pixels do não observado na oblíqua D: ${hachura}`);
   expect(hachura).toBeGreaterThanOrEqual(200);
@@ -226,7 +233,11 @@ test("foto real no desenho A: a foto editada e a incerteza existem, sem nenhum n
   await expect(card).toBeVisible();
   await expect(card).toHaveAttribute("data-numeros", "0");
   await expect(card).toContainText("só ilustração");
-  expect(await card.innerText()).not.toMatch(/\d/);
+  // nenhum número calculado nas linhas por eixo (o título só diz "modelo 3D estimado de 1 foto")
+  const linhas = await card.locator("li").allInnerTexts();
+  expect(linhas.length).toBeGreaterThanOrEqual(2);
+  for (const l of linhas) expect(l).not.toMatch(/\d/);
+  expect(await card.innerText()).not.toMatch(/mm|%|±/);
   await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
   await expect(page.getByTestId("foto-diferencas")).toHaveCount(0);
   // a API também não entrega números em A (só câmeras e o halo)
