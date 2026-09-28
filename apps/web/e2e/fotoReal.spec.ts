@@ -57,6 +57,33 @@ async function prepararFotoReal(page: Page, implantes: string[], variante: Varia
   return malhaId;
 }
 
+test("foto real no desenho B só com a frontal: o SERVIDOR não entrega nem grava previsto (profundidade só ilustração)", async ({ page }, info) => {
+  test.skip(info.project.name !== "desenho-B", "desenho B");
+  test.setTimeout(6 * 60_000);
+  const morphs = page.waitForResponse((r) => /\/api\/malhas\/[0-9a-f-]+\/morphs$/.test(r.url()) && r.request().method() === "POST", { timeout: 240_000 });
+  const malhaId = await prepararFotoReal(page, [IMPLANTE_1], "foto_frente");
+  const alvos = ((await (await morphs).json()) as { arquivos: { targets: { previsto: unknown }[] }[] }).arquivos.flatMap((a) => a.targets);
+  expect(alvos.length).toBeGreaterThan(0);
+  expect(alvos.every((t) => t.previsto === null), "previsto nulo em todo target (B, sem perfil)").toBe(true);
+  const man = await page.evaluate(async (id) => (await fetch(`/api/malhas/${id}/arquivo?nome=morphs/manifest.json`, { cache: "no-store" })).json(), malhaId);
+  expect(man.arquivos.flatMap((a: { targets: { previsto: unknown }[] }) => a.targets).every((t: { previsto: unknown }) => t.previsto === null)).toBe(true);
+  // gravar uma simulação mostrada com previsto é recusado; sem previsto, aceito
+  const r = await page.evaluate(
+    async ([id, imp, versao]) => {
+      const corpo = { implante_id: imp, plano: "subglandular", imf: "manter", lado: "ambos", versao_config_simulacao: versao, nao_calibrado: true, previsto: { delta_projecao_mamilo_mm: { dir: 1, esq: 1 }, delta_y_sulco_mm: { dir: 0, esq: 0 }, delta_y_mamilo_mm: { dir: 0, esq: 0 } } };
+      const x = await fetch(`/api/malhas/${id}/simulacoes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      return { status: x.status, codigo: (await x.json()).erro?.codigo };
+    },
+    [malhaId, IMPLANTE_1, man.versao_config_simulacao] as const,
+  );
+  expect(r).toEqual({ status: 422, codigo: "previsto_sem_perfil" });
+  const lista = await page.evaluate(async (id) => (await fetch(`/api/malhas/${id}/simulacoes`)).json(), malhaId);
+  expect(lista.simulacoes.length).toBeGreaterThan(0); // as mostradas foram registradas pelo painel, sem previsto
+  expect(lista.simulacoes.every((x: { previsto: unknown }) => x.previsto === null)).toBe(true);
+  await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
+  await expect(page.getByTestId("foto-incerteza")).toContainText("só ilustração");
+});
+
 /** Diferença entre os pixels da foto guardada pelo renderizador (sem selo) e a foto decodificada de novo aqui. */
 async function identidadeDaFoto(page: Page, malhaId: string, arquivo: string) {
   return page.evaluate(
@@ -169,6 +196,8 @@ test("foto real no desenho B (3 fotos): antes = a foto, edição só na região 
   await expect(page.getByTestId("foto-erro-gabarito")).toContainText(/RMS na região das mamas: x \d+,\d mm · y \d+,\d mm · z \d+,\d mm/);
   await expect(page.getByTestId("foto-erro-gabarito")).toContainText("Volume");
   await expect(page.getByTestId("foto-reconstrucao")).not.toContainText("só ilustração");
+  await expect(page.getByTestId("foto-erro-caso-ideal")).toContainText("Em fotos reais espere erros de alguns mm");
+  await expect(page.getByTestId("foto-erro-gabarito")).not.toContainText("−0 %");
   // a fita SSN–N entra como distância em linha reta (ADR 0021): o texto diz como medir
   await expect(page.getByTestId("foto-escala")).toContainText("linha reta");
 
@@ -179,6 +208,12 @@ test("foto real no desenho B (3 fotos): antes = a foto, edição só na região 
   expect((e0.selo as string[]).join(" ")).toContain(`MODELO 3D ESTIMADO DE ${nFotos(n).toUpperCase()}`);
   expect((e0.selo as string[]).join(" ")).toContain(`±${mm1(halo)} mm`);
   for (const f of r.fotos) await expect(page.getByTestId(`foto-vista-real-${f.vista}`)).toBeVisible();
+  // rótulos da tira inteiros (quebram em 2 linhas, não cortam): "Foto real · Oblíqua D"
+  await expect(page.getByTestId("foto-vista-real-obliqua_dir")).toContainText("Foto real · Oblíqua D");
+  const cortados = await page.getByTestId("foto-comparador").locator('[role="group"] button > span:last-child').evaluateAll((els) =>
+    els.filter((e) => e.scrollWidth > e.clientWidth + 1 || e.getBoundingClientRect().right > e.parentElement!.getBoundingClientRect().right + 1).map((e) => e.textContent),
+  );
+  expect(cortados).toEqual([]);
   await expect(page.getByTestId("foto-vista-real-frente")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("foto-rotulo")).toContainText("A ·");
   await expect(page.getByTestId("foto-legenda")).toContainText(`±${mm1(halo)} mm`);

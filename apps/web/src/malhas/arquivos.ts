@@ -13,6 +13,11 @@ const NOMES_FIXOS: Record<string, string> = {
 };
 const REGEX_MORPH = /^morphs\/(subglandular|dual_plane)__(manter|rebaixar)\.glb$/;
 
+/** Arquivo que só existe em malha reconstruída de fotos (a rota confere a origem da malha antes de servir). */
+export function arquivoDeFoto(nome: string): boolean {
+  return nome === "observado.png" || ARQUIVO_FOTO_REGEX.test(nome);
+}
+
 /** Content-Type do arquivo permitido, ou null se o nome estiver fora da lista. */
 export function tipoDoArquivo(nome: string): string | null {
   if (Object.hasOwn(NOMES_FIXOS, nome)) return NOMES_FIXOS[nome] ?? null;

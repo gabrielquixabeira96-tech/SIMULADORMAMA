@@ -7,7 +7,7 @@ import { recursoAtivoEm } from "@/config/recursos";
 import { registrarAuditoria } from "@/db/auditoria";
 import { malhaPorId } from "@/db/repositorio";
 import { fotoRealPublica } from "@/foto/publica";
-import { lerReconstrucao } from "@/foto/servidor";
+import { avaliacaoLiberadaAgora, lerReconstrucao } from "@/foto/servidor";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -41,7 +41,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
         envelopeMm: carregarConfigSimulacaoUI().envelope_rms_mm,
         numerosPermitidos: recursoAtivoEm(desenho, "medicao_automatica_3d"),
         observado: lida.observado,
-        avaliacao: lida.avaliacao,
+        // cegamento da sessão de Bland-Altman (ADR 0017): torso com sessão aberta → sem erro contra o gabarito
+        avaliacao: await avaliacaoLiberadaAgora(lida.avaliacao),
       }),
     );
   } catch (e) {

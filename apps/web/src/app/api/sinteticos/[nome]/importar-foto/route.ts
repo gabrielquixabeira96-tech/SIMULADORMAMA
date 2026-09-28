@@ -107,7 +107,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
           await copyFile(f.de, join(/*turbopackIgnore: true*/ dir, f.para));
         }
         await copyFile(abs(ARQUIVO_RECONSTRUCAO), join(/*turbopackIgnore: true*/ dir, ARQUIVO_RECONSTRUCAO));
-        for (const opcional of [ARQUIVO_OBSERVADO, ARQUIVO_AVALIACAO]) {
+        // com sessão de Bland-Altman aberta para este torso (ADR 0017), a avaliação contra o gabarito não é copiada
+        for (const opcional of bloqueado ? [ARQUIVO_OBSERVADO] : [ARQUIVO_OBSERVADO, ARQUIVO_AVALIACAO]) {
           if (await existe(abs(opcional))) await copyFile(abs(opcional), join(/*turbopackIgnore: true*/ dir, opcional));
         }
       },

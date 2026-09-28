@@ -9,6 +9,7 @@ import { recursoAtivoEm } from "@/config/recursos";
 import { registrarAuditoria } from "@/db/auditoria";
 import { transacao } from "@/db/pool";
 import { inserirSimulacao, listarSimulacoes, malhaPorId, upsertImplante } from "@/db/repositorio";
+import { previstoProibidoPorFoto } from "@/foto/servidor";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (!implante) return erro(422, "implante_desconhecido", "implante fora do catálogo");
     const m = await malhaPorId(id);
     if (!m) return erro(404, "malha_nao_encontrada", "malha não encontrada");
+    // malha de fotos sem perfil: a profundidade é só ilustração (ADR 0021) — nenhum `previsto` gravado, nem em B
+    if (corpo.previsto != null && (await previstoProibidoPorFoto(m.malha_dir)))
+      return erro(422, "previsto_sem_perfil", "malha reconstruída sem foto de perfil: a profundidade é só ilustração e não há números de projeção");
     const simId = await transacao(async (c) => {
       await upsertImplante(implante, c);
       const sid = await inserirSimulacao(
@@ -70,7 +74,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     if (!m) return erro(404, "malha_nao_encontrada", "malha não encontrada");
     const lista = await listarSimulacoes(m.id);
     await registrarAuditoria({ usuarioId: usuarioAtual(), acao: "visualizou", entidade: "simulacoes", entidadeId: m.id, desenho, detalhes: { n: lista.length } });
-    const calculados = recursoAtivoEm(desenho, "numeros_calculados_no_relatorio");
+    const calculados = recursoAtivoEm(desenho, "numeros_calculados_no_relatorio") && !(await previstoProibidoPorFoto(m.malha_dir));
     return json({ simulacoes: lista.map((s) => ({ ...s, previsto: calculados ? s.previsto : null })) });
   } catch (e) {
     return tratarErro(e, "simulacoes.listar");
