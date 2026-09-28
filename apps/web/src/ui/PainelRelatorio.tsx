@@ -98,18 +98,31 @@ export function PainelRelatorio({ pacienteId, desenho, malhaId, medidaId, atendi
   const secoes = (relatorio?.secoes ?? []).filter((s) => calculadosAtivos || !s.calculado);
 
   return (
-    <section className="painel" data-testid="painel-relatorio" aria-labelledby="titulo-relatorio">
+    <section className="painel painel-registro" data-testid="painel-relatorio" aria-labelledby="titulo-relatorio">
       <h3 id="titulo-relatorio">Relatório para a paciente</h3>
       <p className="aviso-servico" data-testid="relatorio-aviso">
         {AVISO_FIXO}
       </p>
-      <div className="par-botoes">
-        <button type="button" data-testid="relatorio-gerar" disabled={ocupado !== null} onClick={gerarRelatorio}>
+      {/* uma sequência só: gerar relatório → gerar PDF → abrir/baixar (cada botão aparece quando cabe) */}
+      <div className="linha-form">
+        <button type="button" className={relatorio ? "secundario" : undefined} data-testid="relatorio-gerar" disabled={ocupado !== null} onClick={gerarRelatorio}>
           {ocupado === "relatorio" ? "Gerando…" : relatorio ? "Gerar novamente" : "Gerar relatório"}
         </button>
-        <button type="button" data-testid="relatorio-pdf-gerar" disabled={!relatorio || ocupado !== null} onClick={gerarPdf}>
-          {ocupado === "pdf" ? "Gerando PDF…" : "Gerar PDF do atendimento"}
-        </button>
+        {relatorio && (
+          <button type="button" className={pdf ? "secundario" : undefined} data-testid="relatorio-pdf-gerar" disabled={ocupado !== null} onClick={gerarPdf}>
+            {ocupado === "pdf" ? "Gerando PDF…" : "Gerar PDF do atendimento"}
+          </button>
+        )}
+        {pdf && (
+          <span data-testid="relatorio-pdf-pronto" className="par-botoes">
+            <a className="botao" href={`/api/pdf/${pdf.atendimentoId}`} target="_blank" rel="noopener noreferrer" data-testid="relatorio-pdf-abrir">
+              Abrir PDF
+            </a>
+            <a className="botao secundario" href={`/api/pdf/${pdf.atendimentoId}?download=1`} data-testid="relatorio-pdf-baixar">
+              Baixar PDF
+            </a>
+          </span>
+        )}
       </div>
       {erroMsg && (
         <p className="erro" role="alert" data-testid="relatorio-erro">
@@ -117,16 +130,10 @@ export function PainelRelatorio({ pacienteId, desenho, malhaId, medidaId, atendi
         </p>
       )}
       {pdf && (
-        <p data-testid="relatorio-pdf-pronto">
-          <a href={`/api/pdf/${pdf.atendimentoId}`} target="_blank" rel="noopener noreferrer" data-testid="relatorio-pdf-abrir">
-            Abrir PDF
-          </a>{" "}
-          ·{" "}
-          <a href={`/api/pdf/${pdf.atendimentoId}?download=1`} data-testid="relatorio-pdf-baixar">
-            Baixar PDF
-          </a>{" "}
-          <span className="nota">SHA-256 {pdf.sha256.slice(0, 12)}…</span>
-        </p>
+        <details className="avancado-pdf">
+          <summary>Integridade do PDF</summary>
+          <p className="nota">SHA-256 {pdf.sha256}</p>
+        </details>
       )}
       {relatorio && (
         <div data-testid="relatorio-conteudo">

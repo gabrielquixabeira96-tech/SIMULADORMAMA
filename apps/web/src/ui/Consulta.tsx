@@ -19,7 +19,11 @@ import type { MalhaCarregada } from "@/viewer/carregar";
 import type { CliqueNaMalha, Marcador } from "@/viewer/Visualizador";
 import { NOMES_VISTAS, VISTAS, type NomeVista } from "@/viewer/vistas";
 import { FormularioTepid, valoresTepidVazios, type ErroCampoUI, type ResultadoTepidUI, type ValoresTepidForm } from "./FormularioTepid";
+import { COR_BASE, COR_OBRIGATORIO, GuiaLandmarks, ROTULO_CURTO, numeroDoLandmark } from "./GuiaLandmarks";
+import { Inicio, type PacienteResumo } from "./Inicio";
+import { Mensagem, horaAgora, type MensagemLocal } from "./Mensagem";
 import { PainelDistancias, PainelVolume, type EstadoMedicao } from "./PainelMedidas";
+import { Passos, type PassoInfo } from "./Passos";
 import { PainelSimulacao, type EstadoSimulacao } from "@/simulacao/PainelSimulacao";
 import { PainelAnamnese } from "./PainelAnamnese";
 import { PainelRelatorio } from "./PainelRelatorio";
@@ -38,17 +42,19 @@ type Fonte =
 
 type Ferramenta = "navegar" | "regua" | "landmarks";
 
-interface Paciente {
-  id: string;
-  pseudonimo: string;
-}
-
 interface TorsoSintetico {
   nome: string;
   glb: boolean;
   obj: boolean;
   gabarito: boolean;
 }
+
+/** Nome para o cirurgião dos torsos sintéticos conhecidos (o código continua no card, em cinza). */
+const NOMES_TORSOS: Record<string, { titulo: string; descricao: string }> = {
+  t01_simetrico_300: { titulo: "Torso 1 — simétrico", descricao: "mamas simétricas de volume médio" },
+  t02_assimetrico: { titulo: "Torso 2 — assimétrico", descricao: "diferença de volume entre os lados" },
+  t03_pequeno_ptose: { titulo: "Torso 3 — pequeno com ptose", descricao: "volume pequeno e mamilo baixo" },
+};
 
 async function lerErro(r: Response): Promise<string> {
   try {
@@ -60,16 +66,23 @@ async function lerErro(r: Response): Promise<string> {
 }
 
 const fmt1 = (v: number) => v.toFixed(1).replace(".", ",");
+/** Valor do campo TEPID (input type=number, passo 0,5): ponto decimal, múltiplo de 0,5. */
+const valorCampo = (v: number) => String(Math.round(v * 2) / 2);
 
 export function Consulta({ config }: { config: ConfigPublica }) {
   const { recursos } = config;
 
   // ---------------------------------------------------------------- estado
-  const [paciente, setPaciente] = useState<Paciente | null>(null);
+  const [paciente, setPaciente] = useState<PacienteResumo | null>(null);
   const [fonte, setFonte] = useState<Fonte | null>(null);
   const [carregada, setCarregada] = useState<MalhaCarregada | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [mensagem, setMensagem] = useState<{ tipo: "info" | "erro"; texto: string } | null>(null);
+  const [processando, setProcessando] = useState<string | null>(null);
+  // feedback junto da ação que o gerou (um por bloco; nenhum sobrescreve o outro)
+  const [msgCaptura, setMsgCaptura] = useState<MensagemLocal | null>(null);
+  const [msgEscala, setMsgEscala] = useState<MensagemLocal | null>(null);
+  const [msgMedidas, setMsgMedidas] = useState<MensagemLocal | null>(null);
+  const [msgTepid, setMsgTepid] = useState<MensagemLocal | null>(null);
   const [meshDisponivel, setMeshDisponivel] = useState<boolean | null>(null);
   const [sinteticos, setSinteticos] = useState<TorsoSintetico[]>([]);
   const [gabarito, setGabarito] = useState<Partial<Record<DistanciaId, { euclidiana_mm: number; geodesica_mm: number | null }>> | null>(null);
@@ -97,6 +110,11 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   const [tepidValidado, setTepidValidado] = useState<Record<string, { dir: number; esq: number }> | null>(null);
   const [errosTepid, setErrosTepid] = useState<ErroCampoUI[]>([]);
   const [avaliandoTepid, setAvaliandoTepid] = useState(false);
+  /** Base pré-preenchida pelo 3D (só DESENHO=B; em A nunca é calculada). */
+  const [basePre, setBasePre] = useState<{ dir: string | null; esq: string | null } | null>(null);
+  /** Fotografia do que foi gravado por último (indicador "alterações não salvas"). */
+  const [salvoTepid, setSalvoTepid] = useState<string | null>(null);
+  const [salvoMedidas, setSalvoMedidas] = useState<string | null>(null);
   /**
    * Estado da simulação mostrada (implantes, plano, IMF, peso, envelope, não calibrado, previsto só em B).
    * Disponível para o relatório/PDF do Marco 2b (PainelRelatorio) — ver README.
@@ -121,26 +139,71 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     return () => urls.forEach((u) => URL.revokeObjectURL(u));
   }, []);
 
+  /**
+   * Pré-preenche a base do TEPID com a largura da base medida no 3D (linha reta), só em DESENHO=B e
+   * só quando o campo está vazio ou ainda com o valor pré-preenchido antes (nunca apaga o digitado).
+   */
+  const valoresTepidRef = useRef(valoresTepid);
+  const basePreRef = useRef(basePre);
+  useLayoutEffect(() => {
+    valoresTepidRef.current = valoresTepid;
+    basePreRef.current = basePre;
+  });
+  const preencherBase = useCallback(
+    (novos: Landmarks) => {
+      if (!recursos.medicao_automatica_3d) return;
+      const e = distanciasEuclidianas(novos);
+      const pre = { dir: e.base_dir !== null ? valorCampo(e.base_dir) : null, esq: e.base_esq !== null ? valorCampo(e.base_esq) : null };
+      const antigo = basePreRef.current;
+      const v = valoresTepidRef.current;
+      const base = { ...v.base_mm };
+      let mudou = false;
+      for (const lado of ["dir", "esq"] as const) {
+        const livre = base[lado] === "" || base[lado] === antigo?.[lado];
+        const novo = pre[lado] ?? "";
+        if (livre && base[lado] !== novo) {
+          base[lado] = novo;
+          mudou = true;
+        }
+      }
+      basePreRef.current = pre;
+      setBasePre(pre);
+      if (mudou) {
+        const nv = { ...v, base_mm: base };
+        valoresTepidRef.current = nv;
+        setValoresTepid(nv);
+        setTepidValidado(null);
+      }
+    },
+    [recursos.medicao_automatica_3d],
+  );
+
   const limparMedidas = useCallback(() => {
     setLandmarks({});
     setAtivo("furcula");
     setMedicao(null);
     setEstadoMedicao("ocioso");
-  }, []);
+    preencherBase({});
+  }, [preencherBase]);
 
   const abrir = useCallback(
     async (novaFonte: Fonte, carregar: () => Promise<MalhaCarregada>) => {
       setCarregando(true);
-      setMensagem(null);
+      setMsgCaptura(null);
       try {
         const m = await carregar();
         setCarregada(m);
         setFonte(novaFonte);
         setMedidaId(null);
+        setSalvoMedidas(null);
         setPontosRegua([]);
         limparMedidas();
+        // passo 2 começa com a marcação ativa; scan enviado espera a escala (régua) antes
+        setFerramenta(novaFonte.tipo === "servidor" && !novaFonte.sintetica ? "navegar" : "landmarks");
+        return true;
       } catch (e) {
-        setMensagem({ tipo: "erro", texto: (e as Error).message });
+        setMsgCaptura({ tipo: "erro", texto: (e as Error).message });
+        return false;
       } finally {
         setCarregando(false);
       }
@@ -149,11 +212,16 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   );
 
   // ---------------------------------------------------------------- ações
-  async function criarPaciente() {
+  async function criarPaciente(): Promise<PacienteResumo | null> {
     const r = await fetch("/api/pacientes", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Não foi possível criar paciente: ${await lerErro(r)}` });
+    if (!r.ok) {
+      setMsgCaptura({ tipo: "erro", texto: `Não foi possível criar o atendimento: ${await lerErro(r)}` });
+      return null;
+    }
     const j = await r.json();
-    setPaciente({ id: j.id, pseudonimo: j.pseudonimo });
+    const p = { id: j.id, pseudonimo: j.pseudonimo, criado_em: j.criado_em };
+    setPaciente(p);
+    return p;
   }
 
   async function enviarMalha(e: React.FormEvent) {
@@ -166,19 +234,22 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     fd.set("recorte_modo", "abaixo_do_pescoco");
     for (const f of Array.from(files)) fd.append("arquivos", f, f.name);
     setCarregando(true);
-    setMensagem({ tipo: "info", texto: "Enviando e processando (recorte + decimação)…" });
+    setProcessando("Enviando e preparando o scan…");
+    setMsgCaptura(null);
     const r = await fetch("/api/malhas", { method: "POST", body: fd });
     setCarregando(false);
-    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Upload falhou: ${await lerErro(r)}` });
+    setProcessando(null);
+    if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Envio falhou: ${await lerErro(r)}` });
     const j = await r.json();
     setCalibrada(false);
     setLandmarksGabarito(null);
     setGabarito(null);
+    setMsgEscala(null);
     const { carregarGlb } = await import("@/viewer/carregar");
-    await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: false, versao: 1 }, () =>
+    const ok = await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: false, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
     );
-    setMensagem({ tipo: "info", texto: `Malha processada: ${j.meta?.processada?.n_vertices ?? "?"} vértices.` });
+    if (ok) setMsgCaptura({ tipo: "ok", texto: "Malha processada ✓ — ajuste a escala pela régua (abaixo) antes de marcar os pontos.", dados: { "data-malha-id": j.malha_id } });
   }
 
   async function abrirLocal() {
@@ -200,6 +271,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     await abrir({ tipo: "local", descricao: nomes.join(", ") }, () => (ply ? mod.carregarPly(mapa.get(ply)!) : mod.carregarObj(mapa)));
   }
 
+  /** Pré-visualização do GLB do gerador (não grava; fica em "Avançado"). */
   async function abrirSintetico(t: TorsoSintetico) {
     const mod = await import("@/viewer/carregar");
     const base = `/api/sinteticos/${t.nome}`;
@@ -209,7 +281,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       fetch(`${base}/gabarito.json`)
         .then(async (r) => {
           if (r.status === 403 && (await r.clone().json().catch(() => null))?.erro?.codigo === "gabarito_oculto_sessao_aberta") {
-            setMensagem({ tipo: "info", texto: `Gabarito de ${t.nome} bloqueado: há sessão de validação (Bland-Altman) aberta com este torso.` });
+            setMsgCaptura({ tipo: "info", texto: `Referência de ${t.nome} bloqueada: há sessão de validação aberta com este torso.` });
           }
           return r.ok ? r.json() : null;
         })
@@ -223,26 +295,32 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     );
   }
 
-  /** Torso sintético pelo MESMO caminho de uma malha enviada (ADR 0003 item 9). */
+  /** Torso sintético pelo MESMO caminho de uma malha enviada (ADR 0003 item 9). Sem atendimento, cria um. */
   async function importarSintetico(t: TorsoSintetico) {
-    if (!paciente) return;
+    const p = paciente ?? (await criarPaciente());
+    if (!p) return;
     setCarregando(true);
-    setMensagem({ tipo: "info", texto: `Processando ${t.nome} no serviço de malha…` });
-    const r = await fetch(`/api/sinteticos/${t.nome}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: paciente.id }) });
+    setProcessando(`Preparando ${NOMES_TORSOS[t.nome]?.titulo ?? t.nome}… (cerca de 15 s)`);
+    setMsgCaptura(null);
+    const r = await fetch(`/api/sinteticos/${t.nome}/importar`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: p.id }) });
     setCarregando(false);
-    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Importação falhou: ${await lerErro(r)}` });
+    setProcessando(null);
+    if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Não foi possível preparar o torso: ${await lerErro(r)}` });
     const j = await r.json();
     setCalibrada(true);
+    setMsgEscala(null);
     setGabarito(recursos.medicao_automatica_3d ? (j.gabarito?.distancias ?? null) : null);
     setLandmarksGabarito(j.gabarito?.landmarks ?? null);
     const { carregarGlb } = await import("@/viewer/carregar");
-    await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: true, versao: 1 }, () =>
+    const ok = await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: true, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
     );
-    setMensagem({
-      tipo: "info",
-      texto: `Torso ${t.nome} processado: ${j.meta?.processada?.n_vertices ?? "?"} vértices (malha ${j.malha_id}).${j.gabarito_bloqueado ? " Gabarito bloqueado: há sessão de validação (Bland-Altman) aberta com este torso." : ""}`,
-    });
+    if (ok)
+      setMsgCaptura({
+        tipo: "ok",
+        texto: `Torso ${t.nome} processado ✓${j.gabarito_bloqueado ? " (pontos de referência bloqueados: há sessão de validação aberta com este torso)" : ""}`,
+        dados: { "data-malha-id": j.malha_id },
+      });
   }
 
   /** Landmarks `origem: "gabarito"` (contratos §2) projetados no vértice mais próximo da malha aberta. */
@@ -257,6 +335,16 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     setLandmarks(novos);
     setMedicao(null);
     setEstadoMedicao("ocioso");
+    preencherBase(novos);
+  }
+
+  function apagarLandmark(id: LandmarkId) {
+    const { [id]: _removido, ...resto } = landmarks;
+    void _removido;
+    setLandmarks(resto);
+    setMedicao(null);
+    setAtivo(id);
+    preencherBase(resto);
   }
 
   function aoClicar(c: CliqueNaMalha) {
@@ -270,6 +358,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       setLandmarks(novos);
       setMedicao(null);
       setEstadoMedicao("ocioso");
+      preencherBase(novos);
       const proximo = LANDMARK_IDS.find((id) => !novos[id]);
       if (proximo) setAtivo(proximo);
     }
@@ -300,14 +389,20 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       body: JSON.stringify({ regua_mm: Number(reguaMm.replace(",", ".")), pontos: pontosRegua }),
     });
     setCarregando(false);
-    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Calibração falhou: ${await lerErro(r)}` });
+    if (!r.ok) return setMsgEscala({ tipo: "erro", texto: `Não foi possível aplicar a escala: ${await lerErro(r)}` });
     const j = await r.json();
     const versao = fonte.versao + 1;
     const { carregarGlb } = await import("@/viewer/carregar");
     await abrir({ ...fonte, versao }, () => carregarGlb(`/api/malhas/${fonte.malhaId}/arquivo?nome=processada.glb&v=${versao}`));
     setCalibrada(true);
     setFerramenta("landmarks");
-    setMensagem({ tipo: "info", texto: `Escala aplicada (fator ${j.fator.toFixed(4)}). Landmarks anteriores foram invalidados.` });
+    setMsgEscala({ tipo: "ok", texto: `Escala aplicada (fator ${j.fator.toFixed(4)}) ✓ Pontos marcados antes foram apagados.` });
+  }
+
+  function prosseguirSemRegua() {
+    setCalibrada(true);
+    setFerramenta("landmarks");
+    setMsgEscala({ tipo: "info", texto: "Escala mantida (unidade declarada no envio)." });
   }
 
   // Euclidianas SÓ quando medicao_automatica_3d está ativo (DESENHO=B).
@@ -319,6 +414,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   async function medirNoServico() {
     if (!recursos.medicao_automatica_3d || fonte?.tipo !== "servidor") return;
     setEstadoMedicao("medindo");
+    setMsgMedidas(null);
     const r = await fetch("/api/medidas/medir", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -327,7 +423,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     if (r.status === 503) return setEstadoMedicao("sem_servico");
     if (!r.ok) {
       setEstadoMedicao("erro");
-      return setMensagem({ tipo: "erro", texto: `Medição falhou: ${await lerErro(r)}` });
+      return setMsgMedidas({ tipo: "erro", texto: `Medição falhou: ${await lerErro(r)}` });
     }
     setMedicao(await r.json());
     setEstadoMedicao("ok");
@@ -336,6 +432,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   async function avaliarTepid() {
     setAvaliandoTepid(true);
     setErrosTepid([]);
+    setMsgTepid(null);
     const r = await fetch("/api/tepid/avaliar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ valores: valoresTepid }) });
     setAvaliandoTepid(false);
     const j = await r.json().catch(() => null);
@@ -343,7 +440,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       setResultadoTepid(null);
       setTepidValidado(null);
       setErrosTepid(j?.erro?.detalhes?.erros ?? []);
-      return setMensagem({ tipo: "erro", texto: j?.erro?.mensagem ?? "TEPID inválido" });
+      return setMsgTepid({ tipo: "erro", texto: j?.erro?.mensagem ?? "Medidas inválidas" });
     }
     setTepidValidado(j.valores);
     setResultadoTepid({ alertas: j.alertas ?? [], referencias: j.referencias ?? [] });
@@ -352,22 +449,28 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   async function gravarTepid() {
     if (!paciente || !tepidValidado) return;
     const r = await fetch("/api/tepid", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: paciente.id, valores: tepidValidado }) });
-    setMensagem(r.ok ? { tipo: "info", texto: "TEPID gravado." } : { tipo: "erro", texto: `TEPID não gravado: ${await lerErro(r)}` });
+    if (r.ok) {
+      setSalvoTepid(JSON.stringify(valoresTepid));
+      setMsgTepid({ tipo: "ok", texto: "TEPID gravado. ✓", hora: horaAgora() });
+    } else setMsgTepid({ tipo: "erro", texto: `TEPID não gravado: ${await lerErro(r)}` });
   }
 
+  const fotoMedidas = JSON.stringify({ landmarks, tepidValidado });
   async function gravarMedidas() {
     if (fonte?.tipo !== "servidor") return;
     const corpo: Record<string, unknown> = { malha_id: fonte.malhaId, landmarks };
     if (tepidValidado) corpo.medidas_digitadas = tepidValidado;
+    const foto = fotoMedidas;
     const r = await fetch("/api/medidas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-    if (!r.ok) return setMensagem({ tipo: "erro", texto: `Medidas não gravadas: ${await lerErro(r)}` });
+    if (!r.ok) return setMsgMedidas({ tipo: "erro", texto: `Medidas não gravadas: ${await lerErro(r)}` });
     const j = await r.json();
     if (recursos.medicao_automatica_3d && j.distancias) {
       setMedicao({ distancias: j.distancias, volumes: j.volumes, quadro_anatomico: j.quadro_anatomico, geodesica: j.geodesica, avisos: [] });
       setEstadoMedicao("ok");
     }
     setMedidaId(j.medida_id);
-    setMensagem({ tipo: "info", texto: `Registro de medidas gravado (${j.medida_id}).` });
+    setSalvoMedidas(foto);
+    setMsgMedidas({ tipo: "ok", texto: "Registro de medidas gravado ✓", hora: horaAgora(), dados: { "data-medida-id": j.medida_id } });
   }
 
   // ---------------------------------------------------------------- viewer
@@ -375,271 +478,348 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     const out: Marcador[] = [];
     for (const d of DEFINICOES_LANDMARKS) {
       const l = landmarks[d.id];
-      if (l) out.push({ id: d.id, posicao: l.posicao, cor: d.obrigatorio ? "#d1242f" : "#8250df" });
+      if (l) out.push({ id: d.id, posicao: l.posicao, cor: d.obrigatorio ? COR_OBRIGATORIO : COR_BASE, rotulo: `${numeroDoLandmark(d.id)} ${ROTULO_CURTO[d.id]}` });
     }
-    pontosRegua.forEach((p, i) => out.push({ id: `regua-${i}`, posicao: p, cor: "#1f6feb" }));
+    pontosRegua.forEach((p, i) => out.push({ id: `regua-${i}`, posicao: p, cor: "#1f6feb", rotulo: `régua ${i + 1}` }));
     return out;
   }, [landmarks, pontosRegua]);
 
   const dims = carregada
     ? { x: carregada.caixa.max.x - carregada.caixa.min.x, y: carregada.caixa.max.y - carregada.caixa.min.y, z: carregada.caixa.max.z - carregada.caixa.min.z }
     : null;
+  const escaneada = fonte?.tipo === "servidor" && !fonte.sintetica;
   const podeMarcar = !!carregada && (calibrada || fonte?.tipo !== "servidor" || (fonte.tipo === "servidor" && fonte.sintetica));
 
-  const todosLandmarks = LANDMARK_IDS.every((id) => landmarks[id]);
+  const faltam = LANDMARK_IDS.filter((id) => !landmarks[id]).length;
+  const todosLandmarks = faltam === 0;
   const motivoBloqueioSimulacao = !fonte || fonte.tipo !== "servidor"
-    ? "Envie a malha ao serviço (ou processe um torso sintético) para simular."
+    ? "Prepare o scan (ou um torso sintético) no passo 1 para simular."
     : !indicesOk
-      ? "Malha sem índices canônicos."
+      ? "Este scan não pode ser simulado: prepare-o de novo no passo 1."
       : !todosLandmarks
-        ? "Marque os 10 landmarks (os 4 da base definem a pegada do implante)."
+        ? "Marque os 10 pontos no passo 2 (os 4 da base definem a pegada do implante)."
         : null;
+
+  // ---------------------------------------------------------------- passos
+  const capturaOk = fonte?.tipo === "servidor" && podeMarcar;
+  const passos: PassoInfo[] = [
+    {
+      n: 1,
+      titulo: "Captura",
+      feito: capturaOk,
+      motivo: !paciente
+        ? "Comece com “Nova simulação”."
+        : fonte?.tipo !== "servidor"
+          ? config.demo
+            ? "Escolha um torso e toque em “Usar este torso”."
+            : "Envie o scan (ou use um torso sintético) para continuar."
+          : !podeMarcar
+            ? "Ajuste a escala pela régua (ou prossiga sem régua) para continuar."
+            : null,
+    },
+    {
+      n: 2,
+      titulo: "Medidas",
+      feito: todosLandmarks && (!recursos.medicao_automatica_3d || estadoMedicao === "ok"),
+      motivo: !capturaOk
+        ? "Conclua o passo 1."
+        : !todosLandmarks
+          ? `Marque os 10 pontos (faltam ${faltam}).`
+          : recursos.medicao_automatica_3d && estadoMedicao !== "ok"
+            ? "Toque em “Medir” para ver as medidas."
+            : null,
+    },
+    { n: 3, titulo: "Simulação", feito: estadoSimulacao !== null, motivo: null },
+  ];
+
+  const definicaoAtiva = DEFINICOES_LANDMARKS.find((d) => d.id === ativo)!;
+  const importaveis = sinteticos.filter((t) => t.obj);
 
   return (
     <>
-    <div className="consulta">
-      <div className="coluna-viewer">
-        <div className="viewer" data-testid="viewer">
-          {carregada || carregando ? (
-            <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={linhaRegua} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicarEstavel} />
-          ) : (
-            <div className="viewer-vazio">Nenhuma malha aberta. Envie um OBJ/PLY, abra um arquivo local ou um torso sintético.</div>
-          )}
-        </div>
-        {carregada && dims && (
-          <p className="caixa" data-testid="caixa-mm">
-            Caixa envolvente: {fmt1(dims.x)} × {fmt1(dims.y)} × {fmt1(dims.z)} mm (X × Y × Z) · {carregada.nVertices.toLocaleString("pt-BR")} vértices · {carregada.origem.toUpperCase()}
-            {carregada.quadro ? ` · quadro ${carregada.quadro}` : ""}
-          </p>
-        )}
-        <p className="nota">+Y cranial, +Z anterior, +X lado esquerdo da paciente. Escala em mm, sem ajuste na carga.</p>
-        <div className="ferramentas" role="toolbar" aria-label="Vista da câmera">
-          {NOMES_VISTAS.map((v) => (
-            <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
-              {VISTAS[v].rotulo}
-            </button>
-          ))}
-        </div>
-        <div className="ferramentas" role="toolbar" aria-label="Ferramenta de clique">
-          {(["navegar", "regua", "landmarks"] as const).map((f) => (
-            <button key={f} type="button" aria-pressed={ferramenta === f} disabled={!carregada || (f === "landmarks" && !podeMarcar)} onClick={() => setFerramenta(f)}>
-              {f === "navegar" ? "Girar/zoom" : f === "regua" ? "Régua (2 pontos)" : "Landmarks"}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="coluna-passos">
-        {mensagem && (
-          <p className={mensagem.tipo === "erro" ? "erro mensagem" : "info mensagem"} role={mensagem.tipo === "erro" ? "alert" : "status"}>
-            {mensagem.texto}
-          </p>
-        )}
-        <p className="status-mesh" data-testid="status-mesh">
-          Serviço de malha: {meshDisponivel === null ? "verificando…" : meshDisponivel ? "disponível" : "aguardando serviço de malha"}
-        </p>
-
-        <section className="painel">
-          <h3>1. Paciente (pseudônimo)</h3>
-          {paciente ? (
-            <p>
-              Paciente <strong data-testid="pseudonimo">{paciente.pseudonimo}</strong>. O vínculo com a identidade fica no prontuário, fora deste sistema.
-            </p>
-          ) : (
-            <button type="button" onClick={criarPaciente}>
-              Novo atendimento (gera pseudônimo)
-            </button>
-          )}
-        </section>
-
-        <section className="painel">
-          <h3>2. Malha 3D</h3>
-          {config.demo ? (
-            <p className="nota" data-testid="upload-desligado-demo">
-              Demonstração: envio de malha e pré-visualização de arquivo local desligados. Use somente os torsos sintéticos abaixo.
-            </p>
-          ) : (
-          <>
-            <form onSubmit={enviarMalha} className="linha-form">
-              <label>
-                Arquivos (OBJ + MTL + PNG/JPG, PLY ou ZIP)
-                <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
-              </label>
-              <label>
-                Unidade do arquivo
-                <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
-                  <option value="desconhecida">desconhecida (inferir)</option>
-                  <option value="m">metros (3D Scanner App)</option>
-                  <option value="cm">centímetros</option>
-                  <option value="mm">milímetros</option>
-                </select>
-              </label>
-              <button type="submit" disabled={!paciente || carregando}>
-                Enviar e processar
+      <Passos passos={passos} />
+      <div className="consulta">
+        <div className="coluna-viewer">
+          <div className="viewer" data-testid="viewer">
+            {carregada || carregando ? (
+              <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={linhaRegua} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicarEstavel} />
+            ) : (
+              <div className="viewer-vazio">{config.demo ? "Escolha um torso sintético no passo 1." : "Envie o scan (ou use um torso sintético) no passo 1."}</div>
+            )}
+          </div>
+          <div className="ferramentas" role="toolbar" aria-label="Vista da câmera">
+            {NOMES_VISTAS.map((v) => (
+              <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
+                {VISTAS[v].rotulo}
               </button>
-            </form>
-            {!paciente && <p className="nota">Crie o atendimento para enviar ao serviço (recorte abaixo do pescoço + decimação 30–50 mil vértices).</p>}
-            <details>
-              <summary>Pré-visualizar arquivo local (sem enviar; não grava medidas)</summary>
-              <div className="linha-form">
-                <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
-                <button type="button" onClick={abrirLocal} disabled={carregando}>
-                  Abrir no viewer
+            ))}
+          </div>
+          <div className="ferramentas" role="toolbar" aria-label="Ferramenta de toque">
+            <button type="button" className="secundario" aria-pressed={ferramenta === "navegar"} disabled={!carregada} onClick={() => setFerramenta("navegar")}>
+              Girar/zoom
+            </button>
+            {escaneada && (
+              <button type="button" className="secundario" aria-pressed={ferramenta === "regua"} disabled={!carregada} onClick={() => setFerramenta("regua")}>
+                Régua (2 pontos)
+              </button>
+            )}
+            <button type="button" className="secundario" aria-pressed={ferramenta === "landmarks"} disabled={!carregada || !podeMarcar} onClick={() => setFerramenta("landmarks")}>
+              Marcar pontos
+            </button>
+          </div>
+        </div>
+
+        <div className="coluna-passos">
+          {/* ------------------------------------------------ passo 1: captura */}
+          <section className="passo-secao" data-passo="1" aria-labelledby="titulo-passo-1">
+            <h2 id="titulo-passo-1">
+              <span className="passo-num" aria-hidden="true">
+                1
+              </span>{" "}
+              Captura
+            </h2>
+            <Inicio paciente={paciente} onNovo={() => void criarPaciente()} onRetomar={setPaciente} ocupado={carregando} />
+
+            {config.demo ? (
+              <p className="nota" data-testid="upload-desligado-demo">
+                Demonstração: só torsos sintéticos (envio de scan desligado).
+              </p>
+            ) : (
+              <form onSubmit={enviarMalha} className="linha-form envio-scan">
+                <label>
+                  Scan (ZIP do 3D Scanner App, OBJ + MTL + imagem, ou PLY)
+                  <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
+                </label>
+                <label>
+                  Unidade do arquivo
+                  <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+                    <option value="desconhecida">detectar</option>
+                    <option value="m">metros (3D Scanner App)</option>
+                    <option value="cm">centímetros</option>
+                    <option value="mm">milímetros</option>
+                  </select>
+                </label>
+                <button type="submit" disabled={!paciente || carregando}>
+                  Enviar e processar
                 </button>
+              </form>
+            )}
+
+            {importaveis.length > 0 && (
+              <div className="cards-torsos" role="list" aria-label="Torsos sintéticos">
+                {importaveis.map((t) => (
+                  <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fonte?.tipo === "servidor" && fonte.sintetica && msgCaptura?.texto.includes(t.nome) ? "1" : "0"}>
+                    <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome}</div>
+                    <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
+                    <button type="button" onClick={() => void importarSintetico(t)} disabled={carregando} data-testid={`importar-${t.nome}`}>
+                      Usar este torso
+                    </button>
+                  </div>
+                ))}
               </div>
+            )}
+
+            {processando && (
+              <div className="progresso" role="status" aria-live="polite">
+                <progress aria-label="Processando" />
+                <span>{processando}</span>
+              </div>
+            )}
+            <Mensagem msg={msgCaptura} testId="mensagem-captura" />
+
+            {escaneada && (
+              <details className="ajustar-escala" open={!calibrada} data-testid="ajustar-escala">
+                <summary>Ajustar escala (régua)</summary>
+                <p className="nota">
+                  {calibrada
+                    ? "Escala definida. Para refazer, marque de novo os dois extremos da régua."
+                    : "Antes de marcar os pontos: toque em “Régua”, toque nos dois extremos da régua escaneada e digite o comprimento real. Sem régua no scan, prossiga com a unidade informada no envio."}
+                </p>
+                <div className="linha-form">
+                  <label>
+                    Comprimento real (mm)
+                    <input type="number" inputMode="decimal" min={1} step="0.1" value={reguaMm} onChange={(e) => setReguaMm(e.target.value)} data-testid="regua-mm" />
+                  </label>
+                  <span data-testid="regua-pontos">{pontosRegua.length}/2 pontos</span>
+                  {fatorPrevisto !== null && <span className="nota">fator previsto {fatorPrevisto.toFixed(4)}</span>}
+                </div>
+                <div className="linha-form">
+                  <button type="button" onClick={aplicarCalibracao} disabled={pontosRegua.length !== 2 || carregando}>
+                    Aplicar calibração
+                  </button>
+                  {!calibrada && (
+                    <button type="button" className="secundario" onClick={prosseguirSemRegua}>
+                      Prosseguir sem régua
+                    </button>
+                  )}
+                  {pontosRegua.length !== 2 && <span className="nota">Marque os 2 extremos da régua para aplicar.</span>}
+                </div>
+                <Mensagem msg={msgEscala} testId="mensagem-escala" />
+              </details>
+            )}
+
+            <details className="avancado" data-testid="avancado-captura">
+              <summary>Avançado</summary>
+              <p className="status-mesh" data-testid="status-mesh">
+                Serviço de malha: {meshDisponivel === null ? "verificando…" : meshDisponivel ? "disponível" : "aguardando serviço de malha"}
+              </p>
+              {carregada && dims && (
+                <p className="caixa" data-testid="caixa-mm">
+                  Caixa envolvente: {fmt1(dims.x)} × {fmt1(dims.y)} × {fmt1(dims.z)} mm (X × Y × Z) · {carregada.nVertices.toLocaleString("pt-BR")} vértices · {carregada.origem.toUpperCase()}
+                  {carregada.quadro ? ` · quadro ${carregada.quadro}` : ""}
+                </p>
+              )}
+              <p className="nota">+Y cranial, +Z anterior, +X lado esquerdo da paciente. Escala em mm, sem ajuste na carga.</p>
+              {fonte?.tipo === "servidor" && <p className="nota">Malha {fonte.malhaId} (versão {fonte.versao}).</p>}
+              {sinteticos.length > 0 && (
+                <div className="linha-form">
+                  <span>Pré-visualizar sem gravar:</span>
+                  {sinteticos.map((t) => (
+                    <button key={t.nome} type="button" className="secundario" onClick={() => void abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)} title="Pré-visualizar o GLB do gerador (não grava)">
+                      {t.nome}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!config.demo && (
+                <div className="linha-form">
+                  <label>
+                    Pré-visualizar arquivo local (sem enviar; não grava medidas)
+                    <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
+                  </label>
+                  <button type="button" className="secundario" onClick={abrirLocal} disabled={carregando}>
+                    Abrir no viewer
+                  </button>
+                </div>
+              )}
             </details>
-          </>
-          )}
-          {sinteticos.length > 0 && (
-            <div className="linha-form">
-              <span>Torsos sintéticos:</span>
-              {sinteticos.map((t) => (
-                <span key={t.nome} className="par-botoes">
-                  <button type="button" className="secundario" onClick={() => abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)} title="Pré-visualizar o GLB do gerador (não grava)">
-                    {t.nome}
-                  </button>
-                  {paciente && t.obj && (
-                    <button type="button" onClick={() => importarSintetico(t)} disabled={carregando} data-testid={`importar-${t.nome}`} title="Processar pelo serviço de malha, como um upload">
-                      processar
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="painel">
-          <h3>3. Calibração pela régua</h3>
-          <p className="nota">Escolha “Régua”, clique nos dois extremos da régua escaneada e digite o comprimento real. Ordem obrigatória: processar → calibrar → landmarks.</p>
-          <div className="linha-form">
-            <label>
-              Comprimento real (mm)
-              <input type="number" min={1} step="0.1" value={reguaMm} onChange={(e) => setReguaMm(e.target.value)} data-testid="regua-mm" />
-            </label>
-            <span data-testid="regua-pontos">{pontosRegua.length}/2 pontos</span>
-            {fatorPrevisto !== null && <span>fator previsto {fatorPrevisto.toFixed(4)}</span>}
-          </div>
-          <div className="linha-form">
-            <button type="button" onClick={aplicarCalibracao} disabled={fonte?.tipo !== "servidor" || pontosRegua.length !== 2 || carregando}>
-              Aplicar calibração
-            </button>
-            {fonte?.tipo === "servidor" && !calibrada && (
-              <button type="button" className="secundario" onClick={() => setCalibrada(true)}>
-                Prosseguir sem régua (escala = unidade declarada)
-              </button>
-            )}
-          </div>
-          {fonte && fonte.tipo !== "servidor" && <p className="nota">Calibração só se aplica a malhas enviadas ao serviço.</p>}
-        </section>
-
-        <section className="painel" data-testid="landmarks-guia">
-          <h3>4. Landmarks ({LANDMARKS_OBRIGATORIOS.length} obrigatórios + 4 da base)</h3>
-          {!recursos.medicao_automatica_3d && <p className="nota">Desenho A: os landmarks servem só de âncora da simulação; nenhuma distância é calculada.</p>}
-          <ol className="lista-landmarks">
-            {DEFINICOES_LANDMARKS.map((d) => {
-              const l = landmarks[d.id];
-              return (
-                <li key={d.id} className={ativo === d.id ? "ativo" : ""}>
-                  <button type="button" className="link" onClick={() => setAtivo(d.id)} aria-current={ativo === d.id} title={d.instrucao}>
-                    {d.rotulo}
-                    {d.obrigatorio ? " *" : ""}
-                  </button>
-                  <span className="estado-landmark">{l ? `✓ v${l.vertice}` : "—"}</span>
-                  {l && (
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() => {
-                        const { [d.id]: _removido, ...resto } = landmarks;
-                        void _removido;
-                        setLandmarks(resto);
-                        setMedicao(null);
-                      }}
-                    >
-                      apagar
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ol>
-          <p className="nota">{DEFINICOES_LANDMARKS.find((d) => d.id === ativo)?.instrucao}</p>
-          {carregada && !indicesOk && <p className="nota">Pré-visualização: índices de vértice não canônicos; para medir no serviço e gravar, envie a malha.</p>}
-          <div className="linha-form">
-            <button type="button" className="secundario" onClick={limparMedidas}>
-              Limpar landmarks
-            </button>
-            {landmarksGabarito && fonte?.tipo === "servidor" && fonte.sintetica && (
-              <button type="button" className="secundario" onClick={aplicarLandmarksGabarito} data-testid="aplicar-gabarito">
-                Landmarks do gabarito (sintético)
-              </button>
-            )}
-            {recursos.medicao_automatica_3d && (
-              <button type="button" onClick={medirNoServico} disabled={!indicesOk || !obrigatoriosOk || estadoMedicao === "medindo"}>
-                Medir geodésicas e volume
-              </button>
-            )}
-            <button type="button" onClick={gravarMedidas} disabled={!indicesOk || (!recursos.medicao_automatica_3d && !tepidValidado)}>
-              Gravar registro de medidas
-            </button>
-          </div>
-        </section>
-
-        <PainelDistancias recursos={recursos} euclidianas={euclidianas} medicao={medicao} estado={estadoMedicao} gabarito={fonte?.tipo === "sintetico" || (fonte?.tipo === "servidor" && fonte.sintetica) ? gabarito : null} />
-        <PainelVolume recursos={recursos} medicao={medicao} estado={estadoMedicao} />
-
-        <FormularioTepid
-          recursos={recursos}
-          tepid={config.tepid}
-          valores={valoresTepid}
-          onChange={(v) => {
-            setValoresTepid(v);
-            setTepidValidado(null);
-          }}
-          onAvaliar={avaliarTepid}
-          avaliando={avaliandoTepid}
-          resultado={resultadoTepid}
-          erros={errosTepid}
-        />
-        {paciente && tepidValidado && (
-          <button type="button" onClick={gravarTepid}>
-            Gravar TEPID do paciente
-          </button>
-        )}
-      </div>
-    </div>
-    <PainelSimulacao
-      recursos={recursos}
-      envelopeMm={config.envelope_rms_mm}
-      malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
-      landmarks={landmarks}
-      prontoParaSimular={motivoBloqueioSimulacao === null}
-      motivoBloqueio={motivoBloqueioSimulacao}
-      pincaPoloSuperiorMm={tepidValidado?.pinca_polo_superior_mm ?? null}
-      onEstado={setEstadoSimulacao}
-    />
-    {paciente && (
-      <div className="paineis-atendimento">
-        {config.demo ? (
-          <section className="painel" data-testid="anamnese-desligada-demo">
-            <h3>Anamnese</h3>
-            <p className="nota">Demonstração: anamnese em texto livre desligada (nenhum dado real entra nesta instância).</p>
           </section>
-        ) : (
-          <PainelAnamnese pacienteId={paciente.id} atendimentoId={atendimentoId} onRegistrada={(r) => setAtendimentoId(r.atendimentoId)} />
-        )}
-        <PainelRelatorio
-          pacienteId={paciente.id}
-          desenho={config.desenho}
-          malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
-          medidaId={medidaId}
-          atendimentoId={atendimentoId}
-          onAtendimento={setAtendimentoId}
-        />
+
+          {/* ------------------------------------------------ passo 2: medidas */}
+          <section className="passo-secao" data-passo="2" aria-labelledby="titulo-passo-2">
+            <h2 id="titulo-passo-2">
+              <span className="passo-num" aria-hidden="true">
+                2
+              </span>{" "}
+              Medidas
+            </h2>
+            {!recursos.medicao_automatica_3d && <p className="nota">Os pontos servem só para posicionar a simulação; nenhuma distância é calculada a partir do 3D.</p>}
+            <p className="instrucao-ativa" aria-live="polite">
+              {!carregada
+                ? "Os pontos são marcados tocando no 3D, depois do passo 1."
+                : todosLandmarks
+                  ? "Os 10 pontos estão marcados ✓"
+                  : !podeMarcar
+                    ? "Ajuste a escala no passo 1 antes de marcar os pontos."
+                    : `Toque no ponto ${numeroDoLandmark(ativo)} — ${definicaoAtiva.rotulo}: ${definicaoAtiva.instrucao}`}
+            </p>
+            <GuiaLandmarks landmarks={landmarks} ativo={ativo} onAtivar={setAtivo} onApagar={apagarLandmark} />
+            {carregada && !indicesOk && <p className="nota">Pré-visualização: para medir e gravar, use “Usar este torso” ou envie o scan.</p>}
+            <div className="linha-form">
+              {landmarksGabarito && fonte?.tipo === "servidor" && fonte.sintetica && (
+                <button type="button" className="secundario" onClick={aplicarLandmarksGabarito} data-testid="aplicar-gabarito">
+                  Marcar os 10 pontos do torso sintético
+                </button>
+              )}
+              {recursos.medicao_automatica_3d && (
+                <button type="button" className="primario" onClick={medirNoServico} disabled={!indicesOk || !obrigatoriosOk || estadoMedicao === "medindo"} aria-label="Medir geodésicas e volume">
+                  {estadoMedicao === "medindo" ? "Medindo…" : "Medir"}
+                </button>
+              )}
+              <button type="button" className="secundario" onClick={limparMedidas} disabled={Object.keys(landmarks).length === 0}>
+                Limpar pontos
+              </button>
+            </div>
+
+            {recursos.medicao_automatica_3d && (
+              <div className="medidas-grade">
+                <PainelDistancias recursos={recursos} euclidianas={euclidianas} medicao={medicao} estado={estadoMedicao} gabarito={fonte?.tipo === "sintetico" || (fonte?.tipo === "servidor" && fonte.sintetica) ? gabarito : null} />
+                <PainelVolume recursos={recursos} medicao={medicao} estado={estadoMedicao} />
+              </div>
+            )}
+
+            <FormularioTepid
+              recursos={recursos}
+              tepid={config.tepid}
+              valores={valoresTepid}
+              onChange={(v) => {
+                setValoresTepid(v);
+                setTepidValidado(null);
+              }}
+              onAvaliar={avaliarTepid}
+              avaliando={avaliandoTepid}
+              resultado={resultadoTepid}
+              erros={errosTepid}
+              basePreenchida={basePre}
+              rodape={
+                <>
+                  {paciente && tepidValidado && (
+                    <button type="button" onClick={gravarTepid}>
+                      Gravar TEPID do paciente
+                    </button>
+                  )}
+                  <Mensagem msg={msgTepid} naoSalvo={salvoTepid !== null && salvoTepid !== JSON.stringify(valoresTepid)} testId="mensagem-tepid" />
+                </>
+              }
+            />
+
+            <div className="linha-form gravar-medidas">
+              <button type="button" onClick={gravarMedidas} disabled={!indicesOk || (!recursos.medicao_automatica_3d && !tepidValidado)}>
+                Gravar registro de medidas
+              </button>
+              {!recursos.medicao_automatica_3d && !tepidValidado && indicesOk && <span className="nota">Valide as medidas digitadas para gravar.</span>}
+              <Mensagem msg={msgMedidas} naoSalvo={salvoMedidas !== null && salvoMedidas !== fotoMedidas} testId="mensagem-medidas" />
+            </div>
+          </section>
+        </div>
       </div>
-    )}
-    <span hidden data-testid="estado-simulacao" data-implantes={estadoSimulacao?.implantes.map((i) => i.id).join(",") ?? ""} data-plano={estadoSimulacao?.plano ?? ""} data-imf={estadoSimulacao?.imf ?? ""} />
+
+      {/* ------------------------------------------------ passo 3: simulação */}
+      <section className="passo-secao passo-simulacao" data-passo="3" aria-labelledby="titulo-passo-3">
+        <h2 id="titulo-passo-3">
+          <span className="passo-num" aria-hidden="true">
+            3
+          </span>{" "}
+          Simulação
+        </h2>
+        {/*
+          SLOT DO PAINEL DE SIMULAÇÃO (pacote P1). O P3 só moveu o componente para o passo 3; a chamada
+          e as props são as de antes (contrato C2). INTEGRAÇÃO: acrescentar aqui a prop opcional
+            baseMedidaMm={euclidianas ? { dir: euclidianas.base_dir, esq: euclidianas.base_esq } : null}
+          (só valores em mm; `euclidianas` é null em DESENHO=A, então o filtro pela base nunca existe em A;
+          se o P1 exigir números, filtrar null: base_dir/base_esq podem faltar sem os pontos da base).
+        */}
+        <PainelSimulacao
+          recursos={recursos}
+          envelopeMm={config.envelope_rms_mm}
+          malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
+          landmarks={landmarks}
+          prontoParaSimular={motivoBloqueioSimulacao === null}
+          motivoBloqueio={motivoBloqueioSimulacao}
+          pincaPoloSuperiorMm={tepidValidado?.pinca_polo_superior_mm ?? null}
+          onEstado={setEstadoSimulacao}
+        />
+        {paciente && (
+          <div className="paineis-atendimento" id="registro">
+            <PainelRelatorio
+              pacienteId={paciente.id}
+              desenho={config.desenho}
+              malhaId={fonte?.tipo === "servidor" ? fonte.malhaId : null}
+              medidaId={medidaId}
+              atendimentoId={atendimentoId}
+              onAtendimento={setAtendimentoId}
+            />
+            {config.demo ? (
+              <p className="nota" data-testid="anamnese-desligada-demo">
+                Demonstração: anamnese em texto livre desligada (nenhum dado real entra nesta instância).
+              </p>
+            ) : (
+              <PainelAnamnese pacienteId={paciente.id} atendimentoId={atendimentoId} onRegistrada={(r) => setAtendimentoId(r.atendimentoId)} />
+            )}
+          </div>
+        )}
+      </section>
+      <span hidden data-testid="estado-simulacao" data-implantes={estadoSimulacao?.implantes.map((i) => i.id).join(",") ?? ""} data-plano={estadoSimulacao?.plano ?? ""} data-imf={estadoSimulacao?.imf ?? ""} />
     </>
   );
 }
