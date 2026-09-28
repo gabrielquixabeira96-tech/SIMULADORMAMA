@@ -8,10 +8,10 @@ import * as THREE from "three";
 import { posicionarCamera } from "@/viewer/camera";
 import type { MalhaCarregada } from "@/viewer/carregar";
 import type { NomeVista } from "@/viewer/vistas";
-import { camerasClinicas, quadroClinico, VISTAS_CLINICAS, type VistaClinica } from "./cameraClinica";
+import { quadroClinico } from "./cameraClinica";
 import { criarCenaSimulada, garantirEnvelope, type CenaSimulada } from "./cena";
 import { shDaCena } from "./materialFoto";
-import { FUNDO_ESTUDIO } from "./RenderizadorFotos";
+import { FUNDO_ESTUDIO, LARGURA_INTERATIVA_MAX } from "./RenderizadorFotos";
 
 export interface ConjuntoMorph {
   plano: Plano;
@@ -87,11 +87,24 @@ function gancho(instrumentar = false): Gancho | null {
   return w.__simuladorSim;
 }
 
-const OPCOES_CAMERA = { fov: 15, near: 1, far: 20000, position: [0, 0, 1600] as [number, number, number] };
+/**
+ * "Explorar 3D" é o explorador orbital: pose e lente da órbita livre (FOV 35°, esfera envolvente),
+ * como no v0.1.2. A câmera clínica padronizada (FOV 15°) vive só no modo foto (ADR 0019, decisão
+ * 8a): com ela o torso enchia o quadro e o slider com 2 painéis passava do critério de latência.
+ */
 const FOV_ORBITA_LIVRE = 35;
+const OPCOES_CAMERA = { fov: FOV_ORBITA_LIVRE, near: 1, far: 20000, position: [0, 0, 1200] as [number, number, number] };
 // Sem MSAA: o custo de preenchimento cai ~4× em GPUs fracas; a malha densa dispensa antialias.
 const OPCOES_GL = { antialias: false, alpha: false, stencil: false, desynchronized: true, powerPreference: "high-performance" as const };
 const ESTILO_CANVAS = { background: FUNDO_ESTUDIO };
+/**
+ * Resolução dinâmica na comparação lado a lado (2 painéis): enquanto o slider, o plano, o sulco
+ * ou o implante mudam, cada painel desenha no máximo LARGURA_INTERATIVA_MAX px de largura (o mesmo
+ * quadro interativo do modo foto) e o navegador amplia o canvas; REFINO_MS depois da última
+ * mudança o quadro é refeito na resolução cheia (dpr 1). A cena é a mesma; só o número de pixels
+ * do quadro intermediário cai (~35 % a menos em 592 px de largura).
+ */
+const REFINO_MS = 250;
 const chaveConjunto = (p: Plano, i: Imf) => `${p}__${i}`;
 const olhoTmp = new THREE.Vector3();
 
@@ -107,10 +120,10 @@ function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, landmark
 
 
   const caixa = conjuntos[0]!.carregada.caixa;
-  // Câmeras clínicas (as mesmas do modo foto) e o quadro anatômico da luz padrão.
-  const { cameras, quadro } = useMemo(() => {
+  // Quadro anatômico da luz padrão (o mesmo do modo foto); a câmera é a da órbita livre.
+  const quadro = useMemo(() => {
     const q = quadroClinico(landmarks ?? null, caixa);
-    return { cameras: camerasClinicas(landmarks ?? null, caixa), quadro: q.fonte === "landmarks" ? { x: q.x, y: q.y, z: q.z } : null };
+    return q.fonte === "landmarks" ? { x: q.x, y: q.y, z: q.z } : null;
   }, [landmarks, caixa]);
   // Uma cena (pele + envelope) por (plano, imf); trocar plano/IMF = trocar a visível (pré-carregadas).
   // Pele-foto (sem luz somada) e halo: o mesmo material do modo foto.
@@ -145,23 +158,8 @@ function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, landmark
 
   useEffect(() => {
     const camera = obter().camera as THREE.PerspectiveCamera;
-    let centro: THREE.Vector3;
-    if ((VISTAS_CLINICAS as readonly string[]).includes(vista)) {
-      // câmera de fotografia clínica (FOV 15°, enquadramento fúrcula +40 mm a sulco −120 mm)
-      const c = cameras[vista as VistaClinica];
-      camera.fov = c.fov;
-      camera.near = c.near;
-      camera.far = c.far;
-      camera.position.set(...c.posicao);
-      camera.up.set(...c.up);
-      centro = new THREE.Vector3(...c.alvo);
-      camera.lookAt(centro);
-      camera.updateProjectionMatrix();
-      camera.updateMatrixWorld(true);
-    } else {
-      camera.fov = FOV_ORBITA_LIVRE;
-      centro = posicionarCamera(camera, caixa, vista);
-    }
+    camera.fov = FOV_ORBITA_LIVRE;
+    const centro = posicionarCamera(camera, caixa, vista);
     if (controles) {
       aplicando.current = true;
       controles.target.copy(centro);
@@ -169,7 +167,7 @@ function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, landmark
       aplicando.current = false;
     }
     invalidar();
-  }, [vista, caixa, cameras, obter, controles, invalidar]);
+  }, [vista, caixa, obter, controles, invalidar]);
 
   useEffect(() => sincronia.registrar(painel.chave, invalidar), [sincronia, painel.chave, invalidar]);
 
@@ -244,13 +242,41 @@ function Cena({ painel, conjuntos, plano, imf, peso, envelopeMm, vista, landmark
 export default function VisualizadorSimulacao(props: Props) {
   const [sincronia] = useState(() => new SincroniaCamera());
   const [erros, setErros] = useState<Record<string, string | null>>({});
+  const primeiro = useRef<HTMLDivElement>(null);
+  const [larguraCss, setLarguraCss] = useState(0);
+  useLayoutEffect(() => {
+    const el = primeiro.current;
+    if (!el) return;
+    const medir = () => setLarguraCss(el.clientWidth);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [props.paineis.length]);
+  // Interação em curso: a assinatura do que redesenha a cena mudou há menos de REFINO_MS. Decidido
+  // no próprio render (padrão "estado do render anterior" do React): o quadro da mudança já sai
+  // na resolução interativa, sem um render extra.
+  const assinatura = `${props.peso}|${props.plano}|${props.imf}|${props.paineis.map((p) => p.implanteId).join()}`;
+  const comparacao = props.paineis.length >= 2;
+  const [anterior, setAnterior] = useState(assinatura);
+  const [interagindo, setInteragindo] = useState(false);
+  if (assinatura !== anterior) {
+    setAnterior(assinatura);
+    if (comparacao && !interagindo) setInteragindo(true);
+  }
+  useEffect(() => {
+    if (!interagindo) return;
+    const t = setTimeout(() => setInteragindo(false), REFINO_MS); // volta ao dpr 1: o R3F redimensiona e redesenha
+    return () => clearTimeout(t);
+  }, [interagindo, assinatura]);
+  const dpr = comparacao && interagindo && larguraCss > LARGURA_INTERATIVA_MAX ? LARGURA_INTERATIVA_MAX / larguraCss : 1;
   return (
     <div className="sim-paineis" data-testid="simulacao-paineis" data-n={props.paineis.length}>
-      {props.paineis.map((p) => (
+      {props.paineis.map((p, k) => (
         <figure key={p.chave} className="sim-painel" data-testid={`sim-painel-${p.chave}`}>
           <figcaption>{p.rotulo}</figcaption>
-          <div className="sim-canvas">
-            <Canvas frameloop="demand" flat dpr={1} camera={OPCOES_CAMERA} gl={OPCOES_GL} style={ESTILO_CANVAS}>
+          <div className="sim-canvas" ref={k === 0 ? primeiro : undefined}>
+            <Canvas frameloop="demand" flat dpr={dpr} camera={OPCOES_CAMERA} gl={OPCOES_GL} style={ESTILO_CANVAS}>
               <Cena
                 {...props}
                 painel={p}
