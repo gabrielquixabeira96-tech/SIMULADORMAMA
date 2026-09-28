@@ -164,7 +164,8 @@ PYV
       falha "relatorio JSON do vitest ausente ($VITEST_JSON): nao da para contar testes pulados"
     fi
     if [[ $SEM_E2E -eq 0 ]]; then
-      pnpm --filter web --if-present run test:e2e && ok "e2e web (playwright, desenhos A e B)" || falha "e2e web"
+      # C4 (sem jargão) verificado na página inteira, inclusive no painel da simulação (P1+P3 integrados)
+      E2E_JARGAO_ESTRITO=1 pnpm --filter web --if-present run test:e2e && ok "e2e web (playwright, desenhos A e B)" || falha "e2e web"
     else pular "e2e (--sem-e2e)"; fi
   else
     falha "pnpm ausente"

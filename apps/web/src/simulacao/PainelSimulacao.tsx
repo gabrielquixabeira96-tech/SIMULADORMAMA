@@ -267,7 +267,10 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
 
   return (
     <section className="painel painel-simulacao" data-testid="simulacao" aria-labelledby="titulo-simulacao">
-      <h3 id="titulo-simulacao">Simulação (ilustração)</h3>
+      {/* o passo 3 da página já tem o título visível; o do painel fica para leitores de tela */}
+      <h3 id="titulo-simulacao" className="sr-only">
+        Simulação (ilustração)
+      </h3>
       <p className="nota">Escolha manual do implante pelo cirurgião: A e, se quiser comparar, B. A simulação é a foto do scan editada pela geometria de cada implante.</p>
       <div className={css.cards} role="radiogroup" aria-label="Implante sendo escolhido">
         {([0, 1] as const).map((k) => (
@@ -325,32 +328,34 @@ export function PainelSimulacao({ recursos, envelopeMm, malhaId, landmarks, pron
               Coeficientes do modelo geométrico NÃO calibrados — ilustração, não previsão de resultado.
             </p>
           )}
-          <div className={css.chips}>
-            <fieldset className={css.grupoChips} role="radiogroup" aria-label="Plano">
-              <legend>Plano</legend>
-              {PLANOS.map((p) => (
-                <label key={p} className={css.chip}>
-                  <input type="radio" name="plano" checked={plano === p} onChange={() => setPlano(p)} data-testid={`plano-${p}`} /> {ROTULOS_PLANO[p]}
-                </label>
-              ))}
-            </fieldset>
-            <fieldset className={css.grupoChips} role="radiogroup" aria-label="Sulco inframamário">
-              <legend>Sulco</legend>
-              {IMFS.map((i) => (
-                <label key={i} className={css.chip}>
-                  <input type="radio" name="imf" checked={imf === i} onChange={() => setImf(i)} data-testid={`imf-${i}`} /> {ROTULOS_IMF[i]}
-                </label>
-              ))}
-            </fieldset>
-          </div>
+          <div className={css.linhaChipsAbas}>
+            <div className={css.chips}>
+              <fieldset className={css.grupoChips} role="radiogroup" aria-label="Plano">
+                <legend>Plano</legend>
+                {PLANOS.map((p) => (
+                  <label key={p} className={css.chip}>
+                    <input type="radio" name="plano" checked={plano === p} onChange={() => setPlano(p)} data-testid={`plano-${p}`} /> {ROTULOS_PLANO[p]}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className={css.grupoChips} role="radiogroup" aria-label="Sulco inframamário">
+                <legend>Sulco</legend>
+                {IMFS.map((i) => (
+                  <label key={i} className={css.chip}>
+                    <input type="radio" name="imf" checked={imf === i} onChange={() => setImf(i)} data-testid={`imf-${i}`} /> {ROTULOS_IMF[i]}
+                  </label>
+                ))}
+              </fieldset>
+            </div>
 
-          <div className={css.abas} role="tablist" aria-label="Forma de ver a simulação">
-            <button type="button" role="tab" aria-selected={aba === "fotos"} onClick={() => setAba("fotos")} data-testid="aba-fotos">
-              Fotos
-            </button>
-            <button type="button" role="tab" aria-selected={aba === "3d"} onClick={() => setAba("3d")} data-testid="aba-explorar-3d">
-              Explorar 3D
-            </button>
+            <div className={css.abas} role="tablist" aria-label="Forma de ver a simulação">
+              <button type="button" role="tab" aria-selected={aba === "fotos"} onClick={() => setAba("fotos")} data-testid="aba-fotos">
+                Fotos
+              </button>
+              <button type="button" role="tab" aria-selected={aba === "3d"} onClick={() => setAba("3d")} data-testid="aba-explorar-3d">
+                Explorar 3D
+              </button>
+            </div>
           </div>
 
           {aba === "fotos" ? (

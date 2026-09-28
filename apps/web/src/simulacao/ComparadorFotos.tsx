@@ -756,7 +756,7 @@ export function ComparadorFotos(props: Props) {
   );
 
   return (
-    <div ref={raiz} className={`${css.estudio} ${apresentando ? css.apresentacao : ""}`} data-testid="foto-comparador" data-modo={modo} data-apresentando={apresentando ? "1" : "0"}>
+    <div ref={raiz} className={`${css.estudio} ${apresentando ? css.apresentacao : css.lateralizado}`} data-testid="foto-comparador" data-modo={modo} data-apresentando={apresentando ? "1" : "0"}>
       {apresentando && (
         <p className={css.avisoApresentacao} data-testid="foto-aviso-apresentacao">
           Ilustração, não previsão de resultado · faixa de incerteza ±{env} mm
