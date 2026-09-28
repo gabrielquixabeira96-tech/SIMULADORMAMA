@@ -71,6 +71,33 @@ describe("proxy com APP_TOKEN_LOCAL", () => {
     expect(proxy(req("/?token=errado")).status).toBe(401);
   });
 
+  it("navegação sem token (Accept: text/html) → 401 com página HTML legível, sem versão nem código interno; API continua 401 JSON", async () => {
+    vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
+    const nav = { accept: "text/html,application/xhtml+xml,*/*;q=0.8", "sec-fetch-mode": "navigate" };
+    for (const c of ["/", "/validacao/bland-altman", "/?token=errado"]) {
+      const r = proxy(req(c, { headers: nav }));
+      expect(r.status, c).toBe(401);
+      expect(r.headers.get("content-type"), c).toMatch(/^text\/html/);
+      expect(r.headers.get("cache-control"), c).toContain("no-store");
+      const html = await r.text();
+      expect(html).toContain("Acesso");
+      expect(html).toContain("link enviado pelo administrador");
+      expect(html).not.toMatch(/nao_autenticado|APP_TOKEN|token=|\bv?\d+\.\d+\.\d+\b|bland-altman/i);
+    }
+    // API, fetch (sec-fetch-mode cors) e POST: JSON como antes
+    const api = proxy(req("/api/config", { headers: nav }));
+    expect(api.status).toBe(401);
+    expect(await codigo(api)).toBe("nao_autenticado");
+    const fetchPagina = proxy(req("/", { headers: { accept: "text/html", "sec-fetch-mode": "cors" } }));
+    expect(fetchPagina.headers.get("content-type")).toMatch(/json/);
+    const semAccept = proxy(req("/"));
+    expect(semAccept.status).toBe(401);
+    expect(await codigo(semAccept)).toBe("nao_autenticado");
+    const post = proxy(req("/", { method: "POST", headers: { ...nav, "content-type": "application/json", origin: BASE }, body: "{}" }));
+    expect(post.status).toBe(401);
+    expect(post.headers.get("content-type")).toMatch(/json/);
+  });
+
   it("host fora do loopback → 403 (DNS rebinding), salvo APP_HOSTS_PERMITIDOS", () => {
     vi.stubEnv("APP_TOKEN_LOCAL", TOKEN);
     const r = proxy(req("/api/config", { headers: { host: "evil.example", authorization: `Bearer ${TOKEN}` } }));

@@ -127,7 +127,8 @@ export default defineConfig({
   projects: [
     { name: "desenho-A", testIgnore: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.A}` } },
     { name: "desenho-B", testIgnore: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.B}` } },
-    { name: "demo", testMatch: /demo\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.demo}` } },
+    // fluxo-guiado.spec também roda na demo (caminho mais curto até o PDF, pacote P3)
+    { name: "demo", testMatch: /(demo|fluxo-guiado)\.spec\.ts/, use: { ...devices["Desktop Chrome"], baseURL: `http://127.0.0.1:${PORTAS.demo}` } },
   ],
   webServer: [
     {

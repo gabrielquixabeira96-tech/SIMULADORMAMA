@@ -374,7 +374,7 @@ export function SessaoBlandAltman({ sessaoInicial, demo = false }: { sessaoInici
                           {d.rotulo}
                           {d.obrigatorio ? " *" : ""}
                         </button>
-                        <span className="estado-landmark">{l ? `✓ v${l.vertice}` : "—"}</span>
+                        <span className="estado-landmark">{l ? "✓" : "—"}</span>
                       </li>
                     );
                   })}

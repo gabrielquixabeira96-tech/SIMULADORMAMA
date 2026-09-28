@@ -57,8 +57,9 @@ export async function uploadCalibrarMarcar(page: Page, ids: readonly (typeof LAN
   await page.getByRole("button", { name: "Enviar e processar" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Malha processada" })).toBeVisible({ timeout: 120_000 });
   await expect(page.getByTestId("caixa-mm")).toContainText("GLB");
-  // ordem obrigatória: landmarks só depois da calibração
-  await expect(page.getByRole("button", { name: "Landmarks", exact: true })).toBeDisabled();
+  // ordem obrigatória: pontos só depois da escala (o bloco "Ajustar escala" abre sozinho)
+  await expect(page.getByRole("button", { name: "Marcar pontos", exact: true })).toBeDisabled();
+  await expect(page.getByTestId("ajustar-escala")).toHaveAttribute("open", "");
 
   // régua: extremos = mamilos (no scan escalado), comprimento real = intermamilar do gabarito
   await page.getByRole("button", { name: "Régua (2 pontos)" }).click();
@@ -76,7 +77,7 @@ export async function uploadCalibrarMarcar(page: Page, ids: readonly (typeof LAN
   expect(Math.abs(fator - 1 / ESCALA_ERRADA)).toBeLessThan(0.005);
 
   // landmarks por clique, cada um na vista mais adequada
-  await expect(page.getByRole("button", { name: "Landmarks", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Marcar pontos", exact: true })).toHaveAttribute("aria-pressed", "true");
   const rngL = prng(78);
   for (const id of ids) {
     const p = gab.landmarks[id].posicao;
