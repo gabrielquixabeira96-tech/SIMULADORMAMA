@@ -79,6 +79,11 @@ def test_luz_padrao_finita_positiva_e_rotacionada():
     assert E.min() > 0.4  # E(n) > 0 para todo n (minimo ~0,43)
     L = il.DIRECAO_PADRAO_ANATOMICA
     assert il.irradiancia_sh9(L[None, :], sh)[0] == pytest.approx(0.45 + 0.55 * 1.0625, abs=1e-5)
+    # vetor de conferencia publicado no contratos §10.6 (para a implementacao do web)
+    assert np.round(sh, 6).tolist() == [2.082632, 0.196393, 0.527454, 0.0, 0.0, 0.154329, 0.222715, 0.0, -0.028731]
+    Nref = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0], [0, -1, 0], [0.3, -0.2, 0.93]], dtype=float)
+    Nref /= np.linalg.norm(Nref, axis=1)[:, None]
+    assert np.allclose(il.irradiancia_sh9(Nref, sh), [0.985701, 0.628911, 0.501563, 0.436995, 0.889187], atol=1e-6)
     # rotacao: com eixos R (anatomico -> objeto), E_obj(R n) == E_anat(n)
     a = math.radians(30)
     R = np.array([[math.cos(a), 0, math.sin(a)], [0, 1, 0], [-math.sin(a), 0, math.cos(a)]])
