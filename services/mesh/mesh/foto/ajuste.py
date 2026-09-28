@@ -6,21 +6,23 @@ cada foto (R = exp(w) R0, t; 6 por foto; K fixo pela focal 35 mm equivalente). R
 1. **Landmarks 2D**: reprojecao dos 10 landmarks exatos do template contra os clicados, sigma 2 px.
 2. **Silhueta**: para N linhas horizontais do template (y fixo, da regiao das mamas), os dois pontos
    extremos em u da linha projetada (refinados por parabola; sao pontos do contorno aparente) sao
-   consultados no campo de distancia assinada (SDF) da mascara observada; sigma 1 px. E suave nos
+   consultados no campo de distancia assinada (SDF) da mascara observada; sigma 2 px. E suave nos
    parametros (ao contrario de rasterizar o template), o que permite jacobiano por diferencas finitas.
 3. **Escala** (sigma 0,5 mm): `ssn_n_fita` fixa |furcula - mamilo_<lado>| 3D; `base_digitada` fixa
    |base_medial - base_lateral|; `regua_foto` fixa a distancia entre 2 cliques da foto frontal
    levados ao plano da furcula (paralelo a imagem).
 4. **Prior** gaussiano fraco em theta (`template.ESPEC`: media dos presets, sigma larga).
 
-Otimizador: `scipy.optimize.least_squares` (TRF, `soft_l1`, f_scale 3 sigmas) em tres etapas (poses so
-com landmarks; conjunto sem silhueta; conjunto com silhueta), jacobiano por diferencas progressivas
-agrupadas (as colunas de pose de fotos diferentes sao perturbadas juntas: cada foto so mexe nos
-proprios residuos). Deterministico (sem aleatoriedade).
+Otimizador: `scipy.optimize.least_squares` (TRF, `soft_l1`, f_scale 3 sigmas) em tres etapas (1: so a
+frontal, template + pose, com landmarks/escala/prior; 2: pose de cada outra foto com o template fixo, a
+partir de 5 giros em torno do nominal, fica o de menor custo; 3: tudo junto com silhueta), jacobiano
+por diferencas progressivas agrupadas (as colunas de pose de fotos diferentes sao perturbadas juntas:
+cada foto so mexe nos proprios residuos). Deterministico (sem aleatoriedade).
 
 Incerteza: covariancia (J^T J)^-1 * max(1, chi2/gl) no otimo, propagada a ~300 pontos das pegadas das
-mamas -> desvio por eixo (RMS), com piso de 4,5 mm; z sem perfil: piso 8 mm com oblíqua e 12 mm so com
-a frontal ("profundidade: so ilustracao"). Volume: desvio relativo com piso 15/20/25 %.
+mamas (deslocamento normal) e aos 10 landmarks -> desvio por eixo (RMS), com piso de 4,5 mm;
+z sem perfil: piso 8 mm com oblíqua e 12 mm so com a frontal ("profundidade: so ilustracao").
+Volume: desvio relativo com piso 15/20/25 %.
 """
 
 from __future__ import annotations
