@@ -334,10 +334,15 @@ $DATA_DIR/
       reconstrucao.json    # reconstrucao/1.0
       fotos/registro.json  # só o bloco `fotos` (K, R, t por foto)
       fotos/mascara_<vista>.png   # máscara do torso usada no ajuste (quando segmentada no serviço)
+      observado.png        # seção 5.5 (L 8 bits: fração da cor que veio das fotos; 0 = não observado)
+      avaliacao.json       # só em malha de torso sintético (seção 19.2): erro contra o gabarito
     medidas/<medida_id>.json      # seção 6
     simulacoes/<simulacao_id>.json
     relatorios/<atendimento_id>.pdf
   sinteticos/<nome>/       # seção 4.2
+    fotos/                 # fotos sintéticas (seção 19): foto_<vista>.jpg, mascara_<vista>.png, registro_<vista>.json
+    foto/                  # "fotos de exemplo" (seção 19.2): malha reconstruída de frente + oblíqua D + perfil D
+    foto_frente/           # idem, só a frontal (só no t01)
   validacao/               # seção 18 (não é dado de paciente)
     malhas/<uuid>/         # torso sintético processado para a sessão (original/, processada.*, preparo.json)
     sessoes/<id>.json      # sessao_bland_altman/1.0
@@ -349,7 +354,7 @@ $DATA_DIR/
 
 Malhas com `origem: "foto"` (reconstrução por ajuste de template, plano foto3d; contrato C3) trocam a textura provisória pela **foto projetada** no atlas UV do template (a UV cilíndrica do gerador, seção 4.5, 4 px/mm). Código: `services/mesh/mesh/foto/projetar.py` (projeção) e `preencher.py` (não observado + gravação, `texturizar_malha`). Nada é sintetizado: cada texel observado é re-amostragem bilinear da foto; o resto é a textura procedural do ADR 0020 com a cor casada.
 
-- **Câmera** (C1): `x_cam = R·X + t`, +z para a frente, +x à direita e +y para baixo na imagem; `u = fx·x/z + cx`, `v = fy·y/z + cy` (com `k1`: `x/z, y/z` × `1 + k1·r²`); pixel (i, j) com centro em (j + 0,5; i + 0,5), ponto principal no centro = (W/2, H/2). `K`, `R` serializados com 9 números coluna-major; `t` com 3 (mm).
+- **Câmera** (C1, seção 19): `x_cam = R·X + t`, +z para a frente, +x à direita e +y para baixo na imagem; `u = fx·x/z + cx`, `v = fy·y/z + cy` (com `k1`: `x/z, y/z` × `1 + k1·r²`); (u, v) contínuos com origem no canto superior esquerdo: pixel (i, j) com centro em (j + 0,5; i + 0,5), ponto principal no centro = (W/2, H/2). `K`, `R` serializados com 9 números coluna-major; `t` com 3 (mm).
 - **Visibilidade**: z-buffer da malha na resolução da foto; um texel só recebe cor se estiver à frente do z-buffer + 0,5 mm + 1 px·(mm/px)·tan θ (0 texels observados atrás de outra superfície, testado contra um oráculo independente). Peso de fusão entre fotos `cos(θ)³ × feather(12 px da borda da máscara) × visível`; com mais de uma foto, 3 ganhos RGB por foto (mínimos quadrados em luz linear contra a frontal).
 - **`observado.png`**: PNG `L` 8 bits, mesmo tamanho do atlas; valor = fração da cor do texel que veio da(s) foto(s) (255 = foto pura; **0 = preenchido proceduralmente**, "não observado", hachurado no web). Um texel é não observado quando a confiança `1 − Π(1 − c_k)` < 0,15, com `c_k = smoothstep(cos θ / cos 75°) × feather × visível`. Entre observado e preenchido há uma rampa de 10 mm para dentro do observado (mistura em luz linear).
 - **Preenchimento**: baixa frequência da cor observada (células de 1 mm, push-pull, gaussiana de 3 mm) extrapolada para todo o atlas + detalhe da textura procedural (log, passa-alta de 8 mm, amplitude casada com a do detalhe observado). A aréola procedural é apagada do detalhe do lado cujo mamilo foi observado; se o mamilo não foi observado ela é mantida e o aviso `areola_procedural_<lado>` sai em `avisos`. Sem textura base: só a cor casada (aviso `preenchimento_sem_textura_base`).
@@ -1068,7 +1073,7 @@ Com **qualquer** sessão aberta, a planilha → `409 planilha_indisponivel_sessa
 }
 ```
 
-**Resposta 200**: `{ "reconstrucao": <reconstrucao/1.0>, "meta": <malha_meta/1.0 com "origem": "foto", "quadro": "anatomico"> }`. Grava `processada.obj/.mtl`, `textura.png` (**provisória**: `textura_pele` fotográfica no fototipo mais próximo da pele observada; o P2 troca pela foto projetada), `processada.glb` (`asset.extras.reconstrucao = {fotos, cobertura_observada_pct}`, `asset.extras.textura.provisoria = true`), `meta.json`, `reconstrucao.json`, `fotos/registro.json` e `fotos/mascara_<vista>.png` das máscaras segmentadas. Em `meta.original`: `arquivo` e `sha256` da foto frontal; `n_vertices`/`n_faces` da malha gerada (não há malha original).
+**Resposta 200**: `{ "reconstrucao": <reconstrucao/1.0>, "meta": <malha_meta/1.0 com "origem": "foto", "quadro": "anatomico" e "textura" = textura_reconstruida/1.0> }`. Grava `processada.obj/.mtl`; `textura.png` = as fotos **projetadas** no atlas UV + preenchimento do não observado (seção 5.5: `projetar.fotos_do_registro` com as câmeras recém-ajustadas → `preencher.texturizar_malha`; a `textura_pele` fotográfica no fototipo mais próximo da pele observada é só a base do preenchimento); `observado.png`; `processada.glb` (`asset.extras.origem = "foto"`, `reconstrucao = {fotos, cobertura_observada_pct}`, `textura = {origem: "foto_projetada", …}`, `textura_provisoria` (a base), `iluminacao`); `meta.json`, `reconstrucao.json`, `fotos/registro.json` e `fotos/mascara_<vista>.png` das máscaras segmentadas. Em `meta.original`: `arquivo` e `sha256` da foto frontal; `n_vertices`/`n_faces` da malha gerada (não há malha original). A projeção só lê `original/foto_<vista>.jpg`; um `arquivo` fora desse layout usa as imagens já decodificadas na validação.
 
 **`reconstrucao/1.0`** (campos principais):
 
@@ -1084,11 +1089,22 @@ Com **qualquer** sessão aberta, a planilha → `409 planilha_indisponivel_sessa
 | `profundidade_confiavel` | `false` sem foto de perfil: profundidade só ilustração e **nenhum número de projeção** (o web deixa `previsto` nulo mesmo em B) |
 | `qualidade` | `boa` (rms ≤ 3 px e silhueta ≤ 2 mm) \| `regular` (≤ 6 px, ≤ 4 mm) \| `ruim` |
 | `avisos` | p. ex. `sem_perfil:profundidade_so_ilustracao`, `forma_fora_do_modelo`, `refazer_ponto:<vista>:<id>` (resíduo isolado > 6 px), `segmentacao_onnx_indisponivel`, `focal_35mm_ausente:<vista>:padrao_26mm`, `desenho_a:medidas_estimadas_omitidas` |
-| `cobertura_observada_pct` | % da área da malha vista de frente em alguma foto (z-buffer; o P2 refina com `observado.png`) |
-| `malha` | `{obj, glb, textura, textura_provisoria, n_vertices, n_faces}` |
-| `diagnostico` | etapas e custos do otimizador, tempos, incerteza bruta do ajuste (sem piso), parâmetros no limite |
+| `cobertura_observada_pct` | % dos texels do atlas com `observado ≥ 0,15` (seção 5.5; a mesma do `meta.textura`) |
+| `malha` | `{obj, glb, textura, textura_provisoria (false: a foto foi projetada), observado: "observado.png", n_vertices, n_faces}` |
+| `diagnostico` | etapas e custos do otimizador, tempos (inclui `textura_s`), incerteza bruta do ajuste (sem piso), parâmetros no limite, `cobertura_area_vista_pct` (% da área da malha vista de frente em alguma foto, z-buffer) |
 
 **Erros**: 422 `landmarks_2d_incompletos` (sem frontal, frontal com < 6 pontos ou sem os obrigatórios, outra vista sem pontos nem máscara), `landmark_desconhecido`, `pontos_colineares`, `registro_ruim` (reprojeção > 12 px), `rosto_possivelmente_visivel` (fúrcula a mais de 12 % da altura a partir do topo numa foto frontal/oblíqua — **as fotos da requisição são apagadas**), `foto_sem_torso`, `escala_ausente`, `lente_grande_angular`, `dimensoes_divergentes`, `vista_invalida`; 404 `arquivo_nao_encontrado`; 400 `caminho_invalido`, `foto_ilegivel`.
 
 **Fotos sintéticas** (dados de teste e fotos de exemplo; nunca versionadas): `python -m mesh.cli foto-sintetica --todos --sinteticos data/sinteticos` grava em `sinteticos/<nome>/fotos/` `foto_<vista>.jpg` (câmera clínica do web: FOV 15°, 4:3, recortada 15 mm acima da fúrcula, sem EXIF), `mascara_<vista>.png` (exata) e `registro_<vista>.json` (`registro_foto_sintetica/1.0`: K, R, t exatos, `focal_35mm`, `landmarks_2d` de todos os 10 e `visiveis`). `python -m mesh.cli reconstruir --sintetico <pasta> --saida <dir>` roda a rota de ponta a ponta.
 
+### 19.1 Câmera no web e paridade
+
+O web (`apps/web/src/simulacao/cameraDaFoto.ts`) monta a `PerspectiveCamera` direto de K, R, t (projeção a partir de K, sem aproximar por FOV) e a textura projetiva do material (`matrizTexturaFoto`) na **mesma** coordenada contínua do Python: não há meio pixel entre os dois lados (`MEIO_PIXEL = 0`). A fixture `apps/web/tests/fixtures/foto3d/paridade_camera.json` (câmeras e landmarks 3D de uma reconstrução real do t01 com 3 fotos, e os pixels do `camera.projetar`) é conferida em `services/mesh/tests/test_paridade_camera.py` (P1 `camera.projetar` × P2 `projetar.Camera`) e em `apps/web/tests/unit/cameraParidade.test.ts` (P3), com tolerância de 0,5 px; medido ~5·10⁻⁷ px.
+
+### 19.2 Fotos de exemplo e avaliação contra o gabarito (`avaliacao_reconstrucao/1.0`)
+
+`python -m mesh.cli fotos-exemplo --todos --sinteticos <DATA_DIR>/sinteticos [--se-desatualizado]` (`scripts/mesh.sh fotos`; a CI e o `scripts/demo_sandbox.sh preparar` rodam depois dos torsos) prepara, pelo pipeline real, `sinteticos/<nome>/foto/` (frente + oblíqua D + perfil D) e `sinteticos/t01_simetrico_300/foto_frente/` (só a frontal): fotos sintéticas (`fotos/`) → `POST /reconstruir-foto` (DESENHO=B; landmarks 2D exatos — todos na frontal, os visíveis nas outras —, máscara exata, escala `ssn_n_fita` = SSN–N direita euclidiana do gabarito) → `avaliacao.json`. A pasta tem o layout de uma malha (`original/foto_<vista>.jpg`, `reconstrucao.json`, `processada.obj/.mtl/.glb`, `textura.png`, `observado.png`, `meta.json`). `--se-desatualizado` pula a pasta cuja `avaliacao.json` tem o mesmo `gabarito_sha256` e o mesmo `codigo_sha256` (impressão de `mesh/foto/*.py`, `superficie.py`, `textura_pele.py`, `gerador.py`).
+
+`avaliacao.json` (`config/schemas/avaliacao_reconstrucao.schema.json`; `mesh/foto/avaliar.py`): `rms_mm {x, y, z, total}` — RMS ponto–superfície por eixo, da superfície verdadeira (pegadas das mamas do gabarito dilatadas 20 mm, a cada 2 mm) para `processada.obj`; `volume_erro_pct {dir, esq}` — `estimado.volumes` contra o volume adicionado do gabarito; `landmarks_erro_mm {medio, max, por_landmark}`; `reprojecao_rms_px` — landmarks 3D reconstruídos pelas câmeras estimadas contra os 2D exatos das fotos sintéticas (visíveis); `pose_erro_mm` por vista; `incerteza_por_eixo_mm` e `profundidade_confiavel` copiados do C1; `gabarito_sha256`, `codigo_sha256`, versão e data.
+
+No web: `GET /api/sinteticos` lista `foto` e `foto_frente` por torso; `POST /api/sinteticos/<nome>/importar-foto` (`{paciente_id, variante?: "foto" | "foto_frente"}`) registra a malha reconstruída pelo caminho de um upload (ADR 0003 item 9) e copia fotos, `reconstrucao.json`, `observado.png` e `avaliacao.json`; `GET /api/malhas/<id>/foto-real` devolve câmeras, halo = max(envelope; incerteza z), incerteza por eixo e o erro contra o gabarito **só em B** (`foto_real/1.0`); a rota de arquivo serve `original/foto_<vista>.jpg|png` e `observado.png`, nunca `reconstrucao.json`/`avaliacao.json`.

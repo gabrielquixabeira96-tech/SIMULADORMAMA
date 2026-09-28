@@ -56,6 +56,8 @@ export interface FotoRealPublica {
   numeros: NumerosReconstrucao | null;
   /** erro contra o gabarito (torso sintético), só em B */
   erro_gabarito: ErroGabarito | null;
+  /** método da referência de escala (C1 `escala.metodo`; sem o valor): o texto da UI explica como medir */
+  escala_metodo: string | null;
   avisos: string[];
 }
 
@@ -94,8 +96,27 @@ export function fotoRealPublica(
             reprojecao_rms_px: av.reprojecao_rms_px ?? null,
           }
         : null,
+    escala_metodo: typeof r.escala?.metodo === "string" ? r.escala.metodo : null,
     avisos: [...r.avisos],
   };
+}
+
+/**
+ * Como a escala foi fixada, em linguagem do consultório (sem números; vale em A e B). A fita SSN–N
+ * entra no ajuste como distância EUCLIDIANA (reta) fúrcula–mamilo: medida esticada em linha reta,
+ * não acompanhando a curva da pele (ADR 0021).
+ */
+export function textoEscala(metodo: string | null): string | null {
+  switch (metodo) {
+    case "ssn_n_fita":
+      return "Escala pela distância fúrcula–mamilo (SSN–N) medida com a fita esticada em linha reta — não acompanhando a curva da pele.";
+    case "regua_foto":
+      return "Escala pela régua fotografada junto do tórax, no plano da fúrcula.";
+    case "base_digitada":
+      return "Escala pela largura da base digitada (a referência menos precisa).";
+    default:
+      return null;
+  }
 }
 
 const mm1 = (v: number) => v.toFixed(1).replace(".", ",");

@@ -8,7 +8,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { reconstrucaoSchema } from "@simulador/contratos";
 import { describe, expect, it } from "vitest";
-import { fotoRealPublica, linhasErroGabarito, linhasIncerteza } from "@/foto/publica";
+import { fotoRealPublica, linhasErroGabarito, linhasIncerteza, textoEscala } from "@/foto/publica";
 import { jsonDoGlb, lerReconstrucao } from "@/foto/servidor";
 
 const C1 = JSON.parse(readFileSync(join(__dirname, "../fixtures/foto3d/reconstrucao_t01_frente.json"), "utf8"));
@@ -53,6 +53,11 @@ describe("resumo da reconstrução para o navegador", () => {
     expect(f.numeros?.incerteza_por_eixo_mm).toEqual({ x: 1.8, y: 2.1, z: 12.4 });
     expect(f.numeros?.reprojecao_rms_px).toBeCloseTo(0.4, 9); // do rms das fotos
     expect(f.erro_gabarito?.rms_mm.z).toBe(9.8);
+    // a escala sai só como método (texto sem números): a fita SSN–N é distância em linha reta
+    expect(f.escala_metodo).toBe("ssn_n_fita");
+    expect(textoEscala(f.escala_metodo)).toMatch(/linha reta/);
+    expect(textoEscala(f.escala_metodo)).not.toMatch(/\d/);
+    expect(textoEscala(null)).toBeNull();
     expect(linhasIncerteza(f).join(" · ")).toBe("Largura ±1,8 mm · altura ±2,1 mm · Profundidade ±12,4 mm — só ilustração (sem foto de perfil) · Volume ±30 %");
     expect(linhasErroGabarito(f.erro_gabarito!)).toEqual([
       "RMS na região das mamas: x 1,2 mm · y 1,4 mm · z 9,8 mm",

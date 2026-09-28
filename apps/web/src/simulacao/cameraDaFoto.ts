@@ -6,9 +6,11 @@ import * as THREE from "three";
  * services/mesh para cada foto (K, R, t) vira uma `THREE.PerspectiveCamera` com a MESMA projeção,
  * para que a malha reconstruída caia, pixel a pixel, sobre a foto.
  *
- * Convenções (C1): `x_cam = R·X + t` (mm, quadro da malha), `[u, v, 1]ᵀ ∝ K·x_cam`, câmera
- * olhando para +z com v para baixo (OpenCV); (u, v) = CENTRO do pixel, (0, 0) no pixel do canto
- * superior esquerdo; K e R em 9 números coluna-major. O three.js olha para −z com y para cima:
+ * Convenções (C1, contratos §19 — as mesmas do `camera.py`/`projetar.py` do services/mesh):
+ * `x_cam = R·X + t` (mm, quadro da malha), `[u, v, 1]ᵀ ∝ K·x_cam`, câmera olhando para +z com v
+ * para baixo (OpenCV); (u, v) CONTÍNUOS com origem no CANTO superior esquerdo da imagem (o centro
+ * do pixel da coluna i fica em u = i + 0,5; ponto principal no centro = W/2, H/2); K e R em 9
+ * números coluna-major. É a mesma coordenada de borda do NDC do WebGL: nada de meio pixel. O three.js olha para −z com y para cima:
  * `matrixWorldInverse = diag(1, −1, −1)·[R | t]` e a projeção sai direto de K (inclusive
  * `fx ≠ fy`, ponto principal fora do centro e cisalhamento), sem aproximar por fov.
  *
@@ -41,8 +43,12 @@ export interface PerturbacaoPx {
 
 type V3 = [number, number, number];
 
-/** Deslocamento entre a coordenada de centro de pixel (C1) e a de borda (NDC do WebGL). */
-export const MEIO_PIXEL = 0.5;
+/**
+ * Deslocamento entre a coordenada de pixel do C1 e a de borda (NDC do WebGL): zero, porque o C1 já
+ * usa coordenadas contínuas com origem no canto (paridade com o Python conferida em
+ * tests/unit/cameraParidade.test.ts contra a fixture gerada pelo services/mesh).
+ */
+export const MEIO_PIXEL = 0;
 
 /** Foto "contida" num quadro w × h: escala única e centralizada. */
 export function encaixeDaFoto(W: number, H: number, w: number, h: number): EncaixeFoto {
@@ -59,7 +65,7 @@ export function validarParametros(p: ParametrosCameraFoto): void {
   if (!(p.largura_px > 0 && p.altura_px > 0)) throw new Error("tamanho da foto inválido");
 }
 
-/** Intrínsecos em coordenadas de BORDA de pixel de um quadro (foto encaixada e, opcionalmente, perturbada). */
+/** Intrínsecos em px de um quadro (foto encaixada e, opcionalmente, perturbada). */
 export function intrinsecosNoQuadro(p: ParametrosCameraFoto, largura: number, altura: number, perturbacao?: PerturbacaoPx | null) {
   const e = encaixeDaFoto(p.largura_px, p.altura_px, largura, altura);
   const s = e.escala;
@@ -73,7 +79,7 @@ export function intrinsecosNoQuadro(p: ParametrosCameraFoto, largura: number, al
   };
 }
 
-/** Pixel (centro, px da foto) de um ponto 3D pela câmera C1 — a referência dos testes. Null atrás da câmera. */
+/** Pixel (contínuo, px da foto) de um ponto 3D pela câmera C1 — a referência dos testes. Null atrás da câmera. */
 export function pixelDaFoto(p: ParametrosCameraFoto, X: readonly number[]): [number, number] | null {
   const xc: V3 = [0, 0, 0];
   for (let i = 0; i < 3; i++) xc[i] = el3(p.R, i, 0) * X[0]! + el3(p.R, i, 1) * X[1]! + el3(p.R, i, 2) * X[2]! + p.t[i]!;
@@ -100,7 +106,7 @@ export function matrizTexturaFoto(p: ParametrosCameraFoto, perturbacao?: Perturb
   const fx = el3(p.K, 0, 0), fy = el3(p.K, 1, 1), s = el3(p.K, 0, 1);
   const cx = el3(p.K, 0, 2) + MEIO_PIXEL + (perturbacao?.dx ?? 0);
   const cy = el3(p.K, 1, 2) + MEIO_PIXEL + (perturbacao?.dy ?? 0);
-  // linhas de K_borda·[R | t]
+  // linhas de K·[R | t]
   const r = (i: number, j: number) => el3(p.R, i, j);
   const lin = (i: number): [number, number, number, number] => [r(i, 0), r(i, 1), r(i, 2), p.t[i]!];
   const l0 = lin(0), l1 = lin(1), l2 = lin(2);
@@ -187,7 +193,7 @@ export function cameraDaFoto(p: ParametrosCameraFoto, largura: number, altura: n
   return new CameraDaFoto(p, largura, altura, { ...planos, perturbacao });
 }
 
-/** Pixel (centro, px do QUADRO) em que a câmera three projeta um ponto — para os testes. */
+/** Pixel (contínuo, px do QUADRO) em que a câmera three projeta um ponto — para os testes. */
 export function pixelNoQuadro(cam: THREE.Camera, X: readonly number[], largura: number, altura: number): [number, number] {
   const v = new THREE.Vector3(X[0]!, X[1]!, X[2]!).project(cam);
   return [((v.x + 1) / 2) * largura - MEIO_PIXEL, ((1 - v.y) / 2) * altura - MEIO_PIXEL];

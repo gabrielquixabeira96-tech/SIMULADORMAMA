@@ -11,10 +11,15 @@ torso; e a referencia de escala. Passos:
 3. ajuste (`ajuste.py`) -> parametros 1.1, poses (K, R, t por foto), residuos, incerteza por eixo;
 4. malha do template (mesmo caminho do gerador: grade densa -> decimacao 30-50 mil vertices) com a
    textura **provisoria** `textura_pele(realismo="fotografico")` no fototipo mais proximo da pele
-   observada na frontal (o P2 troca pela foto projetada);
-5. grava `processada.obj/.mtl`, `textura.png`, `processada.glb` (`asset.extras.reconstrucao`), `meta.json`
-   (`malha_meta/1.0` com `origem: "foto"`, quadro anatomico), `reconstrucao.json` (`reconstrucao/1.0`),
-   `fotos/registro.json` (so o bloco `fotos`) e `fotos/mascara_<vista>.png` (a mascara usada).
+   observada na frontal — so a base do preenchimento;
+5. textura (P2, C3): `projetar.fotos_do_registro` (as fotos da requisicao com as cameras recem-ajustadas)
+   -> `preencher.texturizar_malha`: foto(s) projetada(s) no atlas UV + preenchimento com cor casada do
+   que nenhuma foto viu; grava `textura.png`, `observado.png` e `processada.glb` (`asset.extras`
+   `origem: "foto"`, `reconstrucao`, `textura`, `iluminacao`);
+6. grava `processada.obj/.mtl`, `meta.json` (`malha_meta/1.0` com `origem: "foto"`, quadro anatomico e o
+   bloco `textura` = `textura_reconstruida/1.0`), `reconstrucao.json` (`reconstrucao/1.0`;
+   `cobertura_observada_pct` = a do atlas, C3), `fotos/registro.json` (so o bloco `fotos`) e
+   `fotos/mascara_<vista>.png` (a mascara usada).
 
 Sem perfil a profundidade e so ilustracao: `profundidade_confiavel: false`, piso de 12 mm (so a frontal)
 ou 8 mm (com oblíqua) em `incerteza_por_eixo_mm.z`; o web nao mostra numeros de projecao (C1).
@@ -38,8 +43,9 @@ from mesh.foto import camera as cam
 from mesh.foto import escala as esc
 from mesh.foto import raster, segmentar
 from mesh.foto import template as tpl
-from mesh.malha.glb import escrever_glb
-from mesh.malha.io import escrever_obj, png_bytes, sha256_arquivo
+from mesh.foto.preencher import texturizar_malha
+from mesh.foto.projetar import Camera, FotoRegistrada, arquivo_de_foto_valido, fotos_do_registro
+from mesh.malha.io import escrever_obj, sha256_arquivo
 from mesh.medir import antropometria as antro
 from mesh.versao import VERSAO_SOFTWARE
 
@@ -266,7 +272,7 @@ def reconstruir(pasta: Path, req: dict, malha_dir: str, malha_id: str) -> dict:
     malha, torso, _ = tpl.malha_do_template(p, textura=textura, torso=torso)
     tempos["malha_textura_s"] = round(time.perf_counter() - t0, 2)
     t0 = time.perf_counter()
-    cobertura = _cobertura(malha, fotos, res.poses)
+    cobertura_area = _cobertura(malha, fotos, res.poses)
     tempos["cobertura_s"] = round(time.perf_counter() - t0, 2)
 
     # landmarks 3D (origem "foto") e o "gabarito estimado"
@@ -279,15 +285,10 @@ def reconstruir(pasta: Path, req: dict, malha_dir: str, malha_id: str) -> dict:
     bloco_esc = esc.bloco_escala(escala, res.landmarks_3d, res.poses[i_f], fotos[i_f].K)
     perfil = any(f.vista.startswith("perfil") for f in fotos)
 
-    # arquivos
+    # arquivos: a malha (OBJ) e a textura provisoria; o P2 troca a textura pela foto projetada
     t0 = time.perf_counter()
-    png = png_bytes(textura)
-    (pasta / "textura.png").write_bytes(png)
     escrever_obj(pasta / "processada.obj", malha, "processada.mtl", "textura.png",
                  cabecalho="# malha do template ajustado a fotos — quadro anatomico (origem na furcula), mm\n")
-    escrever_glb(pasta / "processada.glb", malha, quadro="anatomico", imagem_png=png,
-                 extras_asset={"reconstrucao": {"fotos": len(fotos), "cobertura_observada_pct": round(cobertura, 1)},
-                               "textura": {"provisoria": True, "origem": "procedural_fototipo", "fototipo": fototipo}})
     (pasta / "fotos").mkdir(exist_ok=True)
     fotos_json = []
     for f, fr, (R, t), resid, rms, fo, sha in zip(fotos, fotos_req, res.poses, res.residuos_px, res.rms_px, focos,
@@ -306,6 +307,24 @@ def reconstruir(pasta: Path, req: dict, malha_dir: str, malha_id: str) -> dict:
             "landmarks_2d": {k: [float(v[0]), float(v[1])] for k, v in f.landmarks_2d.items()},
             "residuos_px": resid, "rms_px": rms, "mascara": {"arquivo": arq_masc, "modo": modo},
         })
+    # textura: a(s) foto(s) projetada(s) no atlas UV do template + preenchimento do nao observado (P2, C3).
+    # As fotos sao as da requisicao, pelo registro recem-ajustado (C1); a textura provisoria e a base do
+    # preenchimento. Grava textura.png, observado.png e processada.glb (extras reconstrucao/textura/iluminacao).
+    t0 = time.perf_counter()
+    mascaras = {f.vista: f.mascara for f in fotos}
+    if all(arquivo_de_foto_valido(fr["arquivo"]) for fr in fotos_req):
+        registradas = fotos_do_registro(pasta, fotos_json, mascaras)
+    else:  # caminho fora do layout C4 (so testes antigos): as imagens ja decodificadas acima
+        registradas = [FotoRegistrada(imagem=img, camera=Camera.de_contrato(fj), mascara=mascaras[fj["vista"]],
+                                      vista=fj["vista"]) for img, fj in zip(imagens, fotos_json, strict=True)]
+    bloco_textura = texturizar_malha(
+        pasta, malha, registradas, textura_base=textura, landmarks=lm3,
+        extras_asset={"origem": "foto", "textura_provisoria": {"origem": "procedural_fototipo", "fototipo": fototipo}})
+    cobertura = float(bloco_textura["cobertura_observada_pct"])
+    avisos += [a for a in bloco_textura["avisos"] if a not in avisos]
+    tempos["textura_s"] = round(time.perf_counter() - t0, 2)
+    t0 = time.perf_counter()
+
     rec = {
         "esquema": ESQUEMA,
         "malha_id": malha_id,
@@ -331,8 +350,10 @@ def reconstruir(pasta: Path, req: dict, malha_dir: str, malha_id: str) -> dict:
         "avisos": avisos,
         "cobertura_observada_pct": round(cobertura, 1),
         "malha": {"obj": "processada.obj", "glb": "processada.glb", "textura": "textura.png",
-                  "textura_provisoria": True, "n_vertices": malha.n_vertices, "n_faces": malha.n_faces},
+                  "textura_provisoria": False, "observado": bloco_textura["observado"],
+                  "n_vertices": malha.n_vertices, "n_faces": malha.n_faces},
         "diagnostico": {**res.diagnostico, "incerteza_ajuste_mm": res.incerteza_ajuste_mm,
+                        "cobertura_area_vista_pct": round(cobertura_area, 1),
                         "fracao_silhueta_fora": res.fracao_silhueta_fora, "textura": {k: v for k, v in bloco_tex.items()
                                                                                     if k in ("fototipo", "realismo")}},
         "versao_software": VERSAO_SOFTWARE,
@@ -353,6 +374,7 @@ def reconstruir(pasta: Path, req: dict, malha_dir: str, malha_id: str) -> dict:
         "processada": _bloco_processada(pasta, malha),
         "recorte": {"modo": "nenhum", "y_corte_mm": None, "aplicado": False},
         "escala": {"historico": []},
+        "textura": bloco_textura,
         "avisos": avisos,
         "versao_software": VERSAO_SOFTWARE,
         "gerado_em": rec["gerado_em"],

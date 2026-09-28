@@ -139,17 +139,19 @@ test("sessão de Bland-Altman na demo: operador OP-NN, marcada demo e sem observ
 
 test("fotos de exemplo: cards t01–t03, reconstrução importada com erro contra o gabarito e a própria foto editada", async ({ page, request }) => {
   test.setTimeout(6 * 60_000);
-  const torsos = (await (await request.get("/api/sinteticos")).json()).torsos as { nome: string; foto: boolean }[];
-  expect(torsos.map((t) => [t.nome, t.foto])).toEqual([
-    ["t01_simetrico_300", true],
-    ["t02_assimetrico", true],
-    ["t03_pequeno_ptose", true],
+  const torsos = (await (await request.get("/api/sinteticos")).json()).torsos as { nome: string; foto: boolean; foto_frente: boolean }[];
+  // pastas preparadas pelo pipeline real (mesh.cli fotos-exemplo): 3 fotos em todos; só a frontal no t01
+  expect(torsos.map((t) => [t.nome, t.foto, t.foto_frente])).toEqual([
+    ["t01_simetrico_300", true, true],
+    ["t02_assimetrico", true, false],
+    ["t03_pequeno_ptose", true, false],
   ]);
   await page.goto("/");
   await expect(page.getByTestId("fotos-exemplo")).toBeVisible();
   for (const t of torsos) await expect(page.getByTestId(`importar-foto-${t.nome}`)).toBeVisible();
+  await expect(page.getByTestId(`importar-foto-${TORSO}-frente`)).toBeVisible();
   await page.getByTestId(`importar-foto-${TORSO}`).click();
-  await expect(page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de 1 foto` })).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de 3 fotos` })).toBeVisible({ timeout: 120_000 });
   const erro = page.getByTestId("foto-erro-gabarito");
   await expect(erro).toContainText("Erro contra o gabarito");
   await expect(erro).toContainText(/RMS na região das mamas: x \d+,\d mm · y \d+,\d mm · z \d+,\d mm/);
@@ -161,7 +163,7 @@ test("fotos de exemplo: cards t01–t03, reconstrução importada com erro contr
   await esperarFotos(page, { estado: "a" });
   const e = await estadoFotos(page);
   expect(e).toMatchObject({ vista: "foto:frente", envelope_visivel: true, preserveDrawingBuffer: false });
-  expect((e.selo as string[]).join(" ")).toContain("MODELO 3D ESTIMADO DE 1 FOTO");
+  expect((e.selo as string[]).join(" ")).toContain("MODELO 3D ESTIMADO DE 3 FOTOS");
   expect((e.selo as string[]).join(" ")).toContain("DEMONSTRAÇÃO — FOTOS SINTÉTICAS");
   await expect(page.getByTestId("foto-incerteza")).toContainText("Profundidade");
 });

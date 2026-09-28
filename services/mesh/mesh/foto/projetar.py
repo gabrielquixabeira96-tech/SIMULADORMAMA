@@ -148,6 +148,11 @@ class FotoRegistrada:
         return arr
 
 
+def arquivo_de_foto_valido(arquivo: str) -> bool:
+    """`arquivo` segue o layout C4 (`original/foto_<vista>.jpg`, o unico que `ler_foto` aceita)?"""
+    return bool(_RE_FOTO.match(arquivo))
+
+
 def ler_foto(malha_dir: Path, arquivo: str) -> Image.Image:
     """Unico ponto de leitura de imagem do P2: so `original/foto_<vista>.jpg` da propria malha (LGPD;
     criterio 6 do P2). Devolve RGB ja decodificado (sem EXIF: o web ja o descartou)."""

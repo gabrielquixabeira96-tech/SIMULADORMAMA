@@ -8,12 +8,12 @@
       "arquivo": "original/foto_frente.png",
       "largura_px": 960,
       "altura_px": 720,
-      "K": [2734.5, 0, 0, 0, 2734.5, 0, 479.5, 359.5, 1],
+      "K": [2734.5, 0, 0, 0, 2734.5, 0, 480, 360, 1],
       "R": [1, 0, 0, 0, -1, 0, 0, 0, -1],
       "t": [0, -165, 1350],
       "k1": 0,
       "f_origem": "estimado",
-      "landmarks_2d": { "furcula": [479.5, 25.3], "mamilo_dir": [279.1, 359.5], "mamilo_esq": [679.9, 359.5] },
+      "landmarks_2d": { "furcula": [480, 25.8], "mamilo_dir": [279.6, 360], "mamilo_esq": [680.4, 360] },
       "residuos_px": { "furcula": 0, "mamilo_dir": 0, "mamilo_esq": 0 },
       "rms_px": 0.4
     }

@@ -41,7 +41,7 @@ function rColunaMajor(q: THREE.Quaternion): number[] {
 
 /** Câmera frontal "clínica" do t01: olha para −z anatômico, x da imagem = +x anatômico (esquerda da paciente). */
 const FRENTE: ParametrosCameraFoto = {
-  K: [2734.5, 0, 0, 0, 2734.5, 0, 479.5, 359.5, 1],
+  K: [2734.5, 0, 0, 0, 2734.5, 0, 480, 360, 1],
   R: [1, 0, 0, 0, -1, 0, 0, 0, -1],
   t: [0, -165, 1350],
   largura_px: 960,
@@ -85,10 +85,10 @@ describe("cameraDaFoto", () => {
 
   it("orientação clínica: esquerda da paciente à direita da imagem, cranial para cima, profundidade positiva", () => {
     const o = pixelDaFoto(FRENTE, [0, -165, 0])!;
-    expect(o[0]).toBeCloseTo(479.5, 6);
-    expect(o[1]).toBeCloseTo(359.5, 6);
-    expect(pixelDaFoto(FRENTE, [50, -165, 0])![0]).toBeGreaterThan(479.5);
-    expect(pixelDaFoto(FRENTE, [0, -100, 0])![1]).toBeLessThan(359.5);
+    expect(o[0]).toBeCloseTo(480, 6);
+    expect(o[1]).toBeCloseTo(360, 6);
+    expect(pixelDaFoto(FRENTE, [50, -165, 0])![0]).toBeGreaterThan(480);
+    expect(pixelDaFoto(FRENTE, [0, -100, 0])![1]).toBeLessThan(360);
     expect(pixelDaFoto(FRENTE, [0, 0, 5000])).toBeNull(); // atrás da câmera
     expect(centroDaCamera(FRENTE).map((v) => v + 0)).toEqual([0, -165, 1350]); // C = −Rᵀ·t
     const cam = cameraDaFoto(FRENTE, 960, 720);
@@ -97,7 +97,7 @@ describe("cameraDaFoto", () => {
     expect(dir.z).toBeCloseTo(-1, 9);
   });
 
-  it("foto encaixada num quadro menor e de outra proporção: pixel do quadro = (u + 0,5)·s − 0,5 + deslocamento", () => {
+  it("foto encaixada num quadro menor e de outra proporção: pixel do quadro = u·s + deslocamento", () => {
     const r = rng(11);
     for (const [w, h] of [
       [480, 360],
@@ -109,8 +109,8 @@ describe("cameraDaFoto", () => {
       for (const X of pontos(r, 50)) {
         const [u, v] = pixelDaFoto(FRENTE, X)!;
         const [uq, vq] = pixelNoQuadro(cam, X, w, h);
-        expect(Math.abs(uq - ((u + 0.5) * e.escala - 0.5 + e.x))).toBeLessThan(1e-3);
-        expect(Math.abs(vq - ((v + 0.5) * e.escala - 0.5 + e.y))).toBeLessThan(1e-3);
+        expect(Math.abs(uq - (u * e.escala + e.x))).toBeLessThan(1e-3);
+        expect(Math.abs(vq - (v * e.escala + e.y))).toBeLessThan(1e-3);
       }
     }
   });
@@ -147,7 +147,7 @@ describe("cameraDaFoto", () => {
     expect(Math.hypot(c[0] - ref[0], c[1] - ref[1])).toBeLessThan(1e-3);
   });
 
-  it("textura projetiva: uv da foto = (u + 0,5)/W, (v + 0,5)/H da posição original", () => {
+  it("textura projetiva: uv da foto = u/W, v/H da posição original (coordenadas contínuas do C1)", () => {
     const r = rng(5);
     for (let c = 0; c < 10; c++) {
       const p = cameraAleatoria(r);
@@ -156,17 +156,17 @@ describe("cameraDaFoto", () => {
         const ref = pixelDaFoto(p, X);
         if (!ref) continue;
         const [s, t] = uvDaFoto(m, X);
-        expect(Math.abs(s * p.largura_px - 0.5 - ref[0])).toBeLessThan(1e-3);
-        expect(Math.abs(t * p.altura_px - 0.5 - ref[1])).toBeLessThan(1e-3);
+        expect(Math.abs(s * p.largura_px - ref[0])).toBeLessThan(1e-3);
+        expect(Math.abs(t * p.altura_px - ref[1])).toBeLessThan(1e-3);
       }
     }
     const [s0, t0] = uvDaFoto(matrizTexturaFoto(FRENTE, { dx: 5, dy: 0 }), [0, -165, 0]);
-    expect(s0 * 960 - 0.5).toBeCloseTo(484.5, 6);
-    expect(t0 * 720 - 0.5).toBeCloseTo(359.5, 6);
+    expect(s0 * 960).toBeCloseTo(485, 6);
+    expect(t0 * 720).toBeCloseTo(360, 6);
   });
 
   it("recusa K linha-major, R que não é rotação e tamanho inválido", () => {
-    expect(() => new CameraDaFoto({ ...FRENTE, K: [2734.5, 0, 479.5, 0, 2734.5, 359.5, 0, 0, 1] }, 960, 720)).toThrow(/coluna-major/);
+    expect(() => new CameraDaFoto({ ...FRENTE, K: [2734.5, 0, 480, 0, 2734.5, 360, 0, 0, 1] }, 960, 720)).toThrow(/coluna-major/);
     expect(() => new CameraDaFoto({ ...FRENTE, R: [-1, 0, 0, 0, -1, 0, 0, 0, -1] }, 960, 720)).toThrow(/rotação/);
     expect(() => new CameraDaFoto({ ...FRENTE, largura_px: 0 }, 960, 720)).toThrow();
     expect(() => encaixeDaFoto(960, 720, 0, 10)).toThrow();

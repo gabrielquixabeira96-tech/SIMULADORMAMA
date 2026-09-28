@@ -78,6 +78,7 @@
         }
       }
     },
+    "textura": { "$ref": "textura_reconstruida.schema.json", "description": "opcional; so em malha reconstruida por fotos (origem \"foto\"): textura_reconstruida/1.0 (C3, contratos secao 5.5)" },
     "avisos": { "type": "array", "items": { "type": "string" } },
     "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
     "gerado_em": { "type": "string", "format": "date-time" }

@@ -9,6 +9,7 @@ import {
   malhaMetaSchema,
   medidasSchema,
   medirRequisicaoSchema,
+  origemLandmarkSchema,
   tepidConfigSchema,
 } from "../src";
 
@@ -28,6 +29,12 @@ describe("paridade zod x config/schemas/*.schema.json", () => {
 
   it("campos digitados iguais", () => {
     expect([...CAMPOS_DIGITADOS].sort()).toEqual([...medidasJson.properties.medidas_digitadas.oneOf[1].required].sort());
+  });
+
+  it("origens de landmark iguais (inclui \"foto\", C5)", () => {
+    const def = medidasJson.$defs ?? medidasJson.definitions;
+    const origens = Object.values(def as Record<string, any>).find((d) => d?.properties?.origem?.enum)?.properties.origem.enum;
+    expect([...origemLandmarkSchema.options].sort()).toEqual([...origens].sort());
   });
 
   it("campos obrigatórios do malha_meta iguais", () => {

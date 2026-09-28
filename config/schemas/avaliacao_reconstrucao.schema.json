@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://simulador-mamario.local/schemas/avaliacao_reconstrucao.schema.json",
+  "title": "avaliacao_reconstrucao/1.0",
+  "description": "Erro de uma reconstrucao por fotos contra o gabarito de um torso SINTETICO (avaliacao.json na pasta da malha; mesh.foto.avaliar; docs/contratos.md secao 19.3). Lido pelo web (cartao 'Erro contra o gabarito', so no desenho B).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["esquema", "torso", "n_fotos", "vistas", "rms_mm", "regiao", "volume_erro_pct", "landmarks_erro_mm", "reprojecao_rms_px", "pose_erro_mm", "incerteza_por_eixo_mm", "profundidade_confiavel", "gabarito_sha256", "versao_software", "gerado_em"],
+  "properties": {
+    "esquema": { "const": "avaliacao_reconstrucao/1.0" },
+    "torso": { "type": "string" },
+    "n_fotos": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "vistas": { "type": "array", "items": { "enum": ["frente", "obliqua_dir", "obliqua_esq", "perfil_dir", "perfil_esq"] } },
+    "rms_mm": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "z", "total"],
+      "description": "RMS ponto-superficie (verdade -> processada.obj) por eixo na regiao das mamas, mm",
+      "properties": { "x": { "type": "number", "minimum": 0 }, "y": { "type": "number", "minimum": 0 }, "z": { "type": "number", "minimum": 0 }, "total": { "type": "number", "minimum": 0 } }
+    },
+    "regiao": {
+      "type": "object", "additionalProperties": false, "required": ["descricao", "dilatacao_mm", "passo_mm", "n_pontos"],
+      "properties": { "descricao": { "type": "string" }, "dilatacao_mm": { "type": "number" }, "passo_mm": { "type": "number" }, "n_pontos": { "type": "integer", "minimum": 1 } }
+    },
+    "volume_erro_pct": {
+      "type": "object", "additionalProperties": false, "required": ["dir", "esq"],
+      "description": "(estimado - gabarito) / gabarito * 100, volume adicionado; null se a reconstrucao nao estimou (desenho A)",
+      "properties": { "dir": { "type": ["number", "null"] }, "esq": { "type": ["number", "null"] } }
+    },
+    "landmarks_erro_mm": {
+      "type": "object", "additionalProperties": false, "required": ["medio", "max", "por_landmark"],
+      "properties": { "medio": { "type": "number", "minimum": 0 }, "max": { "type": "number", "minimum": 0 }, "por_landmark": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } } }
+    },
+    "reprojecao_rms_px": { "type": ["number", "null"], "minimum": 0, "description": "landmarks 3D reconstruidos pelas cameras estimadas vs os 2D exatos das fotos sinteticas (visiveis)" },
+    "pose_erro_mm": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 }, "description": "distancia entre o centro optico estimado e o verdadeiro, por vista" },
+    "incerteza_por_eixo_mm": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "z"],
+      "properties": { "x": { "type": "number", "minimum": 0 }, "y": { "type": "number", "minimum": 0 }, "z": { "type": "number", "minimum": 0 } }
+    },
+    "profundidade_confiavel": { "type": "boolean" },
+    "gabarito_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "codigo_sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "opcional; impressao do codigo que gerou a pasta (mesh.cli fotos-exemplo --se-desatualizado)" },
+    "versao_software": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "gerado_em": { "type": "string", "format": "date-time" }
+  }
+}

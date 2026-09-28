@@ -126,7 +126,11 @@ if [[ -f apps/web/package.json ]]; then
       done
       if [[ $GLB_OK -eq 1 ]]; then ok "morphs sinteticos presentes (data/sinteticos/*/morphs)"
       else falha "geracao de torso.glb/morphs (mesh.cli torso/morphs)"; fi
-      node scripts/validar_gltf.mjs "$SINT"/*/morphs/*.glb "$SINT"/*/torso.glb \
+      # "Fotos de exemplo" (plano foto3d): <torso>/foto/ (3 fotos) e t01/foto_frente/ pelo pipeline real
+      # (fotos sinteticas -> /reconstruir-foto -> avaliacao.json contra o gabarito); o e2e fotoReal/demo as usa.
+      if DATA_DIR="$RAIZ/data" bash scripts/mesh.sh fotos; then ok "fotos de exemplo reconstruidas (bash scripts/mesh.sh fotos)"
+      else falha "fotos de exemplo (bash scripts/mesh.sh fotos)"; fi
+      node scripts/validar_gltf.mjs "$SINT"/*/morphs/*.glb "$SINT"/*/torso.glb "$SINT"/*/foto*/processada.glb \
         && ok "glTF-Validator: 0 erros, 0 avisos" || falha "glTF-Validator (node scripts/validar_gltf.mjs)"
       MESH_REAL_EXIGIDO=1
       EXIGIR_MESH_REAL=1 pnpm --filter web run test "${VITEST_ARGS[@]}" && ok "testes web (vitest, com banco e services/mesh real)" || falha "testes web"

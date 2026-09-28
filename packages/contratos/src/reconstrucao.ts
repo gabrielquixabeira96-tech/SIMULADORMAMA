@@ -11,7 +11,8 @@ import { vetor3Schema } from "./comum";
  *
  * Câmera por foto (C1): pinhole `K` (px), `R` (3×3) e `t` (mm) no quadro da malha (`anatomico`),
  * com `x_cam = R·X + t` e `[u, v, 1]ᵀ ∝ K·x_cam` (convenção OpenCV: câmera olhando para +z, v para
- * baixo, pixel (0, 0) = CENTRO do pixel do canto superior esquerdo). `K` e `R` em 9 números
+ * baixo; (u, v) contínuos com origem no CANTO superior esquerdo da imagem — o centro do pixel da
+ * coluna i fica em u = i + 0,5, ponto principal no centro = W/2, H/2; contratos §19). `K` e `R` em 9 números
  * **coluna-major** (como `THREE.Matrix3.elements` e os contratos §1.1): `K = [fx, 0, 0, s, fy, 0, cx, cy, 1]`.
  * Esquemas tolerantes (passthrough): o web só exige o que usa.
  */
@@ -110,7 +111,7 @@ export const avaliacaoReconstrucaoSchema = z
     /** volume reconstruído vs gabarito (%, com sinal): um número ou por lado */
     volume_erro_pct: z.union([finito, z.object({ dir: finito, esq: finito })]),
     landmarks_erro_mm: z.object({ medio: z.number().min(0), max: z.number().min(0) }).passthrough().optional(),
-    reprojecao_rms_px: z.number().min(0).optional(),
+    reprojecao_rms_px: z.number().min(0).nullable().optional(),
     ssim_antes: z.number().optional(),
     psnr_antes_db: z.number().optional(),
     n_fotos: z.number().int().positive().optional(),

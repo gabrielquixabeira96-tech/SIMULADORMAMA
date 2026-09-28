@@ -14,7 +14,7 @@ import {
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConfigPublica } from "@/config/publica";
-import { linhasErroGabarito, type FotoRealPublica } from "@/foto/publica";
+import { linhasErroGabarito, textoEscala, type FotoRealPublica } from "@/foto/publica";
 import { distanciaEuclidiana, distanciasEuclidianas } from "@/medidas/geometria";
 import type { MalhaCarregada } from "@/viewer/carregar";
 import type { CliqueNaMalha, Marcador } from "@/viewer/Visualizador";
@@ -48,8 +48,10 @@ interface TorsoSintetico {
   glb: boolean;
   obj: boolean;
   gabarito: boolean;
-  /** fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D") */
+  /** fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D"): frente + oblíqua + perfil */
   foto?: boolean;
+  /** variante só com a foto frontal (profundidade "só ilustração") */
+  foto_frente?: boolean;
 }
 
 /** Nome para o cirurgião dos torsos sintéticos conhecidos (o código continua no card, em cinza). */
@@ -335,13 +337,13 @@ export function Consulta({ config }: { config: ConfigPublica }) {
    * fotos sintéticas do torso entra pelo mesmo caminho de um torso sintético; os pontos do passo 2
    * continuam os do gabarito (âncora), e o passo 3 mostra a própria foto sendo editada.
    */
-  async function importarFoto(t: TorsoSintetico) {
+  async function importarFoto(t: TorsoSintetico, variante: "foto" | "foto_frente" = "foto") {
     const p = paciente ?? (await criarPaciente());
     if (!p) return;
     setCarregando(true);
     setProcessando(`Preparando a reconstrução das fotos de ${NOMES_TORSOS[t.nome]?.titulo ?? t.nome}… (cerca de 15 s)`);
     setMsgCaptura(null);
-    const r = await fetch(`/api/sinteticos/${t.nome}/importar-foto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: p.id }) });
+    const r = await fetch(`/api/sinteticos/${t.nome}/importar-foto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: p.id, variante }) });
     setCarregando(false);
     setProcessando(null);
     if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Não foi possível preparar a foto de exemplo: ${await lerErro(r)}` });
@@ -649,8 +651,13 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                       <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome} — foto de exemplo</div>
                       <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
                       <button type="button" onClick={() => void importarFoto(t)} disabled={carregando} data-testid={`importar-foto-${t.nome}`}>
-                        Usar a foto de exemplo
+                        Usar as 3 fotos (frente, oblíqua, perfil)
                       </button>
+                      {t.foto_frente && (
+                        <button type="button" className="secundario" onClick={() => void importarFoto(t, "foto_frente")} disabled={carregando} data-testid={`importar-foto-${t.nome}-frente`}>
+                          Só a foto de frente
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -672,6 +679,11 @@ export function Consulta({ config }: { config: ConfigPublica }) {
               Modelo 3D estimado de {fotoImportada.foto.n_fotos === 1 ? "1 foto" : `${fotoImportada.foto.n_fotos} fotos`} sintéticas
               {fotoImportada.foto.profundidade_so_ilustracao ? " (sem foto de perfil: a profundidade é só ilustração)" : ""}.
             </p>
+            {textoEscala(fotoImportada.foto.escala_metodo) && (
+              <p className="nota" data-testid="foto-escala">
+                {textoEscala(fotoImportada.foto.escala_metodo)}
+              </p>
+            )}
             {fotoImportada.foto.erro_gabarito && (
               <section aria-label="Erro contra o gabarito" data-testid="foto-erro-gabarito">
                 <strong>Erro contra o gabarito (torso sintético)</strong>

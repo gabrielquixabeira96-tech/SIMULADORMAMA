@@ -19,6 +19,8 @@ export const malhaMetaSchema = z.strictObject({
   fator_unidade: z.number().positive(),
   fator_escala_acumulado: z.number().positive(),
   quadro: z.enum(["scan", "anatomico"]),
+  /** opcional; ausente = upload. "foto": malha do template ajustado a fotos (/reconstruir-foto, C1) */
+  origem: z.enum(["upload", "sintetico", "foto"]).optional(),
   original: z.strictObject({
     arquivo: z.string(),
     n_vertices: z.number().int().min(3),
@@ -52,6 +54,8 @@ export const malhaMetaSchema = z.strictObject({
         .optional(),
     })
     .optional(),
+  /** só em malha reconstruída por fotos: `textura_reconstruida/1.0` (C3; o web só confere o esquema) */
+  textura: z.object({ esquema: z.literal("textura_reconstruida/1.0") }).passthrough().optional(),
   avisos: z.array(z.string()),
   versao_software: versaoSoftwareSchema,
   gerado_em: dataHoraSchema,

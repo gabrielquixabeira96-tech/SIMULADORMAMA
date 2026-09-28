@@ -1,6 +1,6 @@
 """Utilitarios dos testes da reconstrucao por fotos: entrada a partir das fotos sinteticas e metricas
 contra o gabarito (RMS ponto-superficie por eixo na regiao das mamas). A avaliacao "oficial" com
-relatorio e do pacote P4 (mesh/foto/avaliar.py); aqui fica so o necessario para os criterios do P1."""
+relatorio e `mesh/foto/avaliar.py` (sobre a malha gravada); aqui, o ajuste em memoria para os criterios do P1."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from PIL import Image
 from mesh.foto import ajuste as aj
 from mesh.foto import camera as cam
 from mesh.foto import template as tpl
-from mesh.malha.geometria import Proximidade
+from mesh.foto.avaliar import pontos_regiao_mamas, rms_por_eixo
 
 
 def carregar_fotos(pasta_torso: Path, vistas, ruido_px: float = 0.0, semente: int = 0, mascara_morf_px: int = 0,
@@ -44,21 +44,6 @@ def escala_ssn_n(pasta_torso: Path, lado: str = "dir") -> aj.EscalaAjuste:
     return aj.EscalaAjuste("ssn_n_fita", float(g["distancias"][f"ssn_n_{lado}"]["euclidiana_mm"]), lado)
 
 
-def pontos_regiao_mamas(torso, dilatacao_mm: float = 20.0, passo_mm: float = 2.0) -> np.ndarray:
-    pts = []
-    for mama in torso.mamas:
-        A_lat, A_med = mama.e_lat + dilatacao_mm, mama.e_med + dilatacao_mm
-        B_sup, B_inf = mama.e_sup + dilatacao_mm, mama.e_inf + dilatacao_mm
-        du = np.arange(-A_med, A_lat + 1e-9, passo_mm)
-        dv = np.arange(-B_inf, B_sup + 1e-9, passo_mm)
-        U, V = np.meshgrid(du, dv)
-        un = np.where(U > 0, U / A_lat, U / A_med)
-        vn = np.where(V > 0, V / B_sup, V / B_inf)
-        d = un ** 2 + vn ** 2 < 1.0
-        pts.append(torso.avaliar(mama.lado * (mama.s_mamilo + U[d]), mama.y_apice + V[d]))
-    return np.concatenate(pts)
-
-
 def superficie_densa(p: dict, faces: int = 200000):
     from mesh.sintetico.gerador import Grade
 
@@ -66,14 +51,6 @@ def superficie_densa(p: dict, faces: int = 200000):
     grade = Grade(torso, faces)
     V = grade.soldar(torso.avaliar(grade.S, grade.Y))
     return torso, V, grade.Fw
-
-
-def rms_por_eixo(pontos_verdade: np.ndarray, V_rec: np.ndarray, F_rec: np.ndarray) -> dict:
-    q, _, _, d = Proximidade(V_rec, F_rec).consultar(pontos_verdade)
-    e = q - pontos_verdade
-    out = {ax: float(np.sqrt(np.mean(e[:, i] ** 2))) for i, ax in enumerate("xyz")}
-    out["total"] = float(np.sqrt(np.mean(d ** 2)))
-    return out
 
 
 def avaliar(res: aj.ResultadoAjuste, pasta_torso: Path, torso_verdade=None) -> dict:

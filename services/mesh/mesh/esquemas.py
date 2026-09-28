@@ -17,11 +17,24 @@ class ErroContrato(ValueError):
         self.erros = erros
 
 
+@lru_cache(maxsize=1)
+def _registro():
+    """Todos os config/schemas/*.schema.json pelo `$id`: um esquema referencia outro por nome de arquivo
+    (ex.: `malha_meta.textura` -> `textura_reconstruida.schema.json`)."""
+    from referencing import Registry, Resource
+
+    recursos = []
+    for caminho in sorted((config_dir() / "schemas").glob("*.schema.json")):
+        esquema = json.loads(caminho.read_text(encoding="utf-8"))
+        recursos.append((esquema.get("$id", caminho.name), Resource.from_contents(esquema)))
+    return Registry().with_resources(recursos)
+
+
 @lru_cache(maxsize=32)
 def validador(nome: str) -> Draft202012Validator:
     caminho = config_dir() / "schemas" / f"{nome}.schema.json"
     esquema = json.loads(caminho.read_text(encoding="utf-8"))
-    return Draft202012Validator(esquema)
+    return Draft202012Validator(esquema, registry=_registro())
 
 
 def validar(nome: str, dado: object) -> None:

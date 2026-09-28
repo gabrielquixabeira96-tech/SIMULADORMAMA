@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { TORSOS, copiarTorsosSinteticos, prepararDataDirE2E } from "./e2e/fixtures";
-import { prepararFotosExemplo } from "./e2e/fotoSintetica";
+import { prepararFotosExemplo } from "./e2e/fotosExemplo";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 
@@ -41,8 +41,8 @@ if (!process.env.E2E_DATA_DIR) {
   process.env.E2E_DATA_DIR = dir;
   prepararDataDirE2E(dir);
   copiarTorsosSinteticos(resolve(RAIZ, "data/sinteticos"), dir, RAIZ);
-  // "fotos de exemplo" (plano "foto → 3D"): as do pipeline, se já preparadas; senão a fixture sintética
-  prepararFotosExemplo(resolve(RAIZ, "data/sinteticos"), dir, TORSOS);
+  // "fotos de exemplo" (plano "foto → 3D"): as do pipeline real (data/sinteticos, preparadas pela CI) ou geradas aqui
+  prepararFotosExemplo(resolve(RAIZ, "data/sinteticos"), dir, TORSOS, RAIZ);
   // Postgres de teste com as migrations (idempotente; ADR 0007).
   execSync("bash scripts/db.sh start criar", { cwd: RAIZ, stdio: "ignore" });
   execSync("node --experimental-strip-types --no-warnings scripts/migrar.ts --teste", { cwd: AQUI, stdio: "ignore", env: { ...process.env, DATABASE_URL_TEST: DB_TESTE } });

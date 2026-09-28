@@ -98,7 +98,7 @@
     "profundidade_confiavel": { "type": "boolean", "description": "false sem foto de perfil: profundidade so ilustracao, sem numeros de projecao (previsto null)" },
     "qualidade": { "enum": ["boa", "regular", "ruim"] },
     "avisos": { "type": "array", "items": { "type": "string" } },
-    "cobertura_observada_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+    "cobertura_observada_pct": { "type": "number", "minimum": 0, "maximum": 100, "description": "% dos texels do atlas UV com observado >= 0,15 (C3; textura_reconstruida/1.0). A area da malha vista por alguma foto vai em diagnostico.cobertura_area_vista_pct" },
     "malha": {
       "type": "object",
       "additionalProperties": false,
@@ -107,7 +107,8 @@
         "obj": { "type": "string" },
         "glb": { "type": "string" },
         "textura": { "type": "string" },
-        "textura_provisoria": { "type": "boolean" },
+        "textura_provisoria": { "type": "boolean", "description": "true so se a projecao da foto (P2) nao rodou; na reconstrucao integrada, false" },
+        "observado": { "type": "string", "description": "mapa de confianca do atlas (observado.png; C3)" },
         "n_vertices": { "type": "integer", "minimum": 3 },
         "n_faces": { "type": "integer", "minimum": 1 }
       }

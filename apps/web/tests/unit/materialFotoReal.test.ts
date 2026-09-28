@@ -23,7 +23,7 @@ const compilar = (m: THREE.Material, lib: { vertexShader: string; fragmentShader
   return shader;
 };
 
-const FRENTE = { K: [2734.5, 0, 0, 0, 2734.5, 0, 479.5, 359.5, 1], R: [1, 0, 0, 0, -1, 0, 0, 0, -1], t: [0, -165, 1350], largura_px: 960, altura_px: 720 };
+const FRENTE = { K: [2734.5, 0, 0, 0, 2734.5, 0, 480, 360, 1], R: [1, 0, 0, 0, -1, 0, 0, 0, -1], t: [0, -165, 1350], largura_px: 960, altura_px: 720 };
 
 function materialReal() {
   const m = criarMaterialPeleFoto(new THREE.Texture(), { sh9: shPadrao(null) });

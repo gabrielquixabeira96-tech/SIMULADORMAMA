@@ -27,7 +27,15 @@ export async function GET() {
       if (!(await torsoUtilizavel(nome))) continue;
       const tem = async (a: string) => stat(caminhoEmDataDir(`sinteticos/${nome}/${a}`)).then((s) => s.isFile()).catch(() => false);
       // `foto`: fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D"; importar-foto)
-      torsos.push({ nome, glb: await tem("torso.glb"), obj: await tem("torso.obj"), gabarito: await tem("gabarito.json"), foto: await tem("foto/reconstrucao.json") });
+      // `foto_frente`: a variante só frontal (t01)
+      torsos.push({
+        nome,
+        glb: await tem("torso.glb"),
+        obj: await tem("torso.obj"),
+        gabarito: await tem("gabarito.json"),
+        foto: await tem("foto/reconstrucao.json"),
+        foto_frente: await tem("foto_frente/reconstrucao.json"),
+      });
     }
     return json({ torsos });
   } catch (e) {

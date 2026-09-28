@@ -10,8 +10,8 @@
 #   preparar       instala dependencias (pacotes do sistema so se faltarem; apt ou dnf), pnpm install,
 #                  venv do services/mesh (Python 3.11-3.13; com so 3.14+ e pygeodesic sem wheel, usa
 #                  Python 3.13 do uv; o uv, se ausente, vem do PyPI com versao e hash fixos), cluster
-#                  Postgres proprio + banco marcado como demo, torsos e
-#                  morphs sinteticos, next build
+#                  Postgres proprio + banco marcado como demo, torsos, morphs e
+#                  fotos de exemplo sinteticos (ADR 0021), next build
 #   subir          sobe Postgres, mesh (127.0.0.1) e web (0.0.0.0:DEMO_PORTA) com DEMO_SINTETICA=1;
 #                  na primeira vez gera APP_TOKEN_LOCAL aleatorio e o imprime UMA vez
 #   parar          para web, mesh e Postgres (o estado fica em DEMO_DIR)
@@ -311,6 +311,11 @@ cmd_preparar() {
     compgen -G "$DATA_DIR_DEMO/sinteticos/$t/morphs/*.glb" >/dev/null \
       || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli morphs --sintetico "$DATA_DIR_DEMO/sinteticos/$t" --catalogo tests/fixtures/catalogo_teste.json >/dev/null )
   done
+  # "Fotos de exemplo" (plano foto3d, ADR 0021): <torso>/foto/ e t01/foto_frente/ pelo pipeline real
+  # (fotos sinteticas -> /reconstruir-foto -> avaliacao.json); pula o que ja estiver atualizado (~2 min/torso)
+  msg "fotos de exemplo (reconstrucao 3D a partir das fotos sinteticas) em $DATA_DIR_DEMO/sinteticos"
+  ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli fotos-exemplo --todos --sinteticos "$DATA_DIR_DEMO/sinteticos" --se-desatualizado >/dev/null ) \
+    || erro "fotos de exemplo (mesh.cli fotos-exemplo) falharam"
 
   msg "next build da demo (DEMO_SINTETICA=1: teto de corpo 2 MB; sem ganchos de teste)"
   ( unset NEXT_PUBLIC_GANCHOS_TESTE; export DEMO_SINTETICA=1; cd "$RAIZ/apps/web" && pnpm_ exec next build >"$LOGS/build.log" 2>&1 ) \

@@ -18,7 +18,13 @@ import { bloqueioGabarito, gabaritoBloqueado } from "@/validacao/sessao";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const corpoSchema = z.strictObject({ paciente_id: uuidSchema });
+/**
+ * Pastas das "fotos de exemplo" de um torso sintético, preparadas pelo pipeline real do services/mesh
+ * (`mesh.cli fotos-exemplo`, `scripts/mesh.sh fotos`): `foto/` = frente + oblíqua D + perfil D;
+ * `foto_frente/` (só o t01) = só a frontal (profundidade "só ilustração").
+ */
+const VARIANTES_FOTO = ["foto", "foto_frente"] as const;
+const corpoSchema = z.strictObject({ paciente_id: uuidSchema, variante: z.enum(VARIANTES_FOTO).default("foto") });
 const gabaritoSchema = z
   .object({
     esquema: z.literal("gabarito/1.0"),
@@ -27,28 +33,21 @@ const gabaritoSchema = z
   })
   .passthrough();
 
-/** Pasta das "fotos de exemplo" de um torso sintético, preparada pelo pipeline do services/mesh (P1/P2/P4). */
-const PASTA_FOTO = "foto";
-/** Malha reconstruída (OBJ + MTL + textura projetada), na ordem de preferência. */
-const MALHAS_RECONSTRUIDAS = [
-  ["torso.obj", "torso.mtl"],
-  ["processada.obj", "processada.mtl"],
-] as const;
-
 const existe = (abs: string) =>
   stat(abs)
     .then((s) => s.isFile())
     .catch(() => false);
 
 /**
- * POST /api/sinteticos/<nome>/importar-foto — "Foto de exemplo" (plano "foto → 3D", P4-lite): a
- * reconstrução JÁ PREPARADA pelo pipeline em `DATA_DIR/sinteticos/<nome>/foto/` (fotos sintéticas
- * do torso, `reconstrucao.json` C1, malha do template ajustado com a foto projetada, `observado.png`
- * e `avaliacao.json` contra o gabarito) entra pelo MESMO caminho de uma malha enviada (ADR 0003
- * item 9: original/ + /processar + registro + auditoria); as fotos, o C1, o observado e a avaliação
- * são copiados para a pasta da malha. Nada é reconstruído aqui (a rota `/reconstruir` com
- * `/reconstruir-foto` é do P3 completo). Devolve o gabarito (âncora dos landmarks) e o resumo da
- * reconstrução redigido por desenho (erro contra o gabarito só em B).
+ * POST /api/sinteticos/<nome>/importar-foto — "Foto de exemplo" (plano "foto → 3D"): a reconstrução
+ * JÁ PREPARADA pelo pipeline real em `DATA_DIR/sinteticos/<nome>/<variante>/` (fotos sintéticas do
+ * torso em `original/foto_<vista>.jpg`, `reconstrucao.json` C1, malha do template ajustado com a foto
+ * projetada — `processada.obj/.mtl` + `textura.png` —, `observado.png` C3 e `avaliacao.json` contra o
+ * gabarito) entra pelo MESMO caminho de uma malha enviada (ADR 0003 item 9: original/ + /processar +
+ * registro + auditoria); as fotos, o C1, o observado e a avaliação são copiados para a pasta da
+ * malha. Nada é reconstruído aqui (o upload real de fotos e `/reconstruir-foto` são do P3 completo).
+ * Corpo: `{ paciente_id, variante?: "foto" | "foto_frente" }`. Devolve o gabarito (âncora dos
+ * landmarks) e o resumo da reconstrução redigido por desenho (erro contra o gabarito só em B).
  */
 export async function POST(req: Request, ctx: { params: Promise<{ nome: string }> }) {
   try {
@@ -60,7 +59,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
     const paciente = await pacientePorId(corpo.paciente_id);
     if (!paciente) return erro(404, "paciente_nao_encontrado", "paciente não encontrado");
 
-    const pasta = `sinteticos/${nome}/${PASTA_FOTO}`;
+    const pasta = `sinteticos/${nome}/${corpo.variante}`;
     const abs = (n: string) => caminhoEmDataDir(`${pasta}/${n}`);
     let rec: Reconstrucao;
     try {
@@ -76,13 +75,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ nome: string }
       if (!(await existe(de))) return erro(404, "foto_nao_preparada", `foto ausente: ${f.arquivo}`);
       fotos.push({ de, para: f.arquivo });
     }
-    const par = await (async () => {
-      for (const [obj, mtl] of MALHAS_RECONSTRUIDAS) if (await existe(abs(obj))) return [obj, mtl] as const;
-      return null;
-    })();
-    if (!par) return erro(404, "foto_nao_preparada", "malha reconstruída ausente");
+    // malha do template ajustado (OBJ + MTL + a textura com a foto projetada), como um upload
+    if (!(await existe(abs("processada.obj")))) return erro(404, "foto_nao_preparada", "malha reconstruída ausente");
     const entradas: ArquivoUpload[] = [];
-    for (const a of [par[0], par[1], "textura.png"]) {
+    for (const a of ["processada.obj", "processada.mtl", "textura.png"]) {
       if (await existe(abs(a))) entradas.push({ nome: a, dados: new Uint8Array(await readFile(abs(a))) });
     }
 

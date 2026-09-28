@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 
 from mesh import esquemas
 from mesh.malha.glb import ler_json_glb
+from mesh.malha.io import sha256_arquivo
 from mesh.servidor import app
 
 from .foto_util import VISTAS_3, garantir_fotos
@@ -75,11 +76,31 @@ def test_tres_fotos_contrato_arquivos_tempo_e_morphs(cliente, data_dir, torsos, 
     for lado in ("dir", "esq"):
         assert abs(rec["estimado"]["volumes"][lado]["adicionado_ml"] - g["volumes"][lado]["adicionado_ml"]) \
             <= 0.10 * g["volumes"][lado]["adicionado_ml"]
-    for a in ("processada.obj", "processada.mtl", "processada.glb", "textura.png", "meta.json", "reconstrucao.json",
-              "fotos/registro.json"):
+    for a in ("processada.obj", "processada.mtl", "processada.glb", "textura.png", "observado.png", "meta.json",
+              "reconstrucao.json", "fotos/registro.json"):
         assert (md / a).is_file(), a
     js = ler_json_glb(md / "processada.glb")
-    assert js["asset"]["extras"]["reconstrucao"]["fotos"] == 3
+    ex = js["asset"]["extras"]
+    assert ex["reconstrucao"]["fotos"] == 3 and ex["origem"] == "foto"
+    # integracao P1 -> P2: a textura e a foto projetada (nao a provisoria), com o bloco no meta.json
+    assert ex["textura"]["origem"] == "foto_projetada" and ex["iluminacao"]["esquema"] == "iluminacao_sh9/1.0"
+    assert meta["textura"]["esquema"] == "textura_reconstruida/1.0"
+    assert meta["textura"]["sha256"] == sha256_arquivo(md / "textura.png")
+    assert [f["vista"] for f in meta["textura"]["fotos"]] == list(VISTAS_3)
+    assert rec["malha"]["textura_provisoria"] is False and rec["malha"]["observado"] == "observado.png"
+    assert rec["cobertura_observada_pct"] == round(meta["textura"]["cobertura_observada_pct"], 1)
+    assert 45.0 <= rec["cobertura_observada_pct"] <= 80.0  # 3 fotos: frente + oblíqua + perfil do lado D
+    assert json.loads((md / "meta.json").read_text(encoding="utf-8")) == meta
+    # avaliacao contra o gabarito (a malha gravada, mesh.foto.avaliar): mesmos criterios do ajuste (P1 item 4)
+    from mesh.foto.avaliar import avaliar_reconstrucao
+
+    av = avaliar_reconstrucao(md, dir_sinteticos / "t01_simetrico_300")
+    print(f"[foto] avaliacao t01 3 fotos: rms {av['rms_mm']}, volume {av['volume_erro_pct']}, "
+          f"landmarks {av['landmarks_erro_mm']['max']} mm, reprojecao {av['reprojecao_rms_px']} px")
+    assert all(av["rms_mm"][ax] <= 2.0 for ax in "xyz")
+    assert all(abs(v) <= 10.0 for v in av["volume_erro_pct"].values())
+    assert av["landmarks_erro_mm"]["max"] <= 2.0 and av["reprojecao_rms_px"] <= 3.0
+    assert set(av["pose_erro_mm"]) == set(VISTAS_3) and (md / "avaliacao.json").is_file()
     assert json.loads((md / "fotos" / "registro.json").read_text(encoding="utf-8"))["fotos"] == rec["fotos"]
     # landmarks "foto" alimentam /medir e /morphs sem mudanca nessas rotas
     lm = rec["landmarks"]

@@ -322,6 +322,11 @@ describe("torsos utilizáveis e defesa em profundidade nas rotas", () => {
     writeFileSync(join(s, "copiado/torso.glb"), "x");
     mkdirSync(join(s, "renomeado"), { recursive: true });
     writeFileSync(join(s, "renomeado/parametros.json"), JSON.stringify({ esquema: "torso_parametros/1.0", nome: "outro" }));
+    // torso_parametros/1.1 (template com fatores de forma, plano "foto → 3D") também é do gerador
+    mkdirSync(join(s, "gerado_v11"), { recursive: true });
+    writeFileSync(join(s, "gerado_v11/parametros.json"), JSON.stringify({ esquema: "torso_parametros/1.1", nome: "gerado_v11" }));
+    mkdirSync(join(s, "futuro"), { recursive: true });
+    writeFileSync(join(s, "futuro/parametros.json"), JSON.stringify({ esquema: "torso_parametros/2.0", nome: "futuro" }));
   }
 
   it("só torsos com parametros.json do gerador no modo demo; todos fora dele", async () => {
@@ -329,6 +334,8 @@ describe("torsos utilizáveis e defesa em profundidade nas rotas", () => {
     expect(await torsoGerado("gerado")).toBe(true);
     expect(await torsoGerado("copiado")).toBe(false);
     expect(await torsoGerado("renomeado")).toBe(false);
+    expect(await torsoGerado("gerado_v11")).toBe(true);
+    expect(await torsoGerado("futuro")).toBe(false);
     expect(await torsoGerado("../x")).toBe(false);
     expect(await torsoUtilizavel("copiado", {})).toBe(true);
     expect(await torsoUtilizavel("copiado", { DEMO_SINTETICA: "1" })).toBe(false);
@@ -336,7 +343,7 @@ describe("torsos utilizáveis e defesa em profundidade nas rotas", () => {
     const nomes = async () => ((await (await GET()).json()) as { torsos: { nome: string }[] }).torsos.map((t) => t.nome);
     expect(await nomes()).toEqual(expect.arrayContaining(["copiado", "gerado", "renomeado"]));
     vi.stubEnv("DEMO_SINTETICA", "1");
-    expect(await nomes()).toEqual(["gerado"]);
+    expect(await nomes()).toEqual(["gerado", "gerado_v11"]);
     const arq = await import("@/app/api/sinteticos/[nome]/[arquivo]/route");
     const r = await arq.GET(new Request("http://x"), { params: Promise.resolve({ nome: "copiado", arquivo: "torso.glb" }) });
     expect(r.status).toBe(404);

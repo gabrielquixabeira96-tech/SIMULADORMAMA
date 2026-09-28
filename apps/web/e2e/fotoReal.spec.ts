@@ -1,13 +1,18 @@
 /**
- * Vista "Foto real" (plano "foto → 3D", P3-lite + P4-lite) contra o stack real: a "foto de exemplo"
- * de um torso sintético (reconstrução preparada em DATA_DIR/sinteticos/<torso>/foto/ — no e2e, a
- * fixture de `fotoSintetica.ts`) entra pelo passo 1, e o passo 3 mostra a PRÓPRIA foto editada:
+ * Vista "Foto real" (plano "foto → 3D") contra o stack real: as "fotos de exemplo" de um torso
+ * sintético — reconstruídas pelo PIPELINE REAL do services/mesh (`mesh.cli fotos-exemplo`: fotos
+ * sintéticas → /reconstruir-foto → foto projetada no atlas → avaliacao.json) em
+ * DATA_DIR/sinteticos/<torso>/foto/ (3 fotos) e .../foto_frente/ (só a frontal) — entram pelo passo 1,
+ * e o passo 3 mostra a PRÓPRIA foto editada:
  *   identidade do antes (os pixels da foto) · 0 pixels alterados fora da região simulada, também
  *   com a pose perturbada 5 px · halo = max(4,5; z) · selo "modelo 3D estimado" · cartão de
- *   incerteza por eixo (A sem números) · erro contra o gabarito (só B) · hachura do não observado
- *   nas vistas clínicas · nenhuma imagem sai do navegador.
+ *   incerteza por eixo (A sem números; sem perfil "só ilustração") · erro contra o gabarito (só B) ·
+ *   hachura do não observado nas vistas clínicas · nenhuma imagem sai do navegador.
+ * Os números esperados saem do reconstrucao.json da própria pasta (nada fixado à mão).
  * As imagens nunca são gravadas: só contagens e hashes saem da página.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { novoAtendimento } from "./apoio";
 import { IMPLANTE_1, IMPLANTE_2, escolherImplante, esperarFotos, estadoFotos } from "./simulacao-apoio";
@@ -16,15 +21,30 @@ test.use({ viewport: { width: 1600, height: 1000 } });
 
 const TORSO = "t01_simetrico_300";
 const VISTA = "foto:frente";
+const ENVELOPE_MM = 4.5; // config/simulacao.json envelope_rms_mm
 type Qualidade = "interativa" | "final";
+type Variante = "foto" | "foto_frente";
+
+interface RecC1 {
+  fotos: { vista: string; arquivo: string; largura_px: number; altura_px: number }[];
+  incerteza_por_eixo_mm: { x: number; y: number; z: number };
+}
+/** reconstrucao.json da variante (a mesma pasta que a rota importar-foto copia). */
+function rec(v: Variante): RecC1 {
+  return JSON.parse(readFileSync(join(process.env.E2E_DATA_DIR!, "sinteticos", TORSO, v, "reconstrucao.json"), "utf8")) as RecC1;
+}
+const mm1 = (x: number) => x.toFixed(1).replace(".", ",");
+const nFotos = (n: number) => (n === 1 ? "1 foto" : `${n} fotos`);
 
 /** Passo 1 com a foto de exemplo → pontos do gabarito → implantes → simulação (vista inicial = a foto). */
-async function prepararFotoReal(page: Page, implantes: string[]): Promise<string> {
+async function prepararFotoReal(page: Page, implantes: string[], variante: Variante): Promise<string> {
+  const n = rec(variante).fotos.length;
+  const botao = variante === "foto" ? `importar-foto-${TORSO}` : `importar-foto-${TORSO}-frente`;
   await page.goto("/");
   await novoAtendimento(page);
-  if (!(await page.getByTestId(`importar-foto-${TORSO}`).isVisible())) await page.getByTestId("torsos-sinteticos").locator("summary").click();
-  await page.getByTestId(`importar-foto-${TORSO}`).click();
-  const msg = page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de 1 foto` });
+  if (!(await page.getByTestId(botao).isVisible())) await page.getByTestId("torsos-sinteticos").locator("summary").click();
+  await page.getByTestId(botao).click();
+  const msg = page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de ${nFotos(n)}` });
   await expect(msg).toBeVisible({ timeout: 120_000 });
   const malhaId = (await msg.getAttribute("data-malha-id"))!;
   expect(malhaId).toMatch(/^[0-9a-f-]{36}$/);
@@ -38,12 +58,12 @@ async function prepararFotoReal(page: Page, implantes: string[]): Promise<string
 }
 
 /** Diferença entre os pixels da foto guardada pelo renderizador (sem selo) e a foto decodificada de novo aqui. */
-async function identidadeDaFoto(page: Page, malhaId: string) {
+async function identidadeDaFoto(page: Page, malhaId: string, arquivo: string) {
   return page.evaluate(
-    async ([id, v]) => {
+    async ([id, v, arq]) => {
       const f = (window as any).__simuladorSim.fotos;
       const base = f.fotoBase(v);
-      const r = await fetch(`/api/malhas/${id}/arquivo?nome=${encodeURIComponent("original/foto_frente.png")}`, { cache: "no-store" });
+      const r = await fetch(`/api/malhas/${id}/arquivo?nome=${encodeURIComponent(arq)}`, { cache: "no-store" });
       const bmp = await createImageBitmap(await r.blob());
       const c = document.createElement("canvas");
       c.width = base.largura;
@@ -57,7 +77,7 @@ async function identidadeDaFoto(page: Page, malhaId: string) {
       for (let i = 0; i < ref.length; i++) if (ref[i] !== base.dados[i]) dif++;
       return { dif, largura: base.largura, altura: base.altura, fotoLargura: bmp.width, fotoAltura: bmp.height, encaixe: base.encaixe };
     },
-    [malhaId, VISTA] as const,
+    [malhaId, VISTA, arquivo] as const,
   );
 }
 
@@ -126,46 +146,56 @@ async function pixelsNaoObservado(page: Page, vista: string): Promise<number> {
   }, vista);
 }
 
-test("foto real no desenho B: antes = a foto, edição só na região (também com pose perturbada), halo, selo, incerteza e erro contra o gabarito", async ({ page }, info) => {
+test("foto real no desenho B (3 fotos): antes = a foto, edição só na região (também com pose perturbada), halo, selo, incerteza e erro contra o gabarito", async ({ page }, info) => {
   test.skip(info.project.name !== "desenho-B", "desenho B");
   test.setTimeout(8 * 60_000);
+  const r = rec("foto");
+  const n = r.fotos.length;
+  const z = r.incerteza_por_eixo_mm.z;
+  const halo = Math.max(ENVELOPE_MM, z);
+  const frente = r.fotos.find((f) => f.vista === "frente")!;
+  expect(r.fotos.map((f) => f.vista)).toEqual(["frente", "obliqua_dir", "perfil_dir"]);
   const imagensEnviadas: string[] = [];
-  page.on("request", (r) => {
-    const ct = r.headers()["content-type"] ?? "";
-    const corpo = r.postDataBuffer();
-    if (/^image\//i.test(ct) || (corpo && (corpo.includes("data:image") || corpo.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))))) imagensEnviadas.push(`${r.method()} ${r.url()}`);
+  page.on("request", (q) => {
+    const ct = q.headers()["content-type"] ?? "";
+    const corpo = q.postDataBuffer();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const jpg = Buffer.from([0xff, 0xd8, 0xff]);
+    if (/^image\//i.test(ct) || (corpo && (corpo.includes("data:image") || corpo.subarray(0, 8).equals(png) || corpo.subarray(0, 3).equals(jpg)))) imagensEnviadas.push(`${q.method()} ${q.url()}`);
   });
-  const malhaId = await prepararFotoReal(page, [IMPLANTE_1, IMPLANTE_2]);
+  const malhaId = await prepararFotoReal(page, [IMPLANTE_1, IMPLANTE_2], "foto");
 
   // passo 1: erro contra o gabarito (torso sintético) com números, só em B
-  await expect(page.getByTestId("foto-erro-gabarito")).toContainText("RMS na região das mamas");
+  await expect(page.getByTestId("foto-erro-gabarito")).toContainText(/RMS na região das mamas: x \d+,\d mm · y \d+,\d mm · z \d+,\d mm/);
   await expect(page.getByTestId("foto-erro-gabarito")).toContainText("Volume");
+  await expect(page.getByTestId("foto-reconstrucao")).not.toContainText("só ilustração");
+  // a fita SSN–N entra como distância em linha reta (ADR 0021): o texto diz como medir
+  await expect(page.getByTestId("foto-escala")).toContainText("linha reta");
 
-  // a vista inicial é a foto real; a tira tem a foto e as 5 clínicas
+  // a vista inicial é a foto real; a tira tem as 3 fotos e as 5 clínicas
   const e0 = await estadoFotos(page);
   expect(e0).toMatchObject({ vista: VISTA, luzes: 0, preserveDrawingBuffer: false, envelope_visivel: true, pele_visivel: true, estado: "a" });
-  // halo = max(4,5; incerteza em z) = 12,4 mm (fixture: só a foto frontal)
-  expect(e0.envelope_mm).toBe(12.4);
-  expect((e0.selo as string[]).join(" ")).toContain("MODELO 3D ESTIMADO DE 1 FOTO");
-  expect((e0.selo as string[]).join(" ")).toContain("±12,4 mm");
+  expect(e0.envelope_mm).toBeCloseTo(halo, 6);
+  expect((e0.selo as string[]).join(" ")).toContain(`MODELO 3D ESTIMADO DE ${nFotos(n).toUpperCase()}`);
+  expect((e0.selo as string[]).join(" ")).toContain(`±${mm1(halo)} mm`);
+  for (const f of r.fotos) await expect(page.getByTestId(`foto-vista-real-${f.vista}`)).toBeVisible();
   await expect(page.getByTestId("foto-vista-real-frente")).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByTestId("foto-rotulo")).toContainText("A ·");
-  await expect(page.getByTestId("foto-legenda")).toContainText("±12,4 mm");
+  await expect(page.getByTestId("foto-legenda")).toContainText(`±${mm1(halo)} mm`);
 
   if (process.env.E2E_CAPTURA_DIR) await page.getByTestId("foto-comparador").screenshot({ path: `${process.env.E2E_CAPTURA_DIR}/foto-real-B-A.png` });
-  // cartão de incerteza por eixo, sempre visível; sem perfil, profundidade "só ilustração" e nenhum previsto
+  // cartão de incerteza por eixo, sempre visível; com perfil a profundidade tem número (não "só ilustração")
   const card = page.getByTestId("foto-incerteza");
   await expect(card).toBeVisible();
   await expect(card).toHaveAttribute("data-numeros", "1");
-  await expect(card).toContainText("modelo 3D estimado de 1 foto");
-  await expect(card).toContainText("Largura ±1,8 mm");
-  await expect(card).toContainText("Profundidade ±12,4 mm — só ilustração");
-  await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
-  await expect(page.getByTestId("foto-diferencas")).not.toContainText("Avanço do mamilo");
+  await expect(card).toContainText(`modelo 3D estimado de ${nFotos(n)}`);
+  await expect(card).toContainText(`Largura ±${mm1(r.incerteza_por_eixo_mm.x)} mm`);
+  await expect(card).toContainText(`Profundidade ±${mm1(z)} mm`);
+  await expect(card).not.toContainText("só ilustração");
 
-  // identidade: a foto guardada é, byte a byte, a foto decodificada de novo (sem selo)
-  const idt = await identidadeDaFoto(page, malhaId);
-  expect(idt).toMatchObject({ dif: 0, fotoLargura: 960, fotoAltura: 720 });
+  // identidade: a foto guardada é, byte a byte, a foto (JPEG do pipeline) decodificada de novo (sem selo)
+  const idt = await identidadeDaFoto(page, malhaId, frente.arquivo);
+  expect(idt).toMatchObject({ dif: 0, fotoLargura: frente.largura_px, fotoAltura: frente.altura_px });
   // antes (com selo) = A e B com peso 0, em outro plano/sulco também; o antes não passa pela GPU
   const renders0 = (await estadoFotos(page)).renders;
   const antes = await sha(page, VISTA, "antes");
@@ -203,14 +233,21 @@ test("foto real no desenho B: antes = a foto, edição só na região (também c
   await page.evaluate(() => (window as any).__simuladorSim.fotos.restaurarHalo());
   await expect(page.getByTestId("foto-erro")).toHaveCount(0);
 
-  // vistas clínicas do modelo reconstruído: hachura onde nenhuma foto viu (oblíqua e perfil)
-  await page.getByTestId("foto-vista-obliqua_dir").click();
+  // as outras fotos reais (oblíqua D e perfil D) também são a própria foto editada
+  for (const v of ["obliqua_dir", "perfil_dir"]) {
+    await page.getByTestId(`foto-vista-real-${v}`).click();
+    await esperarFotos(page);
+    expect((await estadoFotos(page)).vista).toBe(`foto:${v}`);
+  }
+
+  // vista clínica do lado que nenhuma foto viu (oblíqua E): hachura do não observado
+  await page.getByTestId("foto-vista-obliqua_esq").click();
   await esperarFotos(page);
   await expect(page.getByTestId("foto-legenda-nao-observado")).toBeVisible();
   await expect(page.getByTestId("foto-rotulo")).toContainText("A ·");
   if (process.env.E2E_CAPTURA_DIR) await page.getByTestId("foto-comparador").screenshot({ path: `${process.env.E2E_CAPTURA_DIR}/foto-real-B-obliqua.png` });
-  const hachura = await pixelsNaoObservado(page, "obliqua_dir");
-  console.log(`[fotoReal] pixels do não observado na oblíqua D: ${hachura}`);
+  const hachura = await pixelsNaoObservado(page, "obliqua_esq");
+  console.log(`[fotoReal] pixels do não observado na oblíqua E (3 fotos, nenhuma do lado E): ${hachura}`);
   expect(hachura).toBeGreaterThanOrEqual(200);
   expect(await pixelsNaoObservado(page, VISTA)).toBeLessThan(hachura / 10); // a foto real não tem hachura
 
@@ -219,11 +256,16 @@ test("foto real no desenho B: antes = a foto, edição só na região (também c
   await expect(page.getByTestId("foto-comparador").getByText(/compartilh|baixar imagem|download|exportar/i)).toHaveCount(0);
 });
 
-test("foto real no desenho A: a foto editada e a incerteza existem, sem nenhum número calculado", async ({ page }, info) => {
+test("foto real no desenho A (só a frontal): a foto editada e a incerteza existem, sem nenhum número calculado", async ({ page }, info) => {
   test.skip(info.project.name !== "desenho-A", "desenho A");
   test.setTimeout(6 * 60_000);
-  const malhaId = await prepararFotoReal(page, [IMPLANTE_1, IMPLANTE_2]);
+  const r = rec("foto_frente");
+  expect(r.fotos.map((f) => f.vista)).toEqual(["frente"]);
+  expect(r.incerteza_por_eixo_mm.z).toBeGreaterThanOrEqual(12); // sem perfil: piso de 12 mm (C1)
+  const halo = Math.max(ENVELOPE_MM, r.incerteza_por_eixo_mm.z);
+  const malhaId = await prepararFotoReal(page, [IMPLANTE_1, IMPLANTE_2], "foto_frente");
   await expect(page.getByTestId("foto-reconstrucao")).toBeVisible();
+  await expect(page.getByTestId("foto-reconstrucao")).toContainText("só ilustração");
   await expect(page.getByTestId("foto-erro-gabarito")).toHaveCount(0);
   const e0 = await estadoFotos(page);
   expect(e0).toMatchObject({ vista: VISTA, envelope_visivel: true, estado: "a" });
@@ -242,11 +284,20 @@ test("foto real no desenho A: a foto editada e a incerteza existem, sem nenhum n
   await expect(page.getByTestId("foto-diferencas")).toHaveCount(0);
   // a API também não entrega números em A (só câmeras e o halo)
   const api = await page.evaluate(async (id) => (await fetch(`/api/malhas/${id}/foto-real`)).json(), malhaId);
-  expect(api).toMatchObject({ numeros: null, erro_gabarito: null, halo_mm: 12.4, n_fotos: 1, profundidade_so_ilustracao: true });
-  // o reconstrucao.json (com números) não sai pela rota de arquivo
-  expect(await page.evaluate(async (id) => (await fetch(`/api/malhas/${id}/arquivo?nome=reconstrucao.json`)).status, malhaId)).toBe(400);
+  expect(api).toMatchObject({ numeros: null, erro_gabarito: null, n_fotos: 1, profundidade_so_ilustracao: true });
+  expect(api.halo_mm).toBeCloseTo(halo, 6);
+  // o reconstrucao.json (com números) e o avaliacao.json não saem pela rota de arquivo
+  for (const nome of ["reconstrucao.json", "avaliacao.json"])
+    expect(await page.evaluate(async ([id, n]) => (await fetch(`/api/malhas/${id}/arquivo?nome=${n}`)).status, [malhaId, nome] as const)).toBe(400);
   // a edição continua local também em A
   const l = await localidade(page, "a", "interativa");
   expect(l.foraDif).toBe(0);
   expect(l.regiaoDif).toBeGreaterThan(200);
+  // só a frontal: a oblíqua D reconstruída tem hachura onde a foto não viu
+  await page.getByTestId("foto-vista-obliqua_dir").click();
+  await esperarFotos(page);
+  await expect(page.getByTestId("foto-legenda-nao-observado")).toBeVisible();
+  const hachura = await pixelsNaoObservado(page, "obliqua_dir");
+  console.log(`[fotoReal] A, só frontal: pixels do não observado na oblíqua D: ${hachura}`);
+  expect(hachura).toBeGreaterThanOrEqual(200);
 });
