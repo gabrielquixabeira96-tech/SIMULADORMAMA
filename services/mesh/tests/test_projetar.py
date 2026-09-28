@@ -233,21 +233,35 @@ def test_fotos_do_registro_c1(tmp_path):
         fotos_do_registro(tmp_path, [{**c1[0], "arquivo": "textura.png"}])
 
 
+# Leitores/escritores de imagem permitidos em mesh/foto, por funcao (depois da integracao P1 + P2):
+# - P2 (projetar/preencher): so `projetar.ler_foto` (original/foto_<vista>.jpg da malha; criterio 6 do P2);
+# - P1: `reconstruir._carregar_foto`/`_carregar_mascara` (caminhos da requisicao resolvidos dentro de
+#   malha_dir por `caminhos.resolver`) e `sintetica.foto_sintetica` (a textura do torso SINTETICO e as fotos
+#   sinteticas que ele grava em fotos/).
+LEITORES_PERMITIDOS = {
+    ("projetar.py", "ler_foto"),
+    ("reconstruir.py", "_carregar_foto"),
+    ("reconstruir.py", "_carregar_mascara"),
+    ("sintetica.py", "foto_sintetica"),
+}
+
+
 def test_image_open_so_no_caminho_de_entrada():
-    """`git grep Image.open` em mesh/foto: so em `projetar.ler_foto` (original/foto_*.jpg da malha)."""
+    """`git grep Image.open|imread|.jpg` em mesh/foto: so nas funcoes de entrada conhecidas (lista acima)."""
     achados = []
     for arq in sorted((RAIZ_MESH / "foto").glob("*.py")):
+        funcao = None
         for n, linha in enumerate(arq.read_text(encoding="utf-8").splitlines(), 1):
+            m = re.match(r"def (\w+)\(", linha)
+            if m:
+                funcao = m.group(1)
             if re.search(r"Image\.open|imread|\.jpe?g[\"']", linha) and not linha.lstrip().startswith(("#", '"')):
-                achados.append(f"{arq.name}:{n}")
-    fonte = (RAIZ_MESH / "foto" / "projetar.py").read_text(encoding="utf-8")
-    inicio = fonte.index("def ler_foto")
-    fim = fonte.index("\ndef ", inicio + 1) if "\ndef " in fonte[inicio + 1:] else len(fonte)
-    linha_ini = fonte[:inicio].count("\n") + 1
-    linha_fim = fonte[:fim].count("\n") + 1
-    fora = [a for a in achados if not (a.startswith("projetar.py:") and linha_ini <= int(a.split(":")[1]) <= linha_fim)]
-    assert achados, "o leitor de foto sumiu?"
+                achados.append((arq.name, funcao, n))
+    assert any(a[:2] == ("projetar.py", "ler_foto") for a in achados), "o leitor de foto do P2 sumiu?"
+    fora = [f"{a}:{n} ({f})" for a, f, n in achados if (a, f) not in LEITORES_PERMITIDOS]
     assert fora == []
+    # o P2 (projecao + preenchimento) nao le imagem nenhuma fora de ler_foto
+    assert not [a for a in achados if a[0] in ("projetar.py", "preencher.py") and a[1] != "ler_foto"]
 
 
 def test_limiar_do_nao_observado():
