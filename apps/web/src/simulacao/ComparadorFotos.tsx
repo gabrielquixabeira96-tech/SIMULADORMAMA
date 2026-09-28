@@ -1,11 +1,24 @@
 "use client";
 
-import { IMFS, PLANOS, type Imf, type Landmarks, type Plano } from "@simulador/contratos";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from "react";
-import { ROTULOS_VISTAS_CLINICAS, VISTAS_CLINICAS, type VistaClinica } from "./cameraClinica";
+import { IMFS, PLANOS, type Imf, type Landmarks, type Plano, type VistaFoto } from "@simulador/contratos";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from "react";
+import type { FotoRealCliente } from "@/foto/cliente";
+import { linhasIncerteza } from "@/foto/publica";
+import { ROTULOS_VISTAS_CLINICAS, VISTAS_CLINICAS } from "./cameraClinica";
+import { encaixeDaFoto } from "./cameraDaFoto";
 import css from "./foto.module.css";
 import { linhasDoSelo, type ConfigSelo } from "./marcaDagua";
-import { FUNDO_ESTUDIO, LARGURA_INTERATIVA_LADO_MAX, RenderizadorFotos, type PedidoFoto, type QualidadeFoto } from "./RenderizadorFotos";
+import {
+  FUNDO_ESTUDIO,
+  LARGURA_INTERATIVA_LADO_MAX,
+  RenderizadorFotos,
+  ehVistaFotoReal,
+  vistaDaFotoReal,
+  type PedidoFoto,
+  type QualidadeFoto,
+  type VistaFotoReal,
+  type VistaRender,
+} from "./RenderizadorFotos";
 import type { ConjuntoMorph } from "./VisualizadorSimulacao";
 
 /**
@@ -15,6 +28,11 @@ import type { ConjuntoMorph } from "./VisualizadorSimulacao";
  * Cortina arrastável (teclado, toque, alvo de 44 px), "segurar para ver o antes", lado a lado,
  * tira das 5 vistas e modo apresentação. A incerteza está sempre na imagem (halo + linha + selo);
  * "margem completa" só acrescenta. Nada é baixado, exportado ou compartilhado.
+ *
+ * Malha reconstruída de fotos (plano "foto → 3D", P3-lite): a tira ganha a vista "Foto real" de
+ * cada foto (a primeira vira a vista inicial): "Antes" é a própria foto e A/B são a mesma foto
+ * editada, só na região que o implante move. Cartão "Incerteza por eixo" sempre visível (em A sem
+ * números); regiões que nenhuma foto viu ficam hachuradas nas vistas clínicas.
  */
 
 export type EstadoFoto = "antes" | "a" | "b";
@@ -44,6 +62,8 @@ interface Props {
   onMostradas?: (ids: string[], plano: Plano, imf: Imf) => void;
   /** estado escolhido e modo (para o "previsto" do estado único) */
   onSelecao?: (s: { estado: EstadoFoto; modo: ModoFoto }) => void;
+  /** malha reconstruída de fotos: fotos (câmera + imagem), observado e o resumo (incerteza) */
+  fotoReal?: FotoRealCliente | null;
 }
 
 const DURACAO_MORPH_MS = 700;
@@ -60,7 +80,7 @@ const virgula = (v: number) => String(v).replace(".", ",");
 interface Quadro {
   estado: EstadoFoto;
   modo: ModoFoto;
-  vista: VistaClinica;
+  vista: VistaRender;
   esquerda: EstadoFoto;
   segurando: boolean;
   plano: Plano;
@@ -90,9 +110,15 @@ export interface GanchoFotos {
   readonly versao: number;
   readonly quadros: number;
   readonly tamanho: { largura: number; altura: number };
-  renderizar(vista: VistaClinica, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): Promise<{ largura: number; altura: number; sha256: string }>;
-  imagem(vista: VistaClinica, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): { largura: number; altura: number; dados: Uint8ClampedArray };
-  mascaraRegiao(vista: VistaClinica, qualidade?: QualidadeFoto): Uint8Array;
+  renderizar(vista: VistaRender, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): Promise<{ largura: number; altura: number; sha256: string }>;
+  imagem(vista: VistaRender, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): { largura: number; altura: number; dados: Uint8ClampedArray };
+  mascaraRegiao(vista: VistaRender, qualidade?: QualidadeFoto): Uint8Array;
+  /** vistas da tira (fotos reais primeiro) */
+  vistas(): VistaRender[];
+  /** pixels da foto real no tamanho do quadro, SEM selo (identidade do "antes"; só testes) e o encaixe usado */
+  fotoBase(vista: VistaFotoReal): { largura: number; altura: number; dados: Uint8ClampedArray; encaixe: { x: number; y: number; largura: number; altura: number } };
+  /** erro de registro simulado (px da foto) nas câmeras das fotos reais; null desfaz */
+  perturbarPose(p: { dx: number; dy: number } | null): void;
   definirPeso(p: number): Record<string, unknown>;
   removerHalo(): void;
   restaurarHalo(): void;
@@ -139,7 +165,7 @@ function apagar(destino: HTMLCanvasElement | null | undefined): void {
 class Controlador {
   r: RenderizadorFotos | null = null;
   q: Quadro | null = null;
-  readonly telas: { principal?: HTMLCanvasElement | null; base?: HTMLCanvasElement | null; topo?: HTMLCanvasElement | null; lado: Partial<Record<EstadoFoto, HTMLCanvasElement | null>>; mini: Partial<Record<VistaClinica, HTMLCanvasElement | null>> } = {
+  readonly telas: { principal?: HTMLCanvasElement | null; base?: HTMLCanvasElement | null; topo?: HTMLCanvasElement | null; lado: Partial<Record<EstadoFoto, HTMLCanvasElement | null>>; mini: Partial<Record<VistaRender, HTMLCanvasElement | null>> } = {
     lado: {},
     mini: {},
   };
@@ -171,7 +197,7 @@ class Controlador {
       f = (c) => {
         const [grupo, k] = nome.split(":") as [string, string | undefined];
         if (grupo === "lado") this.telas.lado[k as EstadoFoto] = c;
-        else if (grupo === "mini") this.telas.mini[k as VistaClinica] = c;
+        else if (grupo === "mini") this.telas.mini[nome.slice(5) as VistaRender] = c;
         else this.telas[grupo as "principal" | "base" | "topo"] = c;
       };
       this.refsTela.set(nome, f);
@@ -214,7 +240,7 @@ class Controlador {
     return q.ids[LETRA[e]] ?? q.ids[0] ?? null;
   }
 
-  pedido(vista: VistaClinica, e: EstadoFoto, largura: number, altura: number, qualidade: QualidadeFoto = "interativa", compacto = largura < 560, q = this.q!): PedidoFoto {
+  pedido(vista: VistaRender, e: EstadoFoto, largura: number, altura: number, qualidade: QualidadeFoto = "interativa", compacto = largura < 560, q = this.q!): PedidoFoto {
     const lado = q.modo === "lado" && largura === q.larguraLado;
     return { vista, plano: q.plano, imf: q.imf, implanteId: this.id(e, q), largura, altura, qualidade, compacto, ...(lado ? { larguraInterativaMax: LARGURA_INTERATIVA_LADO_MAX } : {}) };
   }
@@ -398,11 +424,16 @@ class Controlador {
     }, ESPERA_REFINO_MS);
   }
 
+  /** Vistas da tira: as fotos reais (se houver) e as 5 clínicas. */
+  vistas(): VistaRender[] {
+    return [...(this.r?.vistasFotoReal() ?? []), ...VISTAS_CLINICAS];
+  }
+
   private agendarMiniaturas(): void {
     const q = this.q!;
     const g = this.geracao;
-    const faltam: VistaClinica[] = [];
-    for (const v of VISTAS_CLINICAS) {
+    const faltam: VistaRender[] = [];
+    for (const v of this.vistas()) {
       const p: PedidoFoto = { ...this.pedido(v, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true), papel: "tira" };
       const pronta = this.r!.emCache(p);
       if (pronta) pintar(this.telas.mini[v], pronta);
@@ -470,12 +501,24 @@ class Controlador {
   }
 }
 
+/** Vistas "Foto real" de uma reconstrução, na ordem das fotos. */
+const vistasReais = (f: FotoRealCliente | null | undefined): VistaFotoReal[] => (f ? f.entradas.map((e) => `foto:${e.vista}` as VistaFotoReal) : []);
+
 export function ComparadorFotos(props: Props) {
-  const { conjuntos, implantes, plano, imf, envelopeMm, landmarks, selo, instrumentar = false, onMostradas, onSelecao } = props;
+  const { conjuntos, implantes, plano, imf, envelopeMm, landmarks, selo, instrumentar = false, onMostradas, onSelecao, fotoReal = null } = props;
   const temB = implantes.length > 1;
+  const reais = useMemo(() => vistasReais(fotoReal), [fotoReal]);
   const [estadoEscolhido, setEstado] = useState<EstadoFoto>("antes");
   const [modo, setModo] = useState<ModoFoto>("foto");
-  const [vista, setVista] = useState<VistaClinica>("frente");
+  // com fotos reais, a primeira é a vista inicial ("Antes" = a própria foto)
+  const [vistaEscolhida, setVista] = useState<VistaRender>(() => reais[0] ?? "frente");
+  // nova reconstrução: volta para a primeira foto real (ajuste de estado durante o render)
+  const [reaisAnteriores, setReaisAnteriores] = useState(reais);
+  if (reaisAnteriores !== reais) {
+    setReaisAnteriores(reais);
+    setVista(reais[0] ?? "frente");
+  }
+  const vista: VistaRender = ehVistaFotoReal(vistaEscolhida) && !reais.includes(vistaEscolhida) ? (reais[0] ?? "frente") : vistaEscolhida;
   const [esquerdaEscolhida, setEsquerda] = useState<EstadoFoto>("antes");
   const [cortina, setCortina] = useState(50);
   const [segurando, setSegurando] = useState(false);
@@ -542,9 +585,9 @@ export function ComparadorFotos(props: Props) {
     ctrl.definirSelo(selo);
   }, [ctrl, selo]);
   useLayoutEffect(() => {
-    ctrl.criar({ conjuntos, envelopeMm, landmarks, selo: seloAtual.current });
+    ctrl.criar({ conjuntos, envelopeMm, landmarks, selo: seloAtual.current, fotoReal: fotoReal ? { fotos: fotoReal.entradas, observado: fotoReal.observado } : null });
     return () => ctrl.descartar();
-  }, [ctrl, conjuntos, envelopeMm, landmarks]);
+  }, [ctrl, conjuntos, envelopeMm, landmarks, fotoReal]);
 
   const ids = implantes.map((i) => i.id).join(",");
   // pinta de forma síncrona a cada mudança (dentro do próprio evento)
@@ -573,7 +616,7 @@ export function ComparadorFotos(props: Props) {
   useEffect(() => {
     const g = ganchoSim(instrumentar);
     if (!g) return;
-    const imagemDe = (v: VistaClinica, e: EstadoFoto, o: { qualidade?: QualidadeFoto; peso?: number } = {}) => {
+    const imagemDe = (v: VistaRender, e: EstadoFoto, o: { qualidade?: QualidadeFoto; peso?: number } = {}) => {
       const r = ctrl.r!;
       const q = ctrl.q!;
       const w = q.largura || 640;
@@ -636,6 +679,18 @@ export function ComparadorFotos(props: Props) {
         const q = ctrl.q!;
         const t = ctrl.r!.tamanhoPixels({ largura: q.largura || 640, altura: q.altura || 480, qualidade });
         return ctrl.r!.mascaraRegiao(v, q.plano, q.imf, q.ids, t.largura, t.altura);
+      },
+      vistas: () => ctrl.vistas(),
+      fotoBase(v) {
+        const q = ctrl.q!;
+        const t = ctrl.r!.tamanhoPixels({ largura: q.largura || 640, altura: q.altura || 480, qualidade: "interativa" });
+        const b = ctrl.r!.baseFoto(vistaDaFotoReal(v), t.largura, t.altura);
+        const f = ctrl.r!.tamanhoFotoReal(vistaDaFotoReal(v))!;
+        const e = encaixeDaFoto(f.largura, f.altura, t.largura, t.altura);
+        return { largura: b.width, altura: b.height, dados: new Uint8ClampedArray(b.data), encaixe: { x: e.x, y: e.y, largura: e.largura, altura: e.altura } };
+      },
+      perturbarPose(p) {
+        ctrl.r?.definirPerturbacao(p);
       },
       definirPeso(p) {
         const q = ctrl.q!;
@@ -736,8 +791,9 @@ export function ComparadorFotos(props: Props) {
     if (!e.repeat) setSegurando(v);
   };
 
+  const real = ehVistaFotoReal(vista);
   const rotulo = (e: EstadoFoto) => {
-    if (e === "antes") return "Antes (foto do scan)";
+    if (e === "antes") return real ? "Antes (a foto)" : fotoReal ? "Antes (modelo 3D estimado das fotos)" : "Antes (foto do scan)";
     const i = implantes[LETRA[e]] ?? implantes[0];
     return `${ROTULO_ESTADO[e]} · ${i?.rotulo ?? ""} · ${props.rotuloPlano} · ${props.rotuloImf}`;
   };
@@ -895,8 +951,33 @@ export function ComparadorFotos(props: Props) {
           limite da região simulada
         </span>
         <span>volume ±{Math.round(props.volumeFator * 100)} %</span>
+        {fotoReal?.observado && !real && (
+          <span data-testid="foto-legenda-nao-observado">
+            <span className={css.amostraNaoObservado} aria-hidden="true" />
+            listras cinza-azuladas: região que nenhuma foto viu
+          </span>
+        )}
         <strong>Ilustração geométrica, não previsão de resultado</strong>
       </div>
+
+      {fotoReal && (
+        <section className={css.incerteza} aria-label="Incerteza da reconstrução por eixo" data-testid="foto-incerteza" data-numeros={fotoReal.publica.numeros ? "1" : "0"}>
+          <strong>
+            Incerteza por eixo — modelo 3D estimado de {fotoReal.publica.n_fotos === 1 ? "1 foto" : `${fotoReal.publica.n_fotos} fotos`}
+          </strong>
+          <ul>
+            {linhasIncerteza(fotoReal.publica).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+          {fotoReal.publica.forma_fora_do_modelo && (
+            <p className={css.avisoForma} data-testid="foto-forma-fora-do-modelo">
+              A forma desta mama fica fora do que o modelo representa bem: a forma 3D é uma aproximação grosseira.
+            </p>
+          )}
+          <p className="nota">A foto é exata; a forma 3D atrás dela é uma estimativa. A faixa âmbar no contorno usa a maior incerteza (profundidade).</p>
+        </section>
+      )}
 
       {!apresentando && (
         <>
@@ -904,6 +985,14 @@ export function ComparadorFotos(props: Props) {
             <input type="checkbox" checked={margem} onChange={(e) => setMargem(e.target.checked)} data-testid="foto-margem-completa" /> Mostrar margem completa (pinta toda a região simulada)
           </label>
           <div className={css.tira} role="group" aria-label="Vistas do protocolo fotográfico">
+            {reais.map((v) => (
+              <button key={v} type="button" className={css.miniatura} aria-pressed={vista === v} onClick={() => setVista(v)} data-testid={`foto-vista-real-${vistaDaFotoReal(v)}`}>
+                <span className={css.miniaturaImg}>
+                  <canvas ref={ctrl.tela(`mini:${v}`)} aria-hidden="true" />
+                </span>
+                Foto real · {ROTULOS_VISTAS_CLINICAS[vistaDaFotoReal(v) as VistaFoto]}
+              </button>
+            ))}
             {VISTAS_CLINICAS.map((v) => (
               <button key={v} type="button" className={css.miniatura} aria-pressed={vista === v} onClick={() => setVista(v)} data-testid={`foto-vista-${v}`}>
                 <span className={css.miniaturaImg}>

@@ -256,6 +256,43 @@
   );
   outline: 1px solid rgba(217, 119, 6, 0.4);
 }
+/* não observado (malha reconstruída de fotos): as mesmas listras do shader (cinza-azulado, 2 px / 8 px) */
+.amostraNaoObservado {
+  display: inline-block;
+  width: 1.4rem;
+  height: 0.7rem;
+  margin-right: 0.35rem;
+  vertical-align: -0.05rem;
+  border-radius: 2px;
+  background: repeating-linear-gradient(-45deg, #4b5d78 0 2px, transparent 2px 8px);
+  outline: 1px solid var(--borda);
+}
+/* cartão "Incerteza por eixo" (sempre visível com foto real; em A sem números) */
+.incerteza {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d97706;
+  border-left-width: 4px;
+  border-radius: 6px;
+  background: #fffaf0;
+  color: var(--texto);
+  font-size: 0.85rem;
+}
+.incerteza ul {
+  margin: 0.25rem 0 0.25rem 1.1rem;
+  padding: 0;
+}
+.incerteza :global(.nota) {
+  margin: 0.2rem 0 0;
+}
+.avisoForma {
+  margin: 0.25rem 0;
+  font-weight: 700;
+  color: #9a3412;
+}
+.apresentacao .incerteza {
+  background: #2b2f36;
+  color: #e6e9ee;
+}
 .amostraLinha {
   display: inline-block;
   width: 1.4rem;

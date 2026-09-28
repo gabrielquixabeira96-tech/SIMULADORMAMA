@@ -14,6 +14,7 @@ import {
 import dynamic from "next/dynamic";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConfigPublica } from "@/config/publica";
+import { linhasErroGabarito, type FotoRealPublica } from "@/foto/publica";
 import { distanciaEuclidiana, distanciasEuclidianas } from "@/medidas/geometria";
 import type { MalhaCarregada } from "@/viewer/carregar";
 import type { CliqueNaMalha, Marcador } from "@/viewer/Visualizador";
@@ -47,6 +48,8 @@ interface TorsoSintetico {
   glb: boolean;
   obj: boolean;
   gabarito: boolean;
+  /** fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D") */
+  foto?: boolean;
 }
 
 /** Nome para o cirurgião dos torsos sintéticos conhecidos (o código continua no card, em cinza). */
@@ -86,6 +89,8 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   const [meshDisponivel, setMeshDisponivel] = useState<boolean | null>(null);
   const [sinteticos, setSinteticos] = useState<TorsoSintetico[]>([]);
   const [gabarito, setGabarito] = useState<Partial<Record<DistanciaId, { euclidiana_mm: number; geodesica_mm: number | null }>> | null>(null);
+  /** reconstrução por fotos importada no passo 1 (demo: "Foto de exemplo") — cartão de erro contra o gabarito */
+  const [fotoImportada, setFotoImportada] = useState<{ torso: string; foto: FotoRealPublica } | null>(null);
 
   const [unidade, setUnidade] = useState("desconhecida");
   const arquivosUpload = useRef<HTMLInputElement>(null);
@@ -241,6 +246,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     setProcessando(null);
     if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Envio falhou: ${await lerErro(r)}` });
     const j = await r.json();
+    setFotoImportada(null);
     setCalibrada(false);
     setLandmarksGabarito(null);
     setGabarito(null);
@@ -307,6 +313,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     setProcessando(null);
     if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Não foi possível preparar o torso: ${await lerErro(r)}` });
     const j = await r.json();
+    setFotoImportada(null);
     setCalibrada(true);
     setMsgEscala(null);
     setGabarito(recursos.medicao_automatica_3d ? (j.gabarito?.distancias ?? null) : null);
@@ -319,6 +326,40 @@ export function Consulta({ config }: { config: ConfigPublica }) {
       setMsgCaptura({
         tipo: "ok",
         texto: `Torso ${t.nome} processado ✓${j.gabarito_bloqueado ? " (pontos de referência bloqueados: há sessão de validação aberta com este torso)" : ""}`,
+        dados: { "data-malha-id": j.malha_id },
+      });
+  }
+
+  /**
+   * "Foto de exemplo" (plano "foto → 3D", P4-lite): a reconstrução 3D já preparada a partir das
+   * fotos sintéticas do torso entra pelo mesmo caminho de um torso sintético; os pontos do passo 2
+   * continuam os do gabarito (âncora), e o passo 3 mostra a própria foto sendo editada.
+   */
+  async function importarFoto(t: TorsoSintetico) {
+    const p = paciente ?? (await criarPaciente());
+    if (!p) return;
+    setCarregando(true);
+    setProcessando(`Preparando a reconstrução das fotos de ${NOMES_TORSOS[t.nome]?.titulo ?? t.nome}… (cerca de 15 s)`);
+    setMsgCaptura(null);
+    const r = await fetch(`/api/sinteticos/${t.nome}/importar-foto`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paciente_id: p.id }) });
+    setCarregando(false);
+    setProcessando(null);
+    if (!r.ok) return setMsgCaptura({ tipo: "erro", texto: `Não foi possível preparar a foto de exemplo: ${await lerErro(r)}` });
+    const j = await r.json();
+    setCalibrada(true);
+    setMsgEscala(null);
+    setGabarito(recursos.medicao_automatica_3d ? (j.gabarito?.distancias ?? null) : null);
+    setLandmarksGabarito(j.gabarito?.landmarks ?? null);
+    setFotoImportada(j.foto ? { torso: t.nome, foto: j.foto as FotoRealPublica } : null);
+    const { carregarGlb } = await import("@/viewer/carregar");
+    const ok = await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: true, versao: 1 }, () =>
+      carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
+    );
+    const n = (j.foto as FotoRealPublica | null)?.n_fotos ?? 0;
+    if (ok)
+      setMsgCaptura({
+        tipo: "ok",
+        texto: `Modelo 3D de ${t.nome} estimado de ${n === 1 ? "1 foto" : `${n} fotos`} ✓ — no passo 3, a própria foto é editada.`,
         dados: { "data-malha-id": j.malha_id },
       });
   }
@@ -538,6 +579,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
 
   const definicaoAtiva = DEFINICOES_LANDMARKS.find((d) => d.id === ativo)!;
   const importaveis = sinteticos.filter((t) => t.obj);
+  const comFoto = sinteticos.filter((t) => t.foto);
 
   return (
     <>
@@ -598,6 +640,24 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           </details>
         )}
 
+        {comFoto.length > 0 && (
+          <details className="torsos" open={fonte?.tipo !== "servidor"} data-testid="fotos-exemplo">
+            <summary>{fonte?.tipo === "servidor" ? "Trocar de foto de exemplo" : "Fotos de exemplo (modelo 3D estimado das fotos)"}</summary>
+            <p className="nota">Fotos sintéticas do torso, já reconstruídas em 3D: a simulação edita a própria foto.</p>
+            <div className="cards-torsos" role="list" aria-label="Fotos de exemplo">
+              {comFoto.map((t) => (
+                <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fotoImportada?.torso === t.nome ? "1" : "0"}>
+                  <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome} — foto de exemplo</div>
+                  <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
+                  <button type="button" onClick={() => void importarFoto(t)} disabled={carregando} data-testid={`importar-foto-${t.nome}`}>
+                    Usar a foto de exemplo
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
         {processando && (
           <div className="progresso" role="status" aria-live="polite">
             <progress aria-label="Processando" />
@@ -605,6 +665,24 @@ export function Consulta({ config }: { config: ConfigPublica }) {
           </div>
         )}
         <Mensagem msg={msgCaptura} testId="mensagem-captura" />
+        {fotoImportada && fonte?.tipo === "servidor" && (
+          <div className="cartao-reconstrucao" data-testid="foto-reconstrucao">
+            <p className="nota">
+              Modelo 3D estimado de {fotoImportada.foto.n_fotos === 1 ? "1 foto" : `${fotoImportada.foto.n_fotos} fotos`} sintéticas
+              {fotoImportada.foto.profundidade_so_ilustracao ? " (sem foto de perfil: a profundidade é só ilustração)" : ""}.
+            </p>
+            {fotoImportada.foto.erro_gabarito && (
+              <section aria-label="Erro contra o gabarito" data-testid="foto-erro-gabarito">
+                <strong>Erro contra o gabarito (torso sintético)</strong>
+                <ul>
+                  {linhasErroGabarito(fotoImportada.foto.erro_gabarito).map((l) => (
+                    <li key={l}>{l}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+        )}
 
 
         <details className="avancado" data-testid="avancado-captura">

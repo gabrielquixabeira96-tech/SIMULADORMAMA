@@ -193,6 +193,10 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .card-torso { background: var(--painel); border: 1px solid var(--borda); border-radius: 10px; padding: 0.5rem 0.7rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.1rem 0.6rem; }
 .card-torso > button { grid-row: 1 / span 2; grid-column: 2; }
 .card-torso[data-selecionado="1"] { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
+/* reconstrução por fotos importada (plano "foto → 3D"): resumo e, em B, o erro contra o gabarito */
+.cartao-reconstrucao { margin: 0.4rem 0; padding: 0.4rem 0.7rem; border: 1px solid var(--borda); border-radius: 8px; background: var(--painel); font-size: 0.9rem; }
+.cartao-reconstrucao ul { margin: 0.2rem 0 0 1.1rem; padding: 0; }
+.cartao-reconstrucao .nota { margin: 0 0 0.2rem; }
 .card-torso .nota { margin: 0; flex: 1; }
 .card-torso-titulo { font-weight: 700; }
 
