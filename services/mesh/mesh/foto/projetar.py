@@ -280,16 +280,11 @@ def mapa_profundidade(m: MalhaUV, camera: Camera, faces: np.ndarray | None = Non
 
 
 def _amostrar_bilinear(img: np.ndarray, u: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """img (H, W, C) float; (u, v) em px continuos (centro do pixel em +0,5). Borda: clamp."""
+    """img (H, W, C); (u, v) em px continuos (centro do pixel em +0,5). Bilinear, borda: clamp."""
     H, W = img.shape[:2]
-    x = np.clip(u - 0.5, 0.0, W - 1.0)
-    y = np.clip(v - 0.5, 0.0, H - 1.0)
-    x0 = np.minimum(np.floor(x).astype(np.int64), W - 2)
-    y0 = np.minimum(np.floor(y).astype(np.int64), H - 2)
-    fx, fy = (x - x0)[:, None], (y - y0)[:, None]
-    topo = img[y0, x0] * (1 - fx) + img[y0, x0 + 1] * fx
-    base = img[y0 + 1, x0] * (1 - fx) + img[y0 + 1, x0 + 1] * fx
-    return topo * (1 - fy) + base * fy
+    coords = np.stack([np.clip(v - 0.5, 0.0, H - 1.0), np.clip(u - 0.5, 0.0, W - 1.0)])
+    return np.stack([ndimage.map_coordinates(img[..., k], coords, order=1, mode="nearest")
+                     for k in range(img.shape[2])], axis=1)
 
 
 # ----------------------------------------------------------------------------- projecao
