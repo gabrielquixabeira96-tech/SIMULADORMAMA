@@ -15,7 +15,17 @@ cmd_venv() {
   echo "venv pronto em $DIR/.venv"
 }
 cmd_dev()    { [[ -x "$PY" ]] || cmd_venv; cd "$DIR" && DATA_DIR="${DATA_DIR:-$RAIZ/data}" "$PY" -m mesh.servidor --host 127.0.0.1 --port "$PORTA"; }
-cmd_torsos() { [[ -x "$PY" ]] || cmd_venv; cd "$DIR" && for p in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do "$PY" -m mesh.cli torso --preset "$p" --saida "${DATA_DIR:-$RAIZ/data}/sinteticos"; done; }
+# torsos: regera so o preset desatualizado (sem gabarito, sem `textura.esquema` — torsos da v0.1.x com a
+# textura neutra —, com parametros ou versao diferentes); MESH_TORSOS_FORCAR=1 regera todos. Regerar um
+# torso apaga os morphs/ dele (a CI e o demo_sandbox.sh os refazem quando faltam).
+cmd_torsos() {
+  [[ -x "$PY" ]] || cmd_venv
+  local se=(--se-desatualizado)
+  [[ "${MESH_TORSOS_FORCAR:-0}" == "1" ]] && se=()
+  cd "$DIR" && for p in t01_simetrico_300 t02_assimetrico t03_pequeno_ptose; do
+    "$PY" -m mesh.cli torso --preset "$p" --saida "${DATA_DIR:-$RAIZ/data}/sinteticos" "${se[@]}"
+  done
+}
 cmd_test()   { [[ -x "$PY" ]] || cmd_venv; cd "$DIR" && "$PY" -m ruff check . && "$PY" -m pytest -q; }
 
 case "${1:-}" in

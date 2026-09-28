@@ -27,9 +27,12 @@ def _alinhar(b: bytes, multiplo: int = 4, preenchimento: bytes = b"\x00") -> byt
 
 
 def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None,
-               alvos: list[dict] | None = None, normais: np.ndarray | None = None) -> bytes:
+               alvos: list[dict] | None = None, normais: np.ndarray | None = None,
+               imagem_png: bytes | None = None) -> bytes:
     """`alvos` (morph targets, contratos §10.3): itens {nome, indices (k,) crescente, dpos (k,3), dnorm (k,3)|None},
-    gravados como acessores **esparsos** (so os vertices com delta)."""
+    gravados como acessores **esparsos** (so os vertices com delta). `imagem_png`: os bytes PNG de
+    `malha.textura` ja codificados (os 4 .glb de morph embutem a mesma imagem; codifica-la uma vez so
+    poupa segundos com texturas de ~6 Mpx). Sem ele, a textura e codificada aqui."""
     V = malha.V.astype(np.float32)
     N = (normais if normais is not None else malha.normais()).astype(np.float32)
     idx = malha.F.astype(np.uint32).reshape(-1)
@@ -121,7 +124,7 @@ def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | No
         gltf["meshes"][0]["weights"] = [0.0] * len(targets)
         gltf["meshes"][0]["extras"] = {"targetNames": nomes}
     if tem_textura:
-        bv_img = adicionar(png_bytes(malha.textura), None)
+        bv_img = adicionar(imagem_png if imagem_png is not None else png_bytes(malha.textura), None)
         gltf["images"] = [{"bufferView": bv_img, "mimeType": "image/png"}]
         gltf["samplers"] = [{"magFilter": 9729, "minFilter": 9987, "wrapS": 10497, "wrapT": 33071}]
         gltf["textures"] = [{"source": 0, "sampler": 0}]
@@ -141,8 +144,9 @@ def montar_glb(malha: MalhaRender, quadro: str = "scan", extras_asset: dict | No
 
 
 def escrever_glb(caminho: Path, malha: MalhaRender, quadro: str = "scan", extras_asset: dict | None = None,
-                 alvos: list[dict] | None = None, normais: np.ndarray | None = None) -> None:
-    Path(caminho).write_bytes(montar_glb(malha, quadro, extras_asset, alvos, normais))
+                 alvos: list[dict] | None = None, normais: np.ndarray | None = None,
+                 imagem_png: bytes | None = None) -> None:
+    Path(caminho).write_bytes(montar_glb(malha, quadro, extras_asset, alvos, normais, imagem_png))
 
 
 def ler_json_glb(caminho: Path) -> dict:

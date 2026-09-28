@@ -2,7 +2,7 @@
 
   python -m mesh.cli torso --preset t01_simetrico_300 --saida data/sinteticos
   python -m mesh.cli torso --parametros p.json --saida data/sinteticos
-  python -m mesh.cli torso --todos --saida data/sinteticos
+  python -m mesh.cli torso --todos --saida data/sinteticos [--se-desatualizado]
   python -m mesh.cli morphs --todos --sinteticos data/sinteticos [--catalogo arq.json] [--implantes a,b]
   python -m mesh.cli validar --sinteticos data/sinteticos [--relatorio docs/validacao/<arquivo>.md]
 """
@@ -18,7 +18,7 @@ from mesh import esquemas
 
 
 def _cmd_torso(a: argparse.Namespace) -> int:
-    from mesh.sintetico.gerador import gerar_torso
+    from mesh.sintetico.gerador import gerar_torso, torso_atualizado
 
     presets = esquemas.presets_torso()
     if a.todos:
@@ -36,6 +36,10 @@ def _cmd_torso(a: argparse.Namespace) -> int:
     saida = Path(a.saida)
     saida.mkdir(parents=True, exist_ok=True)
     for p in lista:
+        if a.se_desatualizado and torso_atualizado(saida / p["nome"], p):
+            print(f"[ok] {p['nome']}: atualizado (textura {esquemas.completar_parametros(p)['textura']['realismo']}); "
+                  "nada a regerar")
+            continue
         g = gerar_torso(p, saida, escrever_densa=not a.sem_densa)
         d = g["distancias"]
         print(f"[ok] {g['nome']}: {g['malha']['decimada']['n_vertices']} vertices (decimada), "
@@ -102,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--todos", action="store_true")
     t.add_argument("--saida", default="data/sinteticos")
     t.add_argument("--sem-densa", action="store_true", help="nao grava denso.obj")
+    t.add_argument("--se-desatualizado", action="store_true",
+                   help="so regera se faltar arquivo, se o gabarito nao tiver textura.esquema (torsos da v0.1.x) "
+                        "ou se os parametros/versao mudaram")
     t.set_defaults(func=_cmd_torso)
     mo = sub.add_parser("morphs", help="pre-computa morph targets (contratos §10) de torsos sinteticos")
     gm = mo.add_mutually_exclusive_group()

@@ -47,12 +47,21 @@ def presets_torso() -> dict[str, dict]:
     return {p["nome"]: p for p in dado["presets"]}
 
 
+TEXTURA_PADRAO = {"realismo": "esquematico", "fototipo": "III", "px_por_mm": 4.0, "areola_mm": 40.0,
+                  "mamilo_mm": 10.0}
+
+
 def completar_parametros(p: dict) -> dict:
-    """Aplica os defaults do esquema torso_parametros/1.0 (altura, profundidade, resolucao)."""
+    """Aplica os defaults do esquema torso_parametros/1.0 (altura, profundidade, resolucao, textura).
+    Sem `textura`, o torso sai com a textura neutra do Marco 0 (`realismo: "esquematico"`), para que
+    parametros antigos gerem exatamente o que geravam; os presets pedem `"fotografico"` (ADR 0020)."""
     q = json.loads(json.dumps(p))
     q.setdefault("altura_torso_mm", 450)
     q.setdefault("profundidade_toracica_mm", 200)
     res = q.setdefault("resolucao", {})
     res.setdefault("densa_faces", 300000)
     res.setdefault("decimada_vertices", 40000)
+    tex = q.setdefault("textura", {})
+    for k, v in TEXTURA_PADRAO.items():
+        tex.setdefault(k, v)
     return q

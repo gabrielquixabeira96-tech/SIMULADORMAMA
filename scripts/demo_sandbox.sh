@@ -305,8 +305,9 @@ cmd_preparar() {
 
   msg "torsos sinteticos e morphs em $DATA_DIR_DEMO/sinteticos"
   for t in "${TORSOS[@]}"; do
-    [[ -f "$DATA_DIR_DEMO/sinteticos/$t/parametros.json" ]] \
-      || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli torso --preset "$t" --saida "$DATA_DIR_DEMO/sinteticos" >/dev/null )
+    # regera o torso que faltar ou que for da v0.1.x (gabarito sem textura.esquema: textura neutra, ADR 0020);
+    # regerar apaga os morphs/ dele, refeitos logo abaixo
+    ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli torso --preset "$t" --saida "$DATA_DIR_DEMO/sinteticos" --se-desatualizado >/dev/null )
     compgen -G "$DATA_DIR_DEMO/sinteticos/$t/morphs/*.glb" >/dev/null \
       || ( cd "$RAIZ/services/mesh" && "$VENV/bin/python" -m mesh.cli morphs --sintetico "$DATA_DIR_DEMO/sinteticos/$t" --catalogo tests/fixtures/catalogo_teste.json >/dev/null )
   done
