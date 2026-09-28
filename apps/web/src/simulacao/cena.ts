@@ -350,11 +350,25 @@ function geometriaCasca(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return c;
 }
 
+export interface OpcoesCena {
+  /**
+   * Acrescenta ao material da pele-foto (já criado, com a razão SH9 e a linha da incerteza) um
+   * efeito a mais — a textura projetiva da vista "Foto real" ou a hachura do não observado
+   * (`materialFotoReal.ts`). Não troca o material nem mexe no halo: a invariante do envelope fica igual.
+   */
+  decorarPele?: (m: THREE.MeshBasicMaterial) => void;
+}
+
 /**
  * @param malhaBase malha do .glb de morphs (com `morphTargetDictionary` vindo de `mesh.extras.targetNames`)
  * @param envelopeMm ±envelope_rms_mm de config/simulacao.json (obrigatório, > 0)
  */
-export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usarTarget: (nome: string) => boolean = (n) => !/__(dir|esq)$/.test(n)): CenaSimulada {
+export function criarCenaSimulada(
+  malhaBase: THREE.Mesh,
+  envelopeMm: number,
+  usarTarget: (nome: string) => boolean = (n) => !/__(dir|esq)$/.test(n),
+  opcoes: OpcoesCena = {},
+): CenaSimulada {
   if (!Number.isFinite(envelopeMm) || envelopeMm <= 0) throw new EnvelopeAusenteError(`envelope_rms_mm inválido: ${envelopeMm}`);
   const dicBase = malhaBase.morphTargetDictionary;
   const original = malhaBase.geometry as THREE.BufferGeometry;
@@ -371,6 +385,7 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
   // Pele-foto: a textura do .glb sem luz somada; o "depois" leva só a razão de sombreamento SH9.
   const orig = (Array.isArray(malhaBase.material) ? malhaBase.material[0]! : malhaBase.material) as THREE.MeshStandardMaterial;
   const matPele = criarMaterialPeleFoto(orig.map ?? null, { cor: orig.color?.clone() ?? new THREE.Color(orig.map ? 0xffffff : 0xd9b8a3), vertexColors: !!orig.vertexColors });
+  opcoes.decorarPele?.(matPele);
   const uniformsPele = matPele.userData.uniforms as UniformsPeleFoto;
   const pele = new THREE.Mesh(g, matPele);
   const gCasca = geometriaCasca(g);
