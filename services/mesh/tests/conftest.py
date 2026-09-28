@@ -11,6 +11,7 @@ import pytest
 
 from mesh import esquemas
 from mesh.malha.io import MalhaRender
+from tests.foto_render import cena_t01, reconstrucao_t01  # noqa: F401 (fixtures do P2: foto -> atlas)
 
 PRESETS = ("t01_simetrico_300", "t02_assimetrico", "t03_pequeno_ptose")
 
