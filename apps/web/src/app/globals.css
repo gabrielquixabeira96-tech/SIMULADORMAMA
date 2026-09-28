@@ -118,6 +118,8 @@ body {
 .coluna-viewer { position: sticky; top: calc(var(--altura-aviso) + var(--altura-passos) + 0.5rem); }
 @media (max-width: 1000px) { .coluna-viewer { position: static; } }
 .viewer { position: relative; height: min(46vh, 680px); border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; background: var(--fundo-viewer); }
+/* telas altas (desktop): viewer maior, cliques mais precisos; o iPad (820 px) fica em 46vh */
+@media (min-height: 1000px) { .viewer { height: min(66vh, 760px); } }
 .viewer-vazio { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--suave); padding: 1rem; text-align: center; }
 .caixa { font-variant-numeric: tabular-nums; margin: 0.4rem 0 0; }
 .rotulo-3d {
@@ -250,6 +252,10 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .tabela-tepid th.com-alerta { box-shadow: inset 0 -3px 0 var(--alerta); }
 .alerta-campo { color: var(--alerta); font-size: 0.75rem; font-weight: 700; }
 .pre-3d { color: var(--acento-forte); font-size: 0.72rem; }
+.alertas { flex: 1 1 14rem; align-self: center; }
+.alertas-lista { flex-basis: 100%; }
+.linha-form > .mensagem-local { order: 3; }
+.alertas .nota { margin: 0; }
 .alertas ul { margin: 0.2rem 0; padding-left: 1.1rem; }
 .alertas .alerta { color: var(--alerta); }
 .aviso-servico { color: var(--alerta); }

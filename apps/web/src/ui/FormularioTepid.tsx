@@ -145,35 +145,36 @@ export function FormularioTepid({ recursos, tepid, valores, onChange, onAvaliar,
             {avaliando ? "Validando…" : recursos.alertas_tepid ? "Validar e avaliar alertas" : "Validar medidas"}
           </button>
           {rodape}
+          {recursos.alertas_tepid && (
+            <div className={resultado && (resultado.alertas.length > 0 || resultado.referencias.length > 0) ? "alertas alertas-lista" : "alertas"} data-testid="tepid-alertas" aria-live="polite">
+              {!resultado && <span className="nota">Alertas TEPID / High Five (apoio, nunca decisão) aparecem ao validar.</span>}
+              {resultado && resultado.alertas.length === 0 && <p className="nota">Nenhum alerta pelos limiares configurados.</p>}
+              {resultado && resultado.alertas.length > 0 && (
+                <ul>
+                  {resultado.alertas.map((a) => (
+                    <li key={`${a.regra_id}-${a.lado}`} className="alerta">
+                      <strong>{a.lado === "dir" ? "D" : a.lado === "esq" ? "E" : ""}</strong> {a.alerta}
+                      {a.conferir_no_texto_original && <em> (conferir no texto original)</em>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {resultado && resultado.referencias.length > 0 && (
+                <details>
+                  <summary>Tabelas de referência (conferir no texto original)</summary>
+                  <ul>
+                    {resultado.referencias.map((r) => (
+                      <li key={`${r.tabela_id}-${r.lado}`}>
+                        {r.tabela_id} ({r.lado}): {r.valor_saida === null ? "fora da faixa da tabela" : `${r.valor_saida} ${r.saida.endsWith("_ml") ? "mL" : "mm"}`}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          )}
         </div>
       </form>
-      {recursos.alertas_tepid && (
-        <div className="alertas" data-testid="tepid-alertas" aria-live="polite">
-          {resultado && resultado.alertas.length === 0 && <p className="nota">Nenhum alerta pelos limiares configurados.</p>}
-          {resultado && resultado.alertas.length > 0 && (
-            <ul>
-              {resultado.alertas.map((a) => (
-                <li key={`${a.regra_id}-${a.lado}`} className="alerta">
-                  <strong>{a.lado === "dir" ? "D" : a.lado === "esq" ? "E" : ""}</strong> {a.alerta}
-                  {a.conferir_no_texto_original && <em> (conferir no texto original)</em>}
-                </li>
-              ))}
-            </ul>
-          )}
-          {resultado && resultado.referencias.length > 0 && (
-            <details>
-              <summary>Tabelas de referência (conferir no texto original)</summary>
-              <ul>
-                {resultado.referencias.map((r) => (
-                  <li key={`${r.tabela_id}-${r.lado}`}>
-                    {r.tabela_id} ({r.lado}): {r.valor_saida === null ? "fora da faixa da tabela" : `${r.valor_saida} ${r.saida.endsWith("_ml") ? "mL" : "mm"}`}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
     </section>
   );
 }

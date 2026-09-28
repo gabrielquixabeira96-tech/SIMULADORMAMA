@@ -103,6 +103,11 @@ const rotuloBotao = (id: LandmarkId) => {
  */
 export async function clicarPonto(page: Page, p: V3, vista: NomeVista, rng: () => number, jitterPx = 1): Promise<{ dx: number; dy: number }> {
   await escolherVista(page, vista);
+  const vw = await page.getByTestId("viewer").boundingBox();
+  if (!vw || vw.y < 0 || vw.y + vw.height > (page.viewportSize()?.height ?? Infinity)) {
+    await page.getByTestId("viewer").scrollIntoViewIfNeeded();
+    await doisQuadros(page);
+  }
   const proj = await projetar(page, p);
   const dx = (rng() * 2 - 1) * jitterPx;
   const dy = (rng() * 2 - 1) * jitterPx;

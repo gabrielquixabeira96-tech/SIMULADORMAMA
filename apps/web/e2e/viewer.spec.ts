@@ -22,6 +22,7 @@ test("GLB sintético em mm abre com escala correta e aceita clique de landmark",
   // o canvas nasce 300×150 e só depois o R3F o redimensiona: a caixa é medida a cada tentativa.
   // câmera olha de +Z para o centro da caixa; um pouco abaixo e à esquerda do centro da tela
   // o raio atinge a face inclinada x+y+z=100 do tetraedro (longe das arestas)
+  await page.getByTestId("viewer").scrollIntoViewIfNeeded(); // o viewer fica no passo 2
   await expect(async () => {
     const box = (await canvas.boundingBox())!;
     expect(box.width).toBeGreaterThan(300);

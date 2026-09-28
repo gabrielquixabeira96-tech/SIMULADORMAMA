@@ -715,9 +715,10 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                   )}
                   {pontosRegua.length !== 2 && <span className="nota">Marque os 2 extremos da régua para aplicar.</span>}
                 </div>
-                <Mensagem msg={msgEscala} testId="mensagem-escala" />
               </details>
             )}
+            {/* fora do <details>: continua visível depois que a escala fecha o bloco */}
+            <Mensagem msg={msgEscala} testId="mensagem-escala" />
             {!recursos.medicao_automatica_3d && <p className="nota">Os pontos servem só para posicionar a simulação; nenhuma distância é calculada a partir do 3D.</p>}
             <p className="instrucao-ativa" aria-live="polite">
               {!carregada
