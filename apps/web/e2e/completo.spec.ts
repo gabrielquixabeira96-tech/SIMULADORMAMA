@@ -150,7 +150,7 @@ async function fluxoAteOPdf(page: Page, desenho: "A" | "B") {
   await page.getByRole("button", { name: "Gravar registro de medidas" }).click();
   const gravado = page.getByRole("status").filter({ hasText: "Registro de medidas gravado" });
   await expect(gravado).toBeVisible({ timeout: 120_000 });
-  const medidaId = (await gravado.innerText()).match(/\(([0-9a-f-]{36})\)/)![1]!;
+  const medidaId = (await gravado.getAttribute("data-medida-id"))!; // P3: sem UUID visível, id no atributo
   const registro = await (await page.request.get(`/api/medidas/${medidaId}`)).json();
   expect(registro.desenho).toBe(desenho);
   const malhaId: string = registro.malha_id;

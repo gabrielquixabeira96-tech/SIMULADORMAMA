@@ -21,6 +21,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { TORSOS } from "./fixtures";
 import {
   LANDMARKS,
+  abrirAvancado,
   caixaObj,
   clicarLandmark,
   dataDirE2E,
@@ -85,6 +86,7 @@ test("Marcos 0 e 1: escala contra o gabarito e Bland-Altman de cliques com jitte
 
     // ---------------- Marco 0a: GLB do gerador aberto direto no viewer (sem escala na carga)
     await test.step(`${torso}: GLB do gerador, caixa na tela`, async () => {
+      await abrirAvancado(page);
       await page.getByRole("button", { name: torso, exact: true }).click();
       await expect(page.getByTestId("caixa-mm")).toContainText("GLB");
       await expect.poll(async () => Math.max(...(await dimensoesNaTela(page)).map((d, i) => Math.abs(d - esperado[i]!)))).toBeLessThanOrEqual(0.06);
@@ -108,7 +110,7 @@ test("Marcos 0 e 1: escala contra o gabarito e Bland-Altman de cliques com jitte
         erros[id] = e;
         erroMax = Math.max(erroMax, Math.abs(e.euclidiana), Math.abs(e.geodesica));
         // a tabela da UI mostra a euclidiana calculada NO CLIENTE (1 casa) = a conferida pelo serviço
-        const celula = await page.getByTestId(`distancia-${id}`).locator("td").nth(1).innerText();
+        const celula = (await page.getByTestId(`distancia-${id}`).locator("td").nth(1).textContent()) ?? ""; // tabela em "Detalhes"
         expect(Math.abs(Number(celula.replace(",", ".")) - m.euclidiana_mm)).toBeLessThanOrEqual(0.051);
       }
       expect(erroMax, JSON.stringify(erros)).toBeLessThanOrEqual(1);
@@ -127,7 +129,7 @@ test("Marcos 0 e 1: escala contra o gabarito e Bland-Altman de cliques com jitte
         mmPorPx.push((await projetar(page, gab.landmarks[id].posicao)).mm_por_px);
       }
       for (let rep = 0; rep < REPETICOES; rep++) {
-        await page.getByRole("button", { name: "Limpar landmarks" }).click();
+        await page.getByRole("button", { name: "Limpar pontos" }).click();
         const rng = prng(1000 * (TORSOS.indexOf(torso) + 1) + rep);
         for (const id of LANDMARKS) await clicarLandmark(page, id, gab.landmarks[id].posicao, vistasUsadas[torso]![id]!, rng, JITTER_PX);
         const med = await medirNoServico(page);

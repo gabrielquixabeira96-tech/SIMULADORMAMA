@@ -1,4 +1,5 @@
 import { expect, request as novoRequest, test } from "@playwright/test";
+import { abrirAvancado } from "./apoio";
 
 /**
  * Revisão v0.1.1 contra o servidor REAL (next start):
@@ -32,6 +33,7 @@ test("R3F e Next funcionam sob a CSP: viewer abre GLB e OBJ sem violação", asy
     if (m.type() === "error" && /Content Security Policy|Refused to/i.test(m.text())) erros.push(m.text());
   });
   await page.goto("/");
+  await abrirAvancado(page);
   await page.getByRole("button", { name: "e2e_tetra_mm" }).click();
   await expect(page.getByTestId("caixa-mm")).toContainText("100,0 × 100,0 × 100,0 mm");
   await expect(page.getByTestId("viewer").locator("canvas")).toBeVisible();

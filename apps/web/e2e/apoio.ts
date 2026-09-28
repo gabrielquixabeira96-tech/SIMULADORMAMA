@@ -32,9 +32,9 @@ export function caixaObj(caminho: string): { min: V3; max: V3 } {
   return { min, max };
 }
 
-/** "Caixa envolvente: 330,2 × 450,0 × 251,3 mm" → [330.2, 450, 251.3] */
+/** "Caixa envolvente: 330,2 × 450,0 × 251,3 mm" → [330.2, 450, 251.3] (texto em "Avançado", lido mesmo recolhido) */
 export async function dimensoesNaTela(page: Page): Promise<V3> {
-  const t = (await page.getByTestId("caixa-mm").innerText()).replace(/\./g, "");
+  const t = ((await page.getByTestId("caixa-mm").textContent()) ?? "").replace(/\./g, "");
   const m = t.match(/([\d,]+) × ([\d,]+) × ([\d,]+) mm/);
   if (!m) throw new Error(`caixa não encontrada em: ${t}`);
   return [m[1], m[2], m[3]].map((s) => Number(s!.replace(",", "."))) as V3;
@@ -111,26 +111,38 @@ export async function clicarLandmark(page: Page, id: LandmarkId, p: V3, vista: N
   const guia = page.getByTestId("landmarks-guia");
   await guia.getByRole("button", { name: rotuloBotao(id), exact: true }).click();
   await clicarPonto(page, p, vista, rng, jitterPx);
-  await expect(guia.locator("li", { has: page.getByRole("button", { name: rotuloBotao(id), exact: true }) })).toContainText(/✓ v\d+/);
+  await expect(guia.locator("li", { has: page.getByRole("button", { name: rotuloBotao(id), exact: true }) })).toContainText("✓");
 }
 
 export const LANDMARKS: readonly LandmarkId[] = LANDMARK_IDS;
 
 export async function novoAtendimento(page: Page): Promise<string> {
-  await page.getByRole("button", { name: /Novo atendimento/ }).click();
+  await page.getByRole("button", { name: /Nova simulação|Novo atendimento/ }).click();
   const ps = page.getByTestId("pseudonimo");
   await expect(ps).toHaveText(/^P-[0-9A-HJ-NP-Z]{6}$/);
   return ps.innerText();
 }
 
+/**
+ * "Usar este torso" (passo 1) → status "Torso <nome> processado". O id da malha não aparece na tela
+ * (sem UUID visível): vem do atributo `data-malha-id` da mensagem. A marcação de pontos já fica
+ * ativa no passo 2 (o botão "Marcar pontos" é conferido, não clicado).
+ */
 export async function importarTorso(page: Page, torso: string): Promise<string> {
   await page.getByTestId(`importar-${torso}`).click();
   const msg = page.getByRole("status").filter({ hasText: `Torso ${torso} processado` });
   await expect(msg).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByTestId("caixa-mm")).toBeVisible();
-  const malhaId = (await msg.innerText()).match(/malha ([0-9a-f-]{36})/)![1]!;
-  await page.getByRole("button", { name: "Landmarks", exact: true }).click();
+  await expect(page.getByTestId("caixa-mm")).toHaveCount(1);
+  const malhaId = (await msg.getAttribute("data-malha-id"))!;
+  expect(malhaId).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(page.getByRole("button", { name: "Marcar pontos", exact: true })).toHaveAttribute("aria-pressed", "true");
   return malhaId;
+}
+
+/** Abre o bloco "Avançado" do passo 1 (pré-visualização, dados técnicos), se ainda fechado. */
+export async function abrirAvancado(page: Page) {
+  const det = page.getByTestId("avancado-captura");
+  if (!(await det.evaluate((d) => (d as HTMLDetailsElement).open))) await det.locator("summary").click();
 }
 
 export async function medirNoServico(page: Page): Promise<any> {
