@@ -648,15 +648,15 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 <div className="cards-torsos" role="list" aria-label="Fotos de exemplo">
                   {comFoto.map((t) => (
                     <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fotoImportada?.torso === t.nome ? "1" : "0"}>
-                      <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome} — foto de exemplo</div>
+                      <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome}</div>
                       <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
                       <div className="card-torso-acoes">
                         <button type="button" onClick={() => void importarFoto(t)} disabled={carregando} data-testid={`importar-foto-${t.nome}`}>
-                          Usar as 3 fotos (frente, oblíqua, perfil)
+                          3 fotos (frente, oblíqua, perfil)
                         </button>
                         {t.foto_frente && (
                           <button type="button" className="secundario" onClick={() => void importarFoto(t, "foto_frente")} disabled={carregando} data-testid={`importar-foto-${t.nome}-frente`}>
-                            Só a foto de frente
+                            Só a frente
                           </button>
                         )}
                       </div>
@@ -694,6 +694,9 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                     <li key={l}>{l}</li>
                   ))}
                 </ul>
+                <p className="nota" data-testid="foto-erro-caso-ideal">
+                  Caso ideal: pontos e contorno exatos, torso da mesma família do modelo. Em fotos reais espere erros de alguns mm (profundidade maior sem o perfil).
+                </p>
               </section>
             )}
           </div>

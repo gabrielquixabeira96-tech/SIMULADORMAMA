@@ -120,7 +120,11 @@ export function textoEscala(metodo: string | null): string | null {
 }
 
 const mm1 = (v: number) => v.toFixed(1).replace(".", ",");
-const pct0 = (v: number) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(0)} %`;
+/** % inteiro com sinal; o que arredonda para 0 sai "0 %" (nunca "−0 %"). */
+const pct0 = (v: number) => {
+  const r = Math.sign(v) * Math.round(Math.abs(v)); // meio para longe do zero, como toFixed
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r)} %`;
+};
 
 /** Linhas do cartão "Incerteza por eixo" (B com números; A qualitativo, sem nenhum dígito). */
 export function linhasIncerteza(f: FotoRealPublica): string[] {

@@ -58,6 +58,9 @@ describe("resumo da reconstrução para o navegador", () => {
     expect(textoEscala(f.escala_metodo)).toMatch(/linha reta/);
     expect(textoEscala(f.escala_metodo)).not.toMatch(/\d/);
     expect(textoEscala(null)).toBeNull();
+    // arredondado a 0 sai "0 %", nunca "−0 %"
+    expect(linhasErroGabarito({ ...f.erro_gabarito!, volume_erro_pct: { dir: -1.5, esq: -0.02 } })[1]).toBe("Volume: −2 % D / 0 % E");
+    expect(linhasErroGabarito({ ...f.erro_gabarito!, volume_erro_pct: 0.4 })[1]).toBe("Volume: 0 %");
     expect(linhasIncerteza(f).join(" · ")).toBe("Largura ±1,8 mm · altura ±2,1 mm · Profundidade ±12,4 mm — só ilustração (sem foto de perfil) · Volume ±30 %");
     expect(linhasErroGabarito(f.erro_gabarito!)).toEqual([
       "RMS na região das mamas: x 1,2 mm · y 1,4 mm · z 9,8 mm",

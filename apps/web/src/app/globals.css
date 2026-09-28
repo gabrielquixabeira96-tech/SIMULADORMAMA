@@ -191,8 +191,9 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .paciente-atual { margin: 0.25rem 0 0.5rem; font-size: 1rem; }
 .cards-torsos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem; margin: 0.5rem 0; }
 .card-torso { background: var(--painel); border: 1px solid var(--borda); border-radius: 10px; padding: 0.5rem 0.7rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.1rem 0.6rem; }
-.card-torso > button, .card-torso > .card-torso-acoes { grid-row: 1 / span 2; grid-column: 2; }
-.card-torso-acoes { display: flex; flex-direction: column; gap: 0.3rem; }
+.card-torso > button { grid-row: 1 / span 2; grid-column: 2; }
+/* "Fotos de exemplo": título e descrição na largura toda, botões numa linha abaixo (quebram se faltar espaço) */
+.card-torso > .card-torso-acoes { grid-column: 1 / -1; grid-row: auto; display: flex; flex-wrap: wrap; gap: 0.3rem 0.5rem; margin-top: 0.3rem; }
 .card-torso[data-selecionado="1"] { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
 /* reconstrução por fotos importada (plano "foto → 3D"): resumo e, em B, o erro contra o gabarito */
 .cartao-reconstrucao { margin: 0.4rem 0; padding: 0.4rem 0.7rem; border: 1px solid var(--borda); border-radius: 8px; background: var(--painel); font-size: 0.9rem; }

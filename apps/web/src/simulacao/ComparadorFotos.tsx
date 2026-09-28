@@ -990,7 +990,7 @@ export function ComparadorFotos(props: Props) {
                 <span className={css.miniaturaImg}>
                   <canvas ref={ctrl.tela(`mini:${v}`)} aria-hidden="true" />
                 </span>
-                Foto real · {ROTULOS_VISTAS_CLINICAS[vistaDaFotoReal(v) as VistaFoto]}
+                <span className={css.miniaturaRotulo}>Foto real · {ROTULOS_VISTAS_CLINICAS[vistaDaFotoReal(v) as VistaFoto]}</span>
               </button>
             ))}
             {VISTAS_CLINICAS.map((v) => (
@@ -998,7 +998,7 @@ export function ComparadorFotos(props: Props) {
                 <span className={css.miniaturaImg}>
                   <canvas ref={ctrl.tela(`mini:${v}`)} aria-hidden="true" />
                 </span>
-                {ROTULOS_VISTAS_CLINICAS[v]}
+                <span className={css.miniaturaRotulo}>{ROTULOS_VISTAS_CLINICAS[v]}</span>
               </button>
             ))}
           </div>

@@ -328,6 +328,13 @@
   font-weight: 600;
   box-shadow: none;
 }
+/* rótulo inteiro na tira ("Foto real · Oblíqua D"): quebra em 2 linhas em vez de cortar */
+.miniaturaRotulo {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.15;
+  text-align: center;
+}
 .miniatura[aria-pressed="true"] {
   border-color: var(--acento);
   box-shadow: 0 0 0 2px var(--acento);
