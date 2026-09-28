@@ -213,9 +213,18 @@ export class RenderizadorFotos {
     for (const k of [...this.cache.keys()]) if (!k.includes("|antes|")) this.cache.delete(k);
   }
 
+  /** Hash curto (FNV-1a) das linhas do selo em vigor (cheia e compacta). */
+  private hashSelo(): string {
+    const t = [...linhasDoSelo(this.selo), ...linhasDoSelo(this.selo, { compacto: true })].join("\n");
+    let h = 0x811c9dc5;
+    for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 0x01000193);
+    return (h >>> 0).toString(36);
+  }
+
   chave(p: PedidoFoto): string {
     const depois = p.implanteId !== null;
-    return [p.vista, depois ? p.implanteId : "antes", depois ? `${p.plano}__${p.imf}` : "-", `${p.largura}x${p.altura}`, p.qualidade, p.compacto ? "c" : "n", depois && this.margem ? "m" : "-"].join("|");
+    // papel (foto/tira) e as linhas do selo entram na chave: selo diferente = imagem diferente
+    return [p.vista, depois ? p.implanteId : "antes", depois ? `${p.plano}__${p.imf}` : "-", `${p.largura}x${p.altura}`, p.qualidade, p.compacto ? "c" : "n", depois && this.margem ? "m" : "-", p.papel ?? "foto", this.hashSelo()].join("|");
   }
 
   /** Foto em cache (ou null). */
@@ -351,7 +360,7 @@ export class RenderizadorFotos {
     for (let y = 0; y < h; y++) img.data.set(px.subarray((h - 1 - y) * linha, (h - y) * linha), y * linha);
     ctx.putImageData(img, 0, 0);
     const t3 = performance.now();
-    desenharSelo(ctx, w, h, linhasDoSelo(this.selo, { compacto: p.compacto }), escala);
+    desenharSelo(ctx, w, h, linhasDoSelo(this.selo, { compacto: p.compacto }), escala, linhasDoSelo(this.selo, { compacto: true }));
     this.ultimoTempo = { preparo: t1 - t0, gpu: t2 - t1, copia: t3 - t2, selo: performance.now() - t3, largura: w, altura: h };
   }
 

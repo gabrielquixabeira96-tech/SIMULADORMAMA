@@ -128,6 +128,38 @@ async function ambarESelo(page: Page, vista: Vista, estado: string) {
   );
 }
 
+/**
+ * Selo × foto: em cada canvas 2D visível (seletor), a faixa do selo (linhas de baixo com ≥ 25 % dos
+ * pixels na cor #1c2128) existe e deixa ≥ 60 % da altura (= dos pixels) da foto fora dela.
+ */
+async function faixasDoSelo(page: Page, seletor: string): Promise<Array<{ largura: number; altura: number; linhasFaixa: number; fora: number }>> {
+  return page.evaluate((sel) => {
+    return [...document.querySelectorAll(sel)].map((el) => {
+      const c = el as HTMLCanvasElement;
+      const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+      let linhas = 0;
+      for (let y = c.height - 1; y >= 0; y--) {
+        let n = 0;
+        for (let x = 0; x < c.width; x++) {
+          const i = 4 * (y * c.width + x);
+          if (Math.abs(d[i]! - 0x1c) + Math.abs(d[i + 1]! - 0x21) + Math.abs(d[i + 2]! - 0x28) < 6) n++;
+        }
+        if (n < 0.25 * c.width) break;
+        linhas++;
+      }
+      return { largura: c.width, altura: c.height, linhasFaixa: linhas, fora: 1 - linhas / c.height };
+    });
+  }, seletor);
+}
+
+function conferirFaixas(rot: string, fs: Awaited<ReturnType<typeof faixasDoSelo>>, n: number) {
+  expect(fs, rot).toHaveLength(n);
+  for (const f of fs) {
+    expect(f.linhasFaixa, `${rot}: selo presente (${JSON.stringify(f)})`).toBeGreaterThan(0);
+    expect(f.fora, `${rot}: ≥ 60 % da foto fora da faixa do selo (${JSON.stringify(f)})`).toBeGreaterThanOrEqual(0.6);
+  }
+}
+
 test("modo foto no desenho B: antes idêntico, edição local, resposta ao volume, incerteza e selo nos pixels", async ({ page }, info) => {
   test.skip(info.project.name !== "desenho-B", "roda uma vez (B)");
   test.setTimeout(10 * 60_000);
@@ -306,6 +338,28 @@ test("modo foto: cortina, segurar, lado a lado, vistas, apresentação com selo 
   await page.getByTestId("foto-modo-lado").click();
   await esperarFotos(page);
   for (const e of ["antes", "a", "b"]) await expect(page.getByTestId(`foto-lado-${e}`).locator("canvas")).toBeVisible();
+  // o selo nunca toma a foto: em todo "depois" (lado a lado, foto única e miniaturas), ≥ 60 % da
+  // imagem fica fora da faixa, também no iPad (1180 px, quadros de ~370 px)
+  for (const tela of [{ width: 1180, height: 820 }, { width: 1600, height: 1000 }]) {
+    await page.setViewportSize(tela);
+    await esperarFotos(page);
+    const fs = await faixasDoSelo(page, '[data-testid="foto-lado-a"] canvas, [data-testid="foto-lado-b"] canvas');
+    console.log(`[foto] lado a lado ${tela.width}: ${JSON.stringify(fs)}`);
+    conferirFaixas(`lado a lado ${tela.width}`, fs, 2);
+  }
+  await page.getByTestId("foto-modo-foto").click();
+  await esperarFotos(page);
+  for (const e of ["a", "b"]) {
+    const v = await versaoFotos(page);
+    const mudou = (await estadoFotos(page)).estado !== e;
+    await page.getByTestId(`foto-estado-${e}`).click();
+    await esperarFotos(page, mudou ? { estado: e, versaoMaiorQue: v } : { estado: e });
+    const fs = await faixasDoSelo(page, '[data-testid="foto-principal"] canvas, [data-testid^="foto-vista-"] canvas');
+    console.log(`[foto] foto ${e} + miniaturas: ${JSON.stringify(fs.map((f) => +f.fora.toFixed(3)))}`);
+    conferirFaixas(`foto ${e} + miniaturas`, fs, 6);
+  }
+  await page.getByTestId("foto-modo-lado").click();
+  await esperarFotos(page);
 
   // modo apresentação: selo nos pixels e aviso dentro do quadro
   await page.getByTestId("foto-modo-foto").click();

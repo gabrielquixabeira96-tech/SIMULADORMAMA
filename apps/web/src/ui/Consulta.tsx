@@ -557,7 +557,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
             </p>
           )}
         </div>
-        <Inicio paciente={paciente} onNovo={() => void criarPaciente()} onRetomar={setPaciente} ocupado={carregando} />
+        <Inicio paciente={paciente} onNovo={() => void criarPaciente()} onRetomar={setPaciente} ocupado={carregando} demo={config.demo} />
 
         {config.demo ? null : (
           <form onSubmit={enviarMalha} className="linha-form envio-scan">

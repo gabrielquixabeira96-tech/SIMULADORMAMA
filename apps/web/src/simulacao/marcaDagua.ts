@@ -18,10 +18,16 @@ export const FONTE_MIN_PX = 16;
 
 const mm = (v: number) => String(v).replace(".", ",");
 
-/** Linhas do selo (puro). `compacto` = miniaturas. Nunca promete resultado. */
+/** Fração máxima da altura da imagem que a faixa do selo pode ocupar (a foto continua a ser vista). */
+export const FRACAO_MAX_FAIXA = 0.3;
+
+/**
+ * Linhas do selo (puro). `compacto` = miniaturas e fotos estreitas: o aviso em UMA linha
+ * ("ILUSTRAÇÃO — NÃO É PREVISÃO · ±4,5 mm") e, na demo, a linha da demonstração. Nunca promete resultado.
+ */
 export function linhasDoSelo(c: ConfigSelo, opts: { compacto?: boolean } = {}): string[] {
   if (opts.compacto) {
-    const l = ["ILUSTRAÇÃO — NÃO É PREVISÃO", `não calibrado · faixa ±${mm(c.envelopeMm)} mm`];
+    const l = [`ILUSTRAÇÃO — NÃO É PREVISÃO · ±${mm(c.envelopeMm)} mm`];
     if (c.demo) l.push("DEMONSTRAÇÃO — TORSO SINTÉTICO");
     return l;
   }
@@ -80,11 +86,12 @@ export function quebrarLinha(ctx: Pick<Contexto2D, "measureText">, texto: string
 }
 
 /**
- * Desenha a marca diagonal (8 %) e a faixa do selo na parte de baixo. Devolve a altura da faixa.
+ * Desenha a marca diagonal (8 %) e a faixa do selo na parte de baixo. Devolve a altura da faixa
+ * (≤ FRACAO_MAX_FAIXA da altura sempre que a primeira linha couber nela).
  * A faixa é desenhada por último, por cima de tudo. `escala` = pixels da imagem por px de
  * referência (CSS): o quadro interativo reduzido e o final em dpr 2 saem com o mesmo desenho.
  */
-export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, linhas: readonly string[], escala = 1): { alturaFaixa: number; fontePx: number } {
+export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, linhas: readonly string[], escala = 1, reserva?: readonly string[]): { alturaFaixa: number; fontePx: number } {
   const fonte = tamanhoFonteSelo(largura, escala);
   const pad = Math.round(fonte * 0.6);
   const familia = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -108,16 +115,25 @@ export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, l
   }
   ctx.restore();
 
-  // faixa inferior sólida com o texto
+  // faixa inferior sólida com o texto, no máximo FRACAO_MAX_FAIXA da altura: se as linhas quebradas
+  // não couberem, usa a versão abreviada (`reserva`, 1 linha + demo) e, no limite, só as primeiras
+  // linhas que cabem — nunca menos que a primeira (o aviso não some).
   ctx.save();
-  ctx.font = `600 ${fonte}px ${familia}`;
-  const quebradas: Array<{ t: string; forte: boolean }> = [];
-  linhas.forEach((l, i) => {
-    ctx.font = `${i === 0 ? 700 : 500} ${fonte}px ${familia}`;
-    for (const q of quebrarLinha(ctx, l, largura - 2 * pad)) quebradas.push({ t: q, forte: i === 0 });
-  });
   const entre = Math.round(fonte * 1.3);
-  const alturaFaixa = Math.min(altura, quebradas.length * entre + 2 * pad - (entre - fonte));
+  const quebrar = (ls: readonly string[]) => {
+    const q: Array<{ t: string; forte: boolean }> = [];
+    ls.forEach((l, i) => {
+      ctx.font = `${i === 0 ? 700 : 500} ${fonte}px ${familia}`;
+      for (const x of quebrarLinha(ctx, l, largura - 2 * pad)) q.push({ t: x, forte: i === 0 });
+    });
+    return q;
+  };
+  const alturaDe = (n: number) => n * entre + 2 * pad - (entre - fonte);
+  const limite = altura * FRACAO_MAX_FAIXA;
+  let quebradas = quebrar(linhas);
+  if (alturaDe(quebradas.length) > limite && reserva) quebradas = quebrar(reserva);
+  while (quebradas.length > 1 && alturaDe(quebradas.length) > limite) quebradas.pop();
+  const alturaFaixa = Math.min(altura, alturaDe(quebradas.length));
   ctx.globalAlpha = 1;
   ctx.fillStyle = COR_FAIXA_SELO;
   ctx.fillRect(0, altura - alturaFaixa, largura, alturaFaixa);

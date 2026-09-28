@@ -19,7 +19,7 @@ const dataCurta = (iso?: string) => {
  * de atendimentos recentes (só pseudônimo e data, via GET /api/pacientes, buscada quando aberta).
  * O vínculo com a identidade fica no prontuário, fora deste sistema.
  */
-export function Inicio({ paciente, onNovo, onRetomar, ocupado }: { paciente: PacienteResumo | null; onNovo: () => void; onRetomar: (p: PacienteResumo) => void; ocupado: boolean }) {
+export function Inicio({ paciente, onNovo, onRetomar, ocupado, demo = false }: { paciente: PacienteResumo | null; onNovo: () => void; onRetomar: (p: PacienteResumo) => void; ocupado: boolean; demo?: boolean }) {
   const [recentes, setRecentes] = useState<PacienteResumo[] | null>(null);
   const [erro, setErro] = useState(false);
 
@@ -49,24 +49,27 @@ export function Inicio({ paciente, onNovo, onRetomar, ocupado }: { paciente: Pac
       <button type="button" className="primario" onClick={onNovo} disabled={ocupado} data-testid="nova-simulacao">
         Nova simulação
       </button>
-      <details className="recentes" onToggle={(e) => (e.currentTarget.open ? void carregarRecentes() : undefined)}>
-        <summary>Retomar atendimento recente</summary>
-        {erro && <p className="erro">Não foi possível listar os atendimentos.</p>}
-        {!erro && !recentes && <p className="nota">Carregando…</p>}
-        {recentes && recentes.length === 0 && <p className="nota">Nenhum atendimento ainda.</p>}
-        {recentes && recentes.length > 0 && (
-          <ul className="lista-recentes">
-            {recentes.map((p) => (
-              <li key={p.id}>
-                <button type="button" className="secundario" onClick={() => onRetomar(p)}>
-                  {p.pseudonimo}
-                  <span className="nota"> {dataCurta(p.criado_em)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </details>
+      {/* na demonstração (ADR 0018) não há atendimento a retomar: cada visita começa do zero */}
+      {!demo && (
+        <details className="recentes" onToggle={(e) => (e.currentTarget.open ? void carregarRecentes() : undefined)}>
+          <summary>Retomar atendimento recente</summary>
+          {erro && <p className="erro">Não foi possível listar os atendimentos.</p>}
+          {!erro && !recentes && <p className="nota">Carregando…</p>}
+          {recentes && recentes.length === 0 && <p className="nota">Nenhum atendimento ainda.</p>}
+          {recentes && recentes.length > 0 && (
+            <ul className="lista-recentes">
+              {recentes.map((p) => (
+                <li key={p.id}>
+                  <button type="button" className="secundario" onClick={() => onRetomar(p)}>
+                    {p.pseudonimo}
+                    <span className="nota"> {dataCurta(p.criado_em)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
+      )}
     </div>
   );
 }

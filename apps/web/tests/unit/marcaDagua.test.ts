@@ -11,6 +11,7 @@ import {
   FONTE_MIN_PX,
   contrasteWcag,
   desenharSelo,
+  FRACAO_MAX_FAIXA,
   linhasDoSelo,
   quebrarLinha,
   type Contexto2D,
@@ -84,7 +85,7 @@ describe("selo nos pixels", () => {
       expect(faixa[0]!.estado.globalAlpha).toBe(1);
       expect(faixa[0]!.args).toEqual([0, h - r.alturaFaixa, w, r.alturaFaixa]);
       const textosFaixa = chamadas.filter((c) => c.op === "fillText" && c.estado.globalAlpha === 1);
-      expect(textosFaixa.length).toBeGreaterThanOrEqual(3);
+      expect(textosFaixa.length).toBeGreaterThanOrEqual(w < 400 ? 2 : 3); // compacto: aviso em 1 linha + demo
       for (const t of textosFaixa) {
         expect(t.estado.fillStyle).toBe(COR_TEXTO_SELO);
         expect(Number(/(\d+)px/.exec(t.estado.font)![1])).toBeGreaterThanOrEqual(FONTE_MIN_PX);
@@ -94,8 +95,28 @@ describe("selo nos pixels", () => {
       }
       // o texto da faixa, junto, é o selo inteiro (nada cortado)
       expect(textosFaixa.map((t) => t.args[0]).join(" ")).toContain("NÃO É PREVISÃO");
-      expect(r.alturaFaixa).toBeLessThan(h * 0.35);
+      expect(r.alturaFaixa).toBeLessThanOrEqual(h * FRACAO_MAX_FAIXA);
     }
+  });
+
+  it("a faixa nunca passa de 30 % da altura: foto estreita abrevia para a versão compacta, e o aviso nunca some", () => {
+    for (const [w, h] of [
+      [370, 277],
+      [300, 225],
+      [240, 180],
+      [160, 120],
+    ] as const) {
+      const { ctx, chamadas } = contextoFalso();
+      const cfg = { ...base, demo: true };
+      const r = desenharSelo(ctx, w, h, linhasDoSelo(cfg), 1, linhasDoSelo(cfg, { compacto: true }));
+      expect(r.alturaFaixa, `${w}x${h}`).toBeLessThanOrEqual(h * FRACAO_MAX_FAIXA);
+      const textos = chamadas.filter((c) => c.op === "fillText" && c.estado.globalAlpha === 1).map((c) => c.args[0] as string);
+      expect(textos.length, `${w}x${h}`).toBeGreaterThanOrEqual(1);
+      expect(textos.join(" "), `${w}x${h}`).toMatch(/ILUSTRAÇÃO/);
+      for (const t of chamadas.filter((c) => c.op === "fillText" && c.estado.globalAlpha === 1)) expect(Number(/(\d+)px/.exec(t.estado.font)![1])).toBeGreaterThanOrEqual(FONTE_MIN_PX);
+    }
+    // compacto: o aviso numa linha só
+    expect(linhasDoSelo(base, { compacto: true })).toEqual(["ILUSTRAÇÃO — NÃO É PREVISÃO · ±4,5 mm"]);
   });
 
   it("escala: o quadro interativo reduzido e o final em dpr 2 têm o mesmo desenho relativo (≥ 16 px de referência)", () => {

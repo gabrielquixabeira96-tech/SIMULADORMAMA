@@ -81,8 +81,7 @@
     grid-column: 2;
     margin-bottom: 0.5rem;
   }
-  .lateralizado > .palco,
-  .lateralizado > .ladoALado {
+  .lateralizado > .palco {
     grid-column: 1;
     grid-row: 1 / -1;
   }
@@ -115,6 +114,11 @@
     padding-left: 0.7rem;
     padding-right: 0.7rem;
   }
+}
+
+/* Lado a lado: controles em cima e as 3 fotos na largura toda (sem a coluna lateral). */
+.ladoCheio {
+  max-width: 1240px;
 }
 
 /* ---------------------------------------------------------------- palco (foto grande) */

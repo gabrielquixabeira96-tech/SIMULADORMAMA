@@ -81,9 +81,8 @@ body {
   margin: 0.1rem -1rem 0.5rem;
   padding: 0.3rem 1rem;
   min-height: var(--altura-passos);
-  background: rgba(246, 247, 249, 0.96);
+  background: #f6f7f9; /* opaco: o conteúdo rolado não aparece por trás da barra */
   border-bottom: 1px solid var(--borda);
-  backdrop-filter: blur(4px);
 }
 .passos-lista { display: flex; gap: 0.35rem; list-style: none; margin: 0; padding: 0; }
 .passo {
