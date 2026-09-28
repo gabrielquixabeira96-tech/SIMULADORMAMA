@@ -59,40 +59,40 @@ export function FormularioTepid({ recursos, tepid, valores, onChange, onAvaliar,
   const pre = recursos.medicao_automatica_3d ? (basePreenchida ?? null) : null;
   const preenchidoPelo3D = (campo: CampoDigitado, lado: "dir" | "esq") => campo === "base_mm" && !!pre?.[lado] && pre[lado] === valores[campo][lado];
   const alertasDe = (campo: string) => (recursos.alertas_tepid ? (resultado?.alertas ?? []).filter((a) => a.campo === campo) : []);
+  const campos = CAMPOS_DIGITADOS.flatMap((campo) => {
+    const def = tepid.campos[campo];
+    return def ? [{ campo, def, alertas: alertasDe(campo) }] : [];
+  });
   return (
     <section className="painel painel-tepid" data-testid="tepid-form" aria-labelledby="titulo-tepid">
-      <h3 id="titulo-tepid">Medidas da consulta (TEPID, mm)</h3>
-      <p className="nota nota-conferir" data-testid="tepid-nota">
-        Limiares {tepid.status === "nao_conferido" ? "NÃO conferidos" : "conferidos"}: conferir no texto original.
-      </p>
-      <details className="fonte-tepid">
-        <summary>Fonte dos limiares</summary>
-        <p className="nota">
-          <code>config/tepid.json</code> (versão {tepid.versao}): {tepid.nota}
+      <div className="tepid-cabecalho">
+        <h3 id="titulo-tepid">Medidas da consulta (TEPID, mm)</h3>
+        <p className="nota nota-conferir" data-testid="tepid-nota">
+          Limiares {tepid.status === "nao_conferido" ? "NÃO conferidos" : "conferidos"}: conferir no texto original.
         </p>
-      </details>
+        <details className="fonte-tepid">
+          <summary>Fonte dos limiares</summary>
+          <p className="nota">
+            <code>config/tepid.json</code> (versão {tepid.versao}): {tepid.nota}
+          </p>
+        </details>
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onAvaliar();
         }}
       >
-        <table className="tabela tabela-tepid">
-          <thead>
-            <tr>
-              <th>Medida</th>
-              <th>D</th>
-              <th>E</th>
-            </tr>
-          </thead>
-          <tbody>
-            {CAMPOS_DIGITADOS.map((campo) => {
-              const def = tepid.campos[campo];
-              if (!def) return null;
-              const alertas = alertasDe(campo);
-              return (
-                <tr key={campo} className={alertas.length > 0 ? "com-alerta" : undefined}>
-                  <td>
+        {/* grade compacta: uma coluna por medida, linhas D e E (cabe numa faixa no iPad) */}
+        <div className="grade-tepid-rolagem">
+          <table className="tabela tabela-tepid">
+            <thead>
+              <tr>
+                <th scope="col">
+                  <span className="sr-only">Lado</span>
+                </th>
+                {campos.map(({ campo, def, alertas }) => (
+                  <th key={campo} scope="col" className={alertas.length > 0 ? "com-alerta" : undefined}>
                     <label htmlFor={`tepid-${campo}-dir`}>{def.rotulo}</label>
                     <span className="faixa">
                       {" "}
@@ -100,12 +100,19 @@ export function FormularioTepid({ recursos, tepid, valores, onChange, onAvaliar,
                     </span>
                     {alertas.length > 0 && (
                       <div className="alerta-campo" aria-hidden="true">
-                        ⚠ {alertas.map((a) => (a.lado === "dir" ? "D" : a.lado === "esq" ? "E" : "")).join(" ")}
+                        ⚠ {alertas.map((al) => (al.lado === "dir" ? "D" : al.lado === "esq" ? "E" : "")).join(" ")}
                       </div>
                     )}
-                  </td>
-                  {(["dir", "esq"] as const).map((lado) => (
-                    <td key={lado}>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(["dir", "esq"] as const).map((lado) => (
+                <tr key={lado}>
+                  <th scope="row">{lado === "dir" ? "D" : "E"}</th>
+                  {campos.map(({ campo, def }) => (
+                    <td key={campo}>
                       <input
                         id={`tepid-${campo}-${lado}`}
                         data-testid={`tepid-${campo}-${lado}`}
@@ -129,10 +136,10 @@ export function FormularioTepid({ recursos, tepid, valores, onChange, onAvaliar,
                     </td>
                   ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="linha-form">
           <button type="submit" className="secundario" disabled={avaliando}>
             {avaliando ? "Validando…" : recursos.alertas_tepid ? "Validar e avaliar alertas" : "Validar medidas"}
@@ -142,7 +149,6 @@ export function FormularioTepid({ recursos, tepid, valores, onChange, onAvaliar,
       </form>
       {recursos.alertas_tepid && (
         <div className="alertas" data-testid="tepid-alertas" aria-live="polite">
-          {!resultado && <p className="nota">Alertas TEPID / High Five (apoio, nunca decisão): preencha e valide.</p>}
           {resultado && resultado.alertas.length === 0 && <p className="nota">Nenhum alerta pelos limiares configurados.</p>}
           {resultado && resultado.alertas.length > 0 && (
             <ul>

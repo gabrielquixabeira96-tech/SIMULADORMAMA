@@ -249,7 +249,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
     const ok = await abrir({ tipo: "servidor", malhaId: j.malha_id, pseudonimo: j.pseudonimo, sintetica: false, versao: 1 }, () =>
       carregarGlb(`/api/malhas/${j.malha_id}/arquivo?nome=processada.glb&v=1`),
     );
-    if (ok) setMsgCaptura({ tipo: "ok", texto: "Malha processada ✓ — ajuste a escala pela régua (abaixo) antes de marcar os pontos.", dados: { "data-malha-id": j.malha_id } });
+    if (ok) setMsgCaptura({ tipo: "ok", texto: "Malha processada ✓ — no passo 2, ajuste a escala pela régua antes de marcar os pontos.", dados: { "data-malha-id": j.malha_id } });
   }
 
   async function abrirLocal() {
@@ -501,29 +501,28 @@ export function Consulta({ config }: { config: ConfigPublica }) {
         : null;
 
   // ---------------------------------------------------------------- passos
-  const capturaOk = fonte?.tipo === "servidor" && podeMarcar;
   const passos: PassoInfo[] = [
     {
       n: 1,
       titulo: "Captura",
-      feito: capturaOk,
+      feito: fonte?.tipo === "servidor",
       motivo: !paciente
         ? "Comece com “Nova simulação”."
         : fonte?.tipo !== "servidor"
           ? config.demo
             ? "Escolha um torso e toque em “Usar este torso”."
             : "Envie o scan (ou use um torso sintético) para continuar."
-          : !podeMarcar
-            ? "Ajuste a escala pela régua (ou prossiga sem régua) para continuar."
-            : null,
+          : null,
     },
     {
       n: 2,
       titulo: "Medidas",
       feito: todosLandmarks && (!recursos.medicao_automatica_3d || estadoMedicao === "ok"),
-      motivo: !capturaOk
+      motivo: fonte?.tipo !== "servidor"
         ? "Conclua o passo 1."
-        : !todosLandmarks
+        : !podeMarcar
+          ? "Ajuste a escala pela régua (ou prossiga sem régua)."
+          : !todosLandmarks
           ? `Marque os 10 pontos (faltam ${faltam}).`
           : recursos.medicao_automatica_3d && estadoMedicao !== "ok"
             ? "Toque em “Medir” para ver as medidas."
@@ -538,95 +537,157 @@ export function Consulta({ config }: { config: ConfigPublica }) {
   return (
     <>
       <Passos passos={passos} />
-      <div className="consulta">
-        <div className="coluna-viewer">
-          <div className="viewer" data-testid="viewer">
-            {carregada || carregando ? (
-              <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={linhaRegua} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicarEstavel} />
-            ) : (
-              <div className="viewer-vazio">{config.demo ? "Escolha um torso sintético no passo 1." : "Envie o scan (ou use um torso sintético) no passo 1."}</div>
-            )}
-          </div>
-          <div className="ferramentas" role="toolbar" aria-label="Vista da câmera">
-            {NOMES_VISTAS.map((v) => (
-              <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
-                {VISTAS[v].rotulo}
-              </button>
-            ))}
-          </div>
-          <div className="ferramentas" role="toolbar" aria-label="Ferramenta de toque">
-            <button type="button" className="secundario" aria-pressed={ferramenta === "navegar"} disabled={!carregada} onClick={() => setFerramenta("navegar")}>
-              Girar/zoom
-            </button>
-            {escaneada && (
-              <button type="button" className="secundario" aria-pressed={ferramenta === "regua"} disabled={!carregada} onClick={() => setFerramenta("regua")}>
-                Régua (2 pontos)
-              </button>
-            )}
-            <button type="button" className="secundario" aria-pressed={ferramenta === "landmarks"} disabled={!carregada || !podeMarcar} onClick={() => setFerramenta("landmarks")}>
-              Marcar pontos
-            </button>
-          </div>
+      {/* ------------------------------------------------ passo 1: captura */}
+      <section className="passo-secao" data-passo="1" aria-labelledby="titulo-passo-1">
+        <div className="passo-cabecalho">
+          <h2 id="titulo-passo-1">
+            <span className="passo-num" aria-hidden="true">
+              1
+            </span>{" "}
+            Captura
+          </h2>
+          {config.demo && (
+            <p className="nota" data-testid="upload-desligado-demo">
+              Demonstração: só torsos sintéticos (envio de scan desligado).
+            </p>
+          )}
         </div>
+        <Inicio paciente={paciente} onNovo={() => void criarPaciente()} onRetomar={setPaciente} ocupado={carregando} />
 
-        <div className="coluna-passos">
-          {/* ------------------------------------------------ passo 1: captura */}
-          <section className="passo-secao" data-passo="1" aria-labelledby="titulo-passo-1">
-            <h2 id="titulo-passo-1">
-              <span className="passo-num" aria-hidden="true">
-                1
-              </span>{" "}
-              Captura
-            </h2>
-            <Inicio paciente={paciente} onNovo={() => void criarPaciente()} onRetomar={setPaciente} ocupado={carregando} />
+        {config.demo ? null : (
+          <form onSubmit={enviarMalha} className="linha-form envio-scan">
+            <label>
+              Scan (ZIP do 3D Scanner App, OBJ + MTL + imagem, ou PLY)
+              <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
+            </label>
+            <label>
+              Unidade do arquivo
+              <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
+                <option value="desconhecida">detectar</option>
+                <option value="m">metros (3D Scanner App)</option>
+                <option value="cm">centímetros</option>
+                <option value="mm">milímetros</option>
+              </select>
+            </label>
+            <button type="submit" disabled={!paciente || carregando}>
+              Enviar e processar
+            </button>
+          </form>
+        )}
 
-            {config.demo ? (
-              <p className="nota" data-testid="upload-desligado-demo">
-                Demonstração: só torsos sintéticos (envio de scan desligado).
-              </p>
-            ) : (
-              <form onSubmit={enviarMalha} className="linha-form envio-scan">
-                <label>
-                  Scan (ZIP do 3D Scanner App, OBJ + MTL + imagem, ou PLY)
-                  <input ref={arquivosUpload} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply,.zip" disabled={!paciente} data-testid="upload-arquivos" />
-                </label>
-                <label>
-                  Unidade do arquivo
-                  <select value={unidade} onChange={(e) => setUnidade(e.target.value)}>
-                    <option value="desconhecida">detectar</option>
-                    <option value="m">metros (3D Scanner App)</option>
-                    <option value="cm">centímetros</option>
-                    <option value="mm">milímetros</option>
-                  </select>
-                </label>
-                <button type="submit" disabled={!paciente || carregando}>
-                  Enviar e processar
+        {importaveis.length > 0 && (
+          // depois da captura os cards recolhem (a página fica curta); abrem de novo para trocar de torso
+          <details className="torsos" open={fonte?.tipo !== "servidor"} data-testid="torsos-sinteticos">
+            <summary>{fonte?.tipo === "servidor" ? "Trocar de torso sintético" : "Torsos sintéticos"}</summary>
+            <div className="cards-torsos" role="list" aria-label="Torsos sintéticos">
+              {importaveis.map((t) => (
+                <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fonte?.tipo === "servidor" && fonte.sintetica && msgCaptura?.texto.includes(t.nome) ? "1" : "0"}>
+                  <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome}</div>
+                  <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
+                  <button type="button" onClick={() => void importarSintetico(t)} disabled={carregando} data-testid={`importar-${t.nome}`}>
+                    Usar este torso
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
+        {processando && (
+          <div className="progresso" role="status" aria-live="polite">
+            <progress aria-label="Processando" />
+            <span>{processando}</span>
+          </div>
+        )}
+        <Mensagem msg={msgCaptura} testId="mensagem-captura" />
+
+
+        <details className="avancado" data-testid="avancado-captura">
+          <summary>Avançado</summary>
+          <p className="status-mesh" data-testid="status-mesh">
+            Serviço de malha: {meshDisponivel === null ? "verificando…" : meshDisponivel ? "disponível" : "aguardando serviço de malha"}
+          </p>
+          {carregada && dims && (
+            <p className="caixa" data-testid="caixa-mm">
+              Caixa envolvente: {fmt1(dims.x)} × {fmt1(dims.y)} × {fmt1(dims.z)} mm (X × Y × Z) · {carregada.nVertices.toLocaleString("pt-BR")} vértices · {carregada.origem.toUpperCase()}
+              {carregada.quadro ? ` · quadro ${carregada.quadro}` : ""}
+            </p>
+          )}
+          <p className="nota">+Y cranial, +Z anterior, +X lado esquerdo da paciente. Escala em mm, sem ajuste na carga.</p>
+          {fonte?.tipo === "servidor" && <p className="nota">Malha {fonte.malhaId} (versão {fonte.versao}).</p>}
+          {sinteticos.length > 0 && (
+            <div className="linha-form">
+              <span>Pré-visualizar sem gravar:</span>
+              {sinteticos.map((t) => (
+                <button key={t.nome} type="button" className="secundario" onClick={() => void abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)} title="Pré-visualizar o GLB do gerador (não grava)">
+                  {t.nome}
                 </button>
-              </form>
-            )}
+              ))}
+            </div>
+          )}
+          {!config.demo && (
+            <div className="linha-form">
+              <label>
+                Pré-visualizar arquivo local (sem enviar; não grava medidas)
+                <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
+              </label>
+              <button type="button" className="secundario" onClick={abrirLocal} disabled={carregando}>
+                Abrir no viewer
+              </button>
+            </div>
+          )}
+        </details>
+      </section>
 
-            {importaveis.length > 0 && (
-              <div className="cards-torsos" role="list" aria-label="Torsos sintéticos">
-                {importaveis.map((t) => (
-                  <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fonte?.tipo === "servidor" && fonte.sintetica && msgCaptura?.texto.includes(t.nome) ? "1" : "0"}>
-                    <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome}</div>
-                    <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
-                    <button type="button" onClick={() => void importarSintetico(t)} disabled={carregando} data-testid={`importar-${t.nome}`}>
-                      Usar este torso
+      {/* ------------------------------------------------ passo 2: medidas */}
+      <section className="passo-secao" data-passo="2" aria-labelledby="titulo-passo-2">
+        <h2 id="titulo-passo-2">
+          <span className="passo-num" aria-hidden="true">
+            2
+          </span>{" "}
+          Medidas
+        </h2>
+        <div className="consulta">
+          <div className="coluna-viewer">
+            <div className="viewer" data-testid="viewer">
+              {carregada || carregando ? (
+                <Visualizador carregada={carregada} marcadores={marcadores} linhaRegua={linhaRegua} clicavel={ferramenta !== "navegar"} vista={vista} onClique={aoClicarEstavel} />
+              ) : (
+                <div className="viewer-vazio">{config.demo ? "Escolha um torso sintético no passo 1." : "Envie o scan (ou use um torso sintético) no passo 1."}</div>
+              )}
+            </div>
+            <div className="ferramentas" role="toolbar" aria-label="Vista da câmera">
+              {NOMES_VISTAS.slice(0, 5).map((v) => (
+                <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
+                  {VISTAS[v].rotulo}
+                </button>
+              ))}
+              <details className="mais-vistas" data-testid="mais-vistas">
+                <summary>Mais vistas</summary>
+                <div className="ferramentas">
+                  {NOMES_VISTAS.slice(5).map((v) => (
+                    <button key={v} type="button" className="secundario" aria-pressed={vista === v} disabled={!carregada} onClick={() => setVista(v)} data-testid={`vista-${v}`}>
+                      {VISTAS[v].rotulo}
                     </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {processando && (
-              <div className="progresso" role="status" aria-live="polite">
-                <progress aria-label="Processando" />
-                <span>{processando}</span>
-              </div>
-            )}
-            <Mensagem msg={msgCaptura} testId="mensagem-captura" />
-
+                  ))}
+                </div>
+              </details>
+            </div>
+            <div className="ferramentas" role="toolbar" aria-label="Ferramenta de toque">
+              <button type="button" className="secundario" aria-pressed={ferramenta === "navegar"} disabled={!carregada} onClick={() => setFerramenta("navegar")}>
+                Girar/zoom
+              </button>
+              {escaneada && (
+                <button type="button" className="secundario" aria-pressed={ferramenta === "regua"} disabled={!carregada} onClick={() => setFerramenta("regua")}>
+                  Régua (2 pontos)
+                </button>
+              )}
+              <button type="button" className="secundario" aria-pressed={ferramenta === "landmarks"} disabled={!carregada || !podeMarcar} onClick={() => setFerramenta("landmarks")}>
+                Marcar pontos
+              </button>
+            </div>
+          </div>
+          <div className="coluna-passos">
             {escaneada && (
               <details className="ajustar-escala" open={!calibrada} data-testid="ajustar-escala">
                 <summary>Ajustar escala (régua)</summary>
@@ -657,52 +718,6 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 <Mensagem msg={msgEscala} testId="mensagem-escala" />
               </details>
             )}
-
-            <details className="avancado" data-testid="avancado-captura">
-              <summary>Avançado</summary>
-              <p className="status-mesh" data-testid="status-mesh">
-                Serviço de malha: {meshDisponivel === null ? "verificando…" : meshDisponivel ? "disponível" : "aguardando serviço de malha"}
-              </p>
-              {carregada && dims && (
-                <p className="caixa" data-testid="caixa-mm">
-                  Caixa envolvente: {fmt1(dims.x)} × {fmt1(dims.y)} × {fmt1(dims.z)} mm (X × Y × Z) · {carregada.nVertices.toLocaleString("pt-BR")} vértices · {carregada.origem.toUpperCase()}
-                  {carregada.quadro ? ` · quadro ${carregada.quadro}` : ""}
-                </p>
-              )}
-              <p className="nota">+Y cranial, +Z anterior, +X lado esquerdo da paciente. Escala em mm, sem ajuste na carga.</p>
-              {fonte?.tipo === "servidor" && <p className="nota">Malha {fonte.malhaId} (versão {fonte.versao}).</p>}
-              {sinteticos.length > 0 && (
-                <div className="linha-form">
-                  <span>Pré-visualizar sem gravar:</span>
-                  {sinteticos.map((t) => (
-                    <button key={t.nome} type="button" className="secundario" onClick={() => void abrirSintetico(t)} disabled={carregando || (!t.glb && !t.obj)} title="Pré-visualizar o GLB do gerador (não grava)">
-                      {t.nome}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {!config.demo && (
-                <div className="linha-form">
-                  <label>
-                    Pré-visualizar arquivo local (sem enviar; não grava medidas)
-                    <input ref={arquivosLocais} type="file" multiple accept=".obj,.mtl,.png,.jpg,.jpeg,.ply" data-testid="arquivos-locais" />
-                  </label>
-                  <button type="button" className="secundario" onClick={abrirLocal} disabled={carregando}>
-                    Abrir no viewer
-                  </button>
-                </div>
-              )}
-            </details>
-          </section>
-
-          {/* ------------------------------------------------ passo 2: medidas */}
-          <section className="passo-secao" data-passo="2" aria-labelledby="titulo-passo-2">
-            <h2 id="titulo-passo-2">
-              <span className="passo-num" aria-hidden="true">
-                2
-              </span>{" "}
-              Medidas
-            </h2>
             {!recursos.medicao_automatica_3d && <p className="nota">Os pontos servem só para posicionar a simulação; nenhuma distância é calculada a partir do 3D.</p>}
             <p className="instrucao-ativa" aria-live="polite">
               {!carregada
@@ -710,7 +725,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 : todosLandmarks
                   ? "Os 10 pontos estão marcados ✓"
                   : !podeMarcar
-                    ? "Ajuste a escala no passo 1 antes de marcar os pontos."
+                    ? "Ajuste a escala pela régua (acima) antes de marcar os pontos."
                     : `Toque no ponto ${numeroDoLandmark(ativo)} — ${definicaoAtiva.rotulo}: ${definicaoAtiva.instrucao}`}
             </p>
             <GuiaLandmarks landmarks={landmarks} ativo={ativo} onAtivar={setAtivo} onApagar={apagarLandmark} />
@@ -718,7 +733,7 @@ export function Consulta({ config }: { config: ConfigPublica }) {
             <div className="linha-form">
               {landmarksGabarito && fonte?.tipo === "servidor" && fonte.sintetica && (
                 <button type="button" className="secundario" onClick={aplicarLandmarksGabarito} data-testid="aplicar-gabarito">
-                  Marcar os 10 pontos do torso sintético
+                  Pontos do torso sintético
                 </button>
               )}
               {recursos.medicao_automatica_3d && (
@@ -737,42 +752,39 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 <PainelVolume recursos={recursos} medicao={medicao} estado={estadoMedicao} />
               </div>
             )}
+          </div>
+        </div>
 
-            <FormularioTepid
-              recursos={recursos}
-              tepid={config.tepid}
-              valores={valoresTepid}
-              onChange={(v) => {
-                setValoresTepid(v);
-                setTepidValidado(null);
-              }}
-              onAvaliar={avaliarTepid}
-              avaliando={avaliandoTepid}
-              resultado={resultadoTepid}
-              erros={errosTepid}
-              basePreenchida={basePre}
-              rodape={
-                <>
-                  {paciente && tepidValidado && (
-                    <button type="button" onClick={gravarTepid}>
-                      Gravar TEPID do paciente
-                    </button>
-                  )}
-                  <Mensagem msg={msgTepid} naoSalvo={salvoTepid !== null && salvoTepid !== JSON.stringify(valoresTepid)} testId="mensagem-tepid" />
-                </>
-              }
-            />
-
-            <div className="linha-form gravar-medidas">
+        <FormularioTepid
+          recursos={recursos}
+          tepid={config.tepid}
+          valores={valoresTepid}
+          onChange={(v) => {
+            setValoresTepid(v);
+            setTepidValidado(null);
+          }}
+          onAvaliar={avaliarTepid}
+          avaliando={avaliandoTepid}
+          resultado={resultadoTepid}
+          erros={errosTepid}
+          basePreenchida={basePre}
+          rodape={
+            <>
+              {paciente && tepidValidado && (
+                <button type="button" onClick={gravarTepid}>
+                  Gravar TEPID do paciente
+                </button>
+              )}
               <button type="button" onClick={gravarMedidas} disabled={!indicesOk || (!recursos.medicao_automatica_3d && !tepidValidado)}>
                 Gravar registro de medidas
               </button>
-              {!recursos.medicao_automatica_3d && !tepidValidado && indicesOk && <span className="nota">Valide as medidas digitadas para gravar.</span>}
+              {!recursos.medicao_automatica_3d && !tepidValidado && indicesOk && <span className="nota">Valide as medidas digitadas para gravar o registro.</span>}
+              <Mensagem msg={msgTepid} naoSalvo={salvoTepid !== null && salvoTepid !== JSON.stringify(valoresTepid)} testId="mensagem-tepid" />
               <Mensagem msg={msgMedidas} naoSalvo={salvoMedidas !== null && salvoMedidas !== fotoMedidas} testId="mensagem-medidas" />
-            </div>
-          </section>
-        </div>
-      </div>
+            </>
+          }
+        />
+      </section>
 
       {/* ------------------------------------------------ passo 3: simulação */}
       <section className="passo-secao passo-simulacao" data-passo="3" aria-labelledby="titulo-passo-3">

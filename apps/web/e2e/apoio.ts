@@ -74,7 +74,10 @@ export async function projetar(page: Page, p: V3): Promise<Projecao> {
 }
 
 export async function escolherVista(page: Page, v: NomeVista) {
-  await page.getByTestId(`vista-${v}`).click();
+  const botao = page.getByTestId(`vista-${v}`);
+  // vistas inferiores ficam em "Mais vistas" (recolhido)
+  if (!(await botao.isVisible())) await page.getByTestId("mais-vistas").locator("summary").click();
+  await botao.click();
   await doisQuadros(page);
 }
 
@@ -129,6 +132,8 @@ export async function novoAtendimento(page: Page): Promise<string> {
  * ativa no passo 2 (o botão "Marcar pontos" é conferido, não clicado).
  */
 export async function importarTorso(page: Page, torso: string): Promise<string> {
+  // depois de uma captura os cards ficam recolhidos em "Trocar de torso sintético"
+  if (!(await page.getByTestId(`importar-${torso}`).isVisible())) await page.getByTestId("torsos-sinteticos").locator("summary").click();
   await page.getByTestId(`importar-${torso}`).click();
   const msg = page.getByRole("status").filter({ hasText: `Torso ${torso} processado` });
   await expect(msg).toBeVisible({ timeout: 120_000 });

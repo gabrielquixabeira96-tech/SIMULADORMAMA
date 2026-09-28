@@ -22,7 +22,6 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
-html { scroll-padding-top: calc(var(--altura-aviso) + var(--altura-passos) + 0.5rem); }
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: var(--fundo);
@@ -58,7 +57,7 @@ body {
   letter-spacing: 0.01em;
   font-size: 0.9rem;
 }
-.conteudo { padding: calc(var(--altura-aviso) + 0.25rem) 1rem 2rem; max-width: 1500px; margin: 0 auto; }
+.conteudo { padding: calc(var(--altura-aviso) + 0.25rem) 1rem 1rem; max-width: 1500px; margin: 0 auto; }
 .conteudo-demo { padding-top: calc(var(--altura-aviso) + 0.25rem); }
 @media (max-width: 760px) {
   /* telas estreitas: o aviso pode quebrar em 2 linhas; o conteúdo desce junto */
@@ -66,7 +65,7 @@ body {
 }
 
 .cabecalho { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.cabecalho h1 { font-size: 1.25rem; margin: 0.4rem 0 0.2rem; }
+.cabecalho h1 { font-size: 1.25rem; margin: 0.25rem 0 0; }
 .link-discreto { color: var(--suave); font-size: 0.85rem; display: inline-flex; align-items: center; min-height: var(--alvo); padding: 0 0.25rem; }
 .nota { color: var(--suave); font-size: 0.85rem; margin: 0.35rem 0; }
 .nota-conferir { color: var(--alerta); }
@@ -79,7 +78,7 @@ body {
   top: var(--altura-aviso);
   z-index: 900;
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
-  margin: 0.25rem -1rem 0.75rem;
+  margin: 0.1rem -1rem 0.5rem;
   padding: 0.3rem 1rem;
   min-height: var(--altura-passos);
   background: rgba(246, 247, 249, 0.96);
@@ -102,19 +101,23 @@ body {
 .passos-acao { display: flex; align-items: center; gap: 0.6rem; }
 .passo-motivo { color: var(--suave); font-size: 0.9rem; }
 .passo-secao { scroll-margin-top: calc(var(--altura-aviso) + var(--altura-passos) + 0.5rem); }
-.passo-secao > h2 { display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; margin: 0.25rem 0 0.6rem; }
+.passo-secao > h2 { display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; margin: 0.15rem 0 0.4rem; }
 .passo-secao > h2 .passo-num { background: var(--acento); color: #fff; }
-.passo-secao + .passo-secao { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px solid var(--borda); }
-.passo-simulacao { margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px solid var(--borda); }
+.passo-cabecalho { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 1rem; }
+.passo-cabecalho > h2 { display: flex; align-items: center; gap: 0.5rem; font-size: 1.15rem; margin: 0.15rem 0 0.4rem; }
+.passo-cabecalho > h2 .passo-num { background: var(--acento); color: #fff; }
+.passo-cabecalho > .nota { margin: 0; }
+.passo-secao + .passo-secao { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--borda); }
+.passo-simulacao { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--borda); }
 /* o painel da simulação traz o próprio título numerado; no passo 3 o título do passo já basta */
 .passo-simulacao #titulo-simulacao { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
 
-/* ---- consulta: viewer à esquerda (fixo durante os passos 1 e 2), passos à direita ---- */
-.consulta { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(360px, 1fr); gap: 1rem; align-items: start; }
+/* ---- passo 2 (e página de validação): viewer à esquerda (fixo), pontos e medidas à direita ---- */
+.consulta { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 1fr); gap: 1rem; align-items: start; }
 @media (max-width: 1000px) { .consulta { grid-template-columns: 1fr; } }
 .coluna-viewer { position: sticky; top: calc(var(--altura-aviso) + var(--altura-passos) + 0.5rem); }
 @media (max-width: 1000px) { .coluna-viewer { position: static; } }
-.viewer { position: relative; height: min(62vh, 700px); border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; background: var(--fundo-viewer); }
+.viewer { position: relative; height: min(46vh, 680px); border: 1px solid var(--borda); border-radius: 8px; overflow: hidden; background: var(--fundo-viewer); }
 .viewer-vazio { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--suave); padding: 1rem; text-align: center; }
 .caixa { font-variant-numeric: tabular-nums; margin: 0.4rem 0 0; }
 .rotulo-3d {
@@ -166,6 +169,10 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 
 .ferramentas { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
 .ferramentas button { padding-inline: 0.7rem; }
+.mais-vistas { display: inline-block; }
+.mais-vistas > summary { font-weight: 500; font-size: 0.9rem; padding: 0 0.4rem; }
+.mais-vistas[open] { flex-basis: 100%; }
+.mais-vistas[open] > .ferramentas { margin-top: 0; }
 
 /* ---- feedback junto da ação ---- */
 .mensagem-local { margin: 0.35rem 0; padding: 0.4rem 0.7rem; border-radius: 6px; border: 1px solid var(--borda); background: var(--painel); font-size: 0.9rem; flex-basis: 100%; }
@@ -182,12 +189,13 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .recentes { flex: 1 1 14rem; }
 .lista-recentes { list-style: none; padding: 0; margin: 0.25rem 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .paciente-atual { margin: 0.25rem 0 0.5rem; font-size: 1rem; }
-.cards-torsos { display: grid; grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr)); gap: 0.6rem; margin: 0.6rem 0; }
-.card-torso { background: var(--painel); border: 1px solid var(--borda); border-radius: 10px; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.3rem; }
+.cards-torsos { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: 0.6rem; margin: 0.5rem 0; }
+.card-torso { background: var(--painel); border: 1px solid var(--borda); border-radius: 10px; padding: 0.5rem 0.7rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.1rem 0.6rem; }
+.card-torso > button { grid-row: 1 / span 2; grid-column: 2; }
 .card-torso[data-selecionado="1"] { border-color: var(--ok); box-shadow: 0 0 0 1px var(--ok); }
 .card-torso .nota { margin: 0; flex: 1; }
 .card-torso-titulo { font-weight: 700; }
-.card-torso button { width: 100%; }
+
 .envio-scan label:first-child { flex: 1 1 16rem; }
 .ajustar-escala { background: var(--painel); border: 1px solid var(--aviso-borda); border-radius: 8px; padding: 0 0.8rem 0.4rem; margin: 0.6rem 0; }
 .avancado { margin-top: 0.4rem; }
@@ -195,26 +203,28 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .status-mesh { font-size: 0.85rem; color: var(--suave); }
 
 /* ---- passo 2 ---- */
-.instrucao-ativa { margin: 0.25rem 0 0.5rem; padding: 0.5rem 0.7rem; border-left: 4px solid #bf5b00; background: #fff4e5; border-radius: 4px; font-size: 0.95rem; }
+.instrucao-ativa { margin: 0 0 0.4rem; padding: 0.35rem 0.7rem; border-left: 4px solid #bf5b00; background: #fff4e5; border-radius: 4px; font-size: 0.95rem; }
 .guia-landmarks { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); gap: 0.6rem; align-items: start; }
 .figura-guia { width: 100%; height: auto; background: var(--painel); border: 1px solid var(--borda); border-radius: 8px; }
 .ponto-guia.ativo circle:first-child { animation: pulso 1.4s ease-in-out infinite; }
 @keyframes pulso { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .ponto-guia.ativo circle:first-child { animation: none; } }
-.lista-landmarks { padding-left: 1.4rem; margin: 0; columns: 2; column-gap: 1rem; }
-.lista-landmarks li { break-inside: avoid; }
+.lista-landmarks { padding-left: 1.4rem; margin: 0; columns: 2; column-gap: 0.75rem; }
+.lista-landmarks li { break-inside: avoid; white-space: nowrap; }
+.desmarcar { font-size: 1.1rem; text-decoration: none; padding: 0 0.35rem; }
 .lista-landmarks li > * { vertical-align: middle; }
 .lista-landmarks li.ativo { font-weight: 700; }
 .lista-landmarks li.ativo::marker { color: #bf5b00; }
-.item-landmark { background: none; border: none; color: var(--texto); padding: 0 0.15rem; text-align: left; white-space: normal; justify-content: flex-start; min-height: var(--alvo); font-size: 0.88rem; }
+.item-landmark { background: none; border: none; color: var(--texto); padding: 0 0.15rem; text-align: left; white-space: nowrap; max-width: calc(100% - 3rem); overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: var(--alvo); justify-content: flex-start; min-height: var(--alvo); font-size: 0.88rem; }
 .lista-landmarks li[data-marcado="1"] .item-landmark { color: var(--ok); }
 .estado-landmark { color: var(--ok); font-weight: 700; }
 .legenda-pontos { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
 .bolinha { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%; }
-@media (max-width: 1200px) { .lista-landmarks { columns: 1; } .guia-landmarks { grid-template-columns: 8rem minmax(0, 1fr); } }
+@media (max-width: 1200px) { .guia-landmarks { grid-template-columns: 7.5rem minmax(0, 1fr); } .item-landmark { font-size: 0.82rem; } }
+@media (max-width: 700px) { .lista-landmarks { columns: 1; } }
 
-.medidas-grade { display: grid; grid-template-columns: minmax(0, 3fr) minmax(8.5rem, 1fr); gap: 0.5rem; margin: 0.5rem 0 0.75rem; align-items: start; }
-@media (max-width: 1200px) { .medidas-grade { grid-template-columns: 1fr; } }
+.medidas-grade { display: grid; grid-template-columns: minmax(0, 3fr) minmax(8.5rem, 1.25fr); gap: 0.5rem; margin: 0.4rem 0 0; align-items: start; }
+@media (max-width: 700px) { .medidas-grade { grid-template-columns: 1fr; } }
 .cartoes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.5rem; }
 .cartao { background: var(--painel); border: 1px solid var(--borda); border-radius: 8px; padding: 0.45rem 0.6rem; margin: 0; }
 .cartao-titulo { font-size: 0.8rem; color: var(--suave); font-weight: 600; margin: 0 0 0.15rem; }
@@ -225,12 +235,19 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .lista-volume small { color: var(--suave); }
 .detalhes-distancias { margin-top: 0.2rem; }
 
-.painel-tepid { padding: 0.6rem 0.8rem; }
-.painel-tepid > h3 { margin-bottom: 0.1rem; }
+.painel-tepid { padding: 0.5rem 0.8rem; margin: 0.75rem 0 0.4rem; }
+.painel-tepid > h3 { margin-bottom: 0; }
 .painel-tepid .nota { margin: 0.1rem 0; }
-.tabela-tepid td, .tabela-tepid th { padding: 0.2rem 0.35rem; vertical-align: middle; }
-.tabela-tepid input { width: 5.5rem; }
-.tabela-tepid tr.com-alerta td:first-child { box-shadow: inset 3px 0 0 var(--alerta); }
+.tepid-cabecalho { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1rem; }
+.tepid-cabecalho h3 { margin: 0; font-size: 1.02rem; }
+.tepid-cabecalho details[open] { flex-basis: 100%; }
+.grade-tepid-rolagem { overflow-x: auto; }
+.tabela-tepid { table-layout: fixed; min-width: 40rem; }
+.tabela-tepid td, .tabela-tepid th { padding: 0.15rem 0.3rem; vertical-align: bottom; border-bottom: none; }
+.tabela-tepid thead th { font-size: 0.78rem; font-weight: 600; line-height: 1.2; }
+.tabela-tepid thead th:first-child, .tabela-tepid tbody th { width: 2rem; text-align: center; vertical-align: middle; }
+.tabela-tepid input { width: 100%; }
+.tabela-tepid th.com-alerta { box-shadow: inset 0 -3px 0 var(--alerta); }
 .alerta-campo { color: var(--alerta); font-size: 0.75rem; font-weight: 700; }
 .pre-3d { color: var(--acento-forte); font-size: 0.72rem; }
 .alertas ul { margin: 0.2rem 0; padding-left: 1.1rem; }
@@ -240,7 +257,10 @@ details.avancado > summary, details.recentes > summary, .fonte-tepid > summary, 
 .par-botoes { display: inline-flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 
 /* ---- passo 3: registro ---- */
-.paineis-atendimento { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; margin-top: 1rem; align-items: start; }
+.painel-registro > h3, .painel-registro > .aviso-servico { display: inline-block; margin: 0 1rem 0.2rem 0; vertical-align: baseline; }
+.torsos > summary { font-weight: 500; font-size: 0.9rem; }
+.torsos[open] > summary { min-height: 2rem; }
+.paineis-atendimento { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1rem; margin-top: 0.5rem; align-items: start; }
 
 /* ---- Simulação (Marco 2) ---- */
 .painel-simulacao { margin-top: 0.25rem; }

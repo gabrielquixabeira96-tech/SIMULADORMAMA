@@ -61,6 +61,11 @@ export function FiguraGuia({ landmarks, ativo }: { landmarks: Landmarks; ativo: 
       <line x1="100" y1="36" x2="100" y2="160" stroke="#c9b6a8" strokeDasharray="3 3" />
       <text x="16" y="188" fontSize="9" fill="#57606a">D</text>
       <text x="178" y="188" fontSize="9" fill="#57606a">E</text>
+      {/* legenda dentro da figura: vermelho = obrigatório, roxo = base da mama (opcional) */}
+      <circle cx="40" cy="176" r="4" fill={COR_OBRIGATORIO} />
+      <text x="47" y="179" fontSize="9" fill="#1c2128">obrigatório</text>
+      <circle cx="108" cy="176" r="4" fill={COR_BASE} />
+      <text x="115" y="179" fontSize="9" fill="#1c2128">base</text>
       {DEFINICOES_LANDMARKS.map((d, i) => {
         const [x, y] = POSICOES[d.id];
         const marcado = !!landmarks[d.id];
@@ -96,17 +101,14 @@ export function GuiaLandmarks({ landmarks, ativo, onAtivar, onApagar, desabilita
                 </button>
                 <span className="estado-landmark">{l ? "✓" : ""}</span>
                 {l && (
-                  <button type="button" className="link" onClick={() => onApagar(d.id)} aria-label={`Desmarcar ${d.rotulo}`}>
-                    desmarcar
+                  <button type="button" className="link desmarcar" onClick={() => onApagar(d.id)} aria-label={`Desmarcar ${d.rotulo}`} title="Desmarcar">
+                    ×
                   </button>
                 )}
               </li>
             );
           })}
         </ol>
-        <p className="nota legenda-pontos">
-          <span className="bolinha" style={{ background: COR_OBRIGATORIO }} /> obrigatório (*) <span className="bolinha" style={{ background: COR_BASE }} /> base da mama (opcional)
-        </p>
       </div>
     </div>
   );

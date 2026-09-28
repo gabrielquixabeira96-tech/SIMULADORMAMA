@@ -43,12 +43,16 @@ async function textoVisivelForaDeDetails(page: Page, excluir: string[]): Promise
   }, excluir);
 }
 
-/** Alvos de toque visíveis fora de "Avançado": altura (radio/checkbox medem o <label> que os contém). */
-async function alvosPequenos(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
+/**
+ * Alvos de toque visíveis fora de "Avançado": altura (radio/checkbox medem o <label> que os contém).
+ * `excluir`: seletores fora do escopo do P3 (ex.: a tabela do catálogo do P1, aberta antes de simular).
+ */
+async function alvosPequenos(page: Page, excluir: string[] = []): Promise<string[]> {
+  return page.evaluate((exc) => {
     const ruins: string[] = [];
     for (const el of Array.from(document.querySelectorAll<HTMLElement>("button, input, select, a.botao"))) {
       if (el.classList.contains("link") || el.closest("details.avancado") || (el as HTMLInputElement).type === "hidden") continue;
+      if (exc.some((s) => el.closest(s))) continue;
       if (!el.checkVisibility({ visibilityProperty: true } as CheckVisibilityOptions)) continue;
       const tipo = (el as HTMLInputElement).type;
       const alvo = (tipo === "radio" || tipo === "checkbox") && el.closest("label") ? el.closest("label")! : el;
@@ -56,8 +60,11 @@ async function alvosPequenos(page: Page): Promise<string[]> {
       if (r.height < 44 - 0.5) ruins.push(`${el.tagName.toLowerCase()}[${el.getAttribute("data-testid") ?? (el.textContent ?? "").trim().slice(0, 30)}] ${r.height.toFixed(1)}px`);
     }
     return ruins;
-  });
+  }, excluir);
 }
+
+/** Tabela do catálogo (pacote P1: vira gaveta com cards; aberta antes de gerar a simulação). */
+const CATALOGO_P1 = ['[data-testid="catalogo-lista"]'];
 
 async function alturas(page: Page) {
   return page.evaluate(() => ({
@@ -123,6 +130,7 @@ test("demo no iPad: até o PDF em ≤ 12 ações, altura, jargão, toque e contr
 
   // ---- medições com o passo 3 pronto, "Avançado" fechado
   await expect(page.getByTestId("avancado-captura")).not.toHaveAttribute("open", "");
+  if (process.env.E2E_CAPTURA_DIR) await page.screenshot({ path: `${process.env.E2E_CAPTURA_DIR}/fluxo-guiado-passo3.png`, fullPage: true });
   const alt = await alturas(page);
   console.log(`[fluxo-guiado] altura com o passo 3 pronto: página ${alt.pagina} px; passos ${JSON.stringify(alt.passos)} (tela ${TELA.width}×${TELA.height})`);
   expect(alt.pagina, "página ≤ 3 telas").toBeLessThanOrEqual(3 * TELA.height);
@@ -227,7 +235,7 @@ test("desenho B: base pré-preenchida pelo 3D e feedback gravado junto de cada b
 
   const texto = await textoVisivelForaDeDetails(page, ['[data-testid="simulacao"]']);
   expect(texto.split("\n").filter((l) => JARGAO.test(l)), "C4 no desenho B").toEqual([]);
-  expect(await alvosPequenos(page), "alvos de toque no desenho B").toEqual([]);
+  expect(await alvosPequenos(page, CATALOGO_P1), "alvos de toque no desenho B").toEqual([]);
 });
 
 test("desenho A: base do TEPID nunca pré-preenchida", async ({ page }, info) => {
@@ -245,5 +253,5 @@ test("desenho A: base do TEPID nunca pré-preenchida", async ({ page }, info) =>
   await expect(page.getByTestId("link-validacao")).toHaveCount(0);
   const texto = await textoVisivelForaDeDetails(page, ['[data-testid="simulacao"]']);
   expect(texto.split("\n").filter((l) => JARGAO.test(l)), "C4 no desenho A").toEqual([]);
-  expect(await alvosPequenos(page), "alvos de toque no desenho A").toEqual([]);
+  expect(await alvosPequenos(page, CATALOGO_P1), "alvos de toque no desenho A").toEqual([]);
 });

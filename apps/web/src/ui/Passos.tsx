@@ -21,15 +21,12 @@ export interface PassoInfo {
 
 const seletor = (n: number) => `section[data-passo="${n}"]`;
 
-function reduzirMovimento(): boolean {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /** Rola até a seção do passo e foca o primeiro controle habilitado (sem rolar de novo). */
 export function irParaPasso(n: number): void {
   const el = document.querySelector<HTMLElement>(seletor(n));
   if (!el) return;
-  el.scrollIntoView({ behavior: reduzirMovimento() ? "auto" : "smooth", block: "start" });
+  // rolagem imediata: a suave era interrompida por re-renderizações (e com reduced-motion nem se aplica)
+  el.scrollIntoView({ behavior: "auto", block: "start" });
   const alvo = el.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled]), summary, a[href]");
   (alvo ?? el).focus({ preventScroll: true });
 }
@@ -41,7 +38,7 @@ function passoNoTopo(total: number): number {
   let ativo = 1;
   for (let n = 1; n <= total; n++) {
     const el = document.querySelector<HTMLElement>(seletor(n));
-    if (el && el.getBoundingClientRect().top <= topo + window.innerHeight * 0.25) ativo = n;
+    if (el && el.getBoundingClientRect().top <= topo + 48) ativo = n;
   }
   // fim da página: o último passo é o ativo mesmo que a seção seja curta
   if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) ativo = total;
