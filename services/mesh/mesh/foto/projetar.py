@@ -161,6 +161,21 @@ def ler_foto(malha_dir: Path, arquivo: str) -> Image.Image:
         return im.convert("RGB")
 
 
+def fotos_do_registro(malha_dir: Path, fotos_c1: list[dict],
+                      mascaras: dict[str, np.ndarray] | None = None) -> list[FotoRegistrada]:
+    """`reconstrucao.fotos` (C1) -> fotos registradas: le cada `arquivo` por `ler_foto` (so
+    `original/foto_<vista>.jpg` da propria malha) e monta a `Camera`. `mascaras`: {vista: (H, W) bool}
+    da segmentacao (ausente = a silhueta da propria malha)."""
+    saida = []
+    for f in fotos_c1:
+        vista = f["vista"]
+        if vista not in VISTAS:
+            raise ValueError(f"vista desconhecida: {vista!r}")
+        saida.append(FotoRegistrada(imagem=ler_foto(malha_dir, f["arquivo"]), camera=Camera.de_contrato(f),
+                                    mascara=(mascaras or {}).get(vista), vista=vista))
+    return saida
+
+
 # ----------------------------------------------------------------------------- malha
 
 @dataclass

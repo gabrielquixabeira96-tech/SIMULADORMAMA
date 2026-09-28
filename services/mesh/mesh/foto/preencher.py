@@ -312,11 +312,12 @@ def preencher(proj: ProjecaoAtlas, textura_base=None, px_por_mm: float = PX_POR_
 
 # ----------------------------------------------------------------------------- gravacao (para o P1)
 
-def texturizar_malha(malha_dir: Path, malha: MalhaRender, fotos: list[FotoRegistrada], textura_base=None,
+def texturizar_malha(malha_dir: Path, malha, fotos: list[FotoRegistrada], textura_base=None,
                      landmarks: dict | None = None, px_por_mm: float = PX_POR_MM,
                      tamanho_atlas: tuple[int, int] | None = None, arquivo_glb: str = "processada.glb",
                      quadro: str = "anatomico", extras_asset: dict | None = None, detalhes: bool = False):
-    """Projeta -> preenche -> grava em `malha_dir`: `textura.png` (a mesma que `processada.obj/.mtl`
+    """Projeta -> preenche -> grava em `malha_dir` (`malha`: `MalhaRender` ou `trimesh.Trimesh` com a UV
+    do atlas, na mesma ordem de vertices de `processada.obj`): `textura.png` (a mesma que `processada.obj/.mtl`
     referenciam), `observado.png` (L) e `arquivo_glb` com `asset.extras.reconstrucao`,
     `asset.extras.textura` e `asset.extras.iluminacao` (ajuste SH9 so nos vertices observados).
     Devolve o bloco `textura` (`textura_reconstruida/1.0`) para `meta.json` (o P1 grava o meta.json);
@@ -325,7 +326,7 @@ def texturizar_malha(malha_dir: Path, malha: MalhaRender, fotos: list[FotoRegist
     t0 = time.perf_counter()
     malha_dir = Path(malha_dir)
     if tamanho_atlas is None:
-        ref = textura_base if textura_base is not None else malha.textura
+        ref = textura_base if textura_base is not None else getattr(malha, "textura", None)
         if ref is None:
             raise ValueError("tamanho do atlas desconhecido: passe textura_base ou tamanho_atlas")
         tamanho_atlas = ref.size if isinstance(ref, Image.Image) else (ref.shape[1], ref.shape[0])
@@ -344,7 +345,7 @@ def texturizar_malha(malha_dir: Path, malha: MalhaRender, fotos: list[FotoRegist
     bloco_tex = {"origem": "foto_projetada", "observado": "observado.png",
                  "cobertura_observada_pct": rec.cobertura_observada_pct,
                  "limiar_nao_observado": LIMIAR_NAO_OBSERVADO}
-    render = MalhaRender(V=malha.V, F=malha.F, uv=m.uv, textura=rec.textura)
+    render = MalhaRender(V=m.V, F=m.F, uv=m.uv, textura=rec.textura)
     extras = {**(extras_asset or {}), "reconstrucao": bloco_rec, "textura": bloco_tex, "iluminacao": iluminacao}
     escrever_glb(malha_dir / arquivo_glb, render, quadro=quadro, extras_asset=extras, imagem_png=png,
                  normais=m.N)

@@ -21,6 +21,7 @@ from mesh.foto.projetar import (
     Camera,
     FotoRegistrada,
     MalhaUV,
+    fotos_do_registro,
     ler_foto,
     mapa_profundidade,
     projetar_fotos,
@@ -168,6 +169,12 @@ def test_oclusor_explicito_nao_recebe_cor_do_que_esta_atras():
     assert np.all(obs[5:95, 105:195] > 0.99)                   # a placa da frente, inteira
     assert np.abs(cor[5:95, 105:195].reshape(-1, 3) - [0.1, 0.8, 0.1]).max() < 0.01
     assert proj.por_foto[0]["texels_oclusos"] > 0
+    # a mesma cena como trimesh.Trimesh com UV (a forma que o template do P1 pode entregar)
+    import trimesh
+
+    tm = trimesh.Trimesh(V, F, process=False, visual=trimesh.visual.TextureVisuals(uv=uv))
+    proj_tm = projetar_fotos(tm, [FotoRegistrada(foto, cam, None)], (200, 100))
+    assert np.array_equal(proj_tm.observado, obs) and np.array_equal(proj_tm.cor, cor)
 
 
 # ----------------------------------------------------------------------------- varias fotos
@@ -209,6 +216,21 @@ def test_ler_foto_so_de_original_foto_da_propria_malha(tmp_path):
                  "original/foto_costas.jpg", "../original/foto_frente.jpg"):
         with pytest.raises(ValueError):
             ler_foto(tmp_path, ruim)
+
+
+def test_fotos_do_registro_c1(tmp_path):
+    (tmp_path / "original").mkdir()
+    Image.fromarray(np.full((48, 64, 3), 90, np.uint8)).save(tmp_path / "original" / "foto_frente.jpg")
+    R = np.diag([1.0, -1.0, -1.0])
+    cam = Camera(K=np.array([[100.0, 0, 32], [0, 100.0, 24], [0, 0, 1]]), R=R, t=np.array([0, 0, 1000.0]),
+                 largura_px=64, altura_px=48)
+    c1 = [{"vista": "frente", "arquivo": "original/foto_frente.jpg", **cam.para_contrato()}]
+    msk = np.ones((48, 64), bool)
+    (f,) = fotos_do_registro(tmp_path, c1, {"frente": msk})
+    assert f.vista == "frente" and f.mascara is msk and f.rgb().shape == (48, 64, 3)
+    np.testing.assert_allclose(f.camera.K, cam.K)
+    with pytest.raises(ValueError):
+        fotos_do_registro(tmp_path, [{**c1[0], "arquivo": "textura.png"}])
 
 
 def test_image_open_so_no_caminho_de_entrada():
