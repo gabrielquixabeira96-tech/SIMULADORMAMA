@@ -98,6 +98,16 @@ describe("selo nos pixels", () => {
     }
   });
 
+  it("escala: o quadro interativo reduzido e o final em dpr 2 têm o mesmo desenho relativo (≥ 16 px de referência)", () => {
+    const alturas = [0.5, 1, 2].map((e) => {
+      const { ctx } = contextoFalso();
+      const r = desenharSelo(ctx, 960 * e, 720 * e, linhasDoSelo(base), e);
+      expect(r.fontePx / e).toBeGreaterThanOrEqual(FONTE_MIN_PX);
+      return r.alturaFaixa / (720 * e);
+    });
+    for (const a of alturas) expect(a).toBeCloseTo(alturas[1]!, 1);
+  });
+
   it("marca diagonal repetida a 8 % sobre a imagem (recortar a faixa não apaga o aviso)", () => {
     const { ctx, chamadas } = contextoFalso();
     desenharSelo(ctx, 960, 720, linhasDoSelo(base));

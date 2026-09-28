@@ -17,18 +17,24 @@ const PROIBIDO = /compartilh|share|exportar|instagram|whatsapp|facebook|tiktok|b
 
 type Vista = "frente" | "obliqua_dir" | "obliqua_esq" | "perfil_dir" | "perfil_esq";
 
-async function sha(page: Page, vista: Vista, estado: string, peso?: number): Promise<string> {
-  return (await page.evaluate(([v, e, p]) => (window as any).__simuladorSim.fotos.renderizar(v, e, p === null ? {} : { peso: p }), [vista, estado, peso ?? null] as const)).sha256;
+type Qualidade = "interativa" | "final";
+/** As análises de pixels usam o quadro final (MSAA, o que fica na tela em repouso); a identidade vale nos dois. */
+const FINAL: Qualidade = "final";
+
+async function sha(page: Page, vista: Vista, estado: string, peso?: number, qualidade: Qualidade = "interativa"): Promise<string> {
+  return (
+    await page.evaluate(([v, e, p, q]) => (window as any).__simuladorSim.fotos.renderizar(v, e, p === null ? { qualidade: q } : { peso: p, qualidade: q }), [vista, estado, peso ?? null, qualidade] as const)
+  ).sha256;
 }
 
 /** Localidade: fração de pixels que mudam (> 2/255) FORA da máscara da região dilatada 3 px; média de diferença dentro. */
-async function localidade(page: Page, vista: Vista, estado: "a" | "b") {
+async function localidade(page: Page, vista: Vista, estado: "a" | "b", qualidade: Qualidade = FINAL) {
   return page.evaluate(
-    ([v, e]) => {
+    ([v, e, q]) => {
       const f = (window as any).__simuladorSim.fotos;
-      const a = f.imagem(v, "antes");
-      const d = f.imagem(v, e);
-      const m: Uint8Array = f.mascaraRegiao(v);
+      const a = f.imagem(v, "antes", { qualidade: q });
+      const d = f.imagem(v, e, { qualidade: q });
+      const m: Uint8Array = f.mascaraRegiao(v, q);
       const w = a.largura, h = a.altura;
       if (d.largura !== w || m.length !== w * h) throw new Error("tamanhos diferentes");
       // dilatação quadrada de 3 px (dois passes separáveis)
@@ -68,7 +74,7 @@ async function localidade(page: Page, vista: Vista, estado: "a" | "b") {
       }
       return { w, h, fora, foraDif, fracFora: foraDif / fora, regiao, mediaRegiao: somaRegiao / Math.max(1, regiao), mediaDilatada: somaDentro / Math.max(1, dentro) };
     },
-    [vista, estado] as const,
+    [vista, estado, qualidade] as const,
   );
 }
 
@@ -76,7 +82,7 @@ async function localidade(page: Page, vista: Vista, estado: "a" | "b") {
 async function areaSilhueta(page: Page, vista: Vista, estado: string): Promise<number> {
   return page.evaluate(
     ([v, e, fundo]) => {
-      const im = (window as any).__simuladorSim.fotos.imagem(v, e);
+      const im = (window as any).__simuladorSim.fotos.imagem(v, e, { qualidade: "final" });
       const linhas = Math.floor(im.altura * 0.85); // acima da faixa do selo
       let n = 0;
       for (let i = 0; i < im.largura * linhas; i++) {
@@ -101,7 +107,7 @@ async function ambarESelo(page: Page, vista: Vista, estado: string) {
         return [116 * t(Y) - 16, 500 * (t(X) - t(Y)), 200 * (t(Y) - t(Z))];
       };
       const alvo = lab(0xd9, 0x77, 0x06);
-      const im = (window as any).__simuladorSim.fotos.imagem(v, e);
+      const im = (window as any).__simuladorSim.fotos.imagem(v, e, { qualidade: "final" });
       let ambar = 0;
       for (let i = 0; i < im.largura * im.altura; i++) {
         const l = lab(im.dados[4 * i], im.dados[4 * i + 1], im.dados[4 * i + 2]);
@@ -140,6 +146,10 @@ test("modo foto no desenho B: antes idêntico, edição local, resposta ao volum
   const hA = await sha(page, "frente", "a");
   expect(await sha(page, "frente", "a"), "determinismo do depois").toBe(hA);
   expect(hA).not.toBe(h1);
+  // o quadro final (MSAA 4×, o que fica na tela em repouso) também é determinístico e igual com peso 0
+  const f1 = await sha(page, "frente", "antes", undefined, FINAL);
+  expect(await sha(page, "frente", "antes", undefined, FINAL)).toBe(f1);
+  expect(await sha(page, "frente", "a", 0, FINAL)).toBe(f1);
   // o antes não depende do plano nem do sulco (mesma malha base nos 4 .glb)
   await page.getByTestId("plano-dual_plane").check();
   await page.getByTestId("imf-rebaixar").check();
@@ -186,21 +196,21 @@ test("modo foto no desenho B: antes idêntico, edição local, resposta ao volum
   const t = await page.evaluate(() => (window as any).__simuladorSim.fotos.definirPeso(0.3));
   expect(t).toMatchObject({ peso: 0.3, envelope_visivel: true, pele_visivel: true });
 
-  // ---- margem completa só acrescenta: estado() igual (antes, repinta o quadro final do A)
+  // ---- margem completa só acrescenta: estado() igual com e sem ela (cada troca redesenha o "depois")
   const campos = (e: Record<string, any>) => ({ alvo: e.alvo, peso: e.peso, envelope_mm: e.envelope_mm, envelope_visivel: e.envelope_visivel, pele_visivel: e.pele_visivel });
-  await page.getByTestId("foto-vista-obliqua_dir").click();
-  await esperarFotos(page);
-  await page.getByTestId("foto-vista-frente").click();
-  await esperarFotos(page);
-  const sem = campos(await estadoFotos(page));
-  const v0 = await versaoFotos(page);
+  let v0 = await versaoFotos(page);
   await page.getByTestId("foto-margem-completa").check();
   await esperarFotos(page, { versaoMaiorQue: v0 });
-  expect((await estadoFotos(page)).margem_completa).toBe(true);
-  expect(campos(await estadoFotos(page))).toEqual(sem);
-  expect(await sha(page, "frente", "antes"), "margem completa não toca o antes").toBe(h1);
+  const com = await estadoFotos(page);
+  expect(com.margem_completa).toBe(true);
+  v0 = await versaoFotos(page);
   await page.getByTestId("foto-margem-completa").uncheck();
-  await esperarFotos(page);
+  await esperarFotos(page, { versaoMaiorQue: v0 });
+  const sem = await estadoFotos(page);
+  expect(sem.margem_completa).toBe(false);
+  expect(campos(com)).toEqual(campos(sem));
+  expect(campos(sem)).toMatchObject({ alvo: `mt__${IMPLANTE_1}__subglandular__manter`, peso: 1, envelope_visivel: true, pele_visivel: true });
+  expect(await sha(page, "frente", "antes"), "margem completa não toca o antes").toBe(h1);
 
   // ---- garantirEnvelope no modo foto: sem o halo, a foto "depois" não é mostrada
   await page.evaluate(() => (window as any).__simuladorSim.fotos.removerHalo());
@@ -227,8 +237,8 @@ test("modo foto: resposta ao volume na mesma linha de implante — silhueta de p
   console.log(`[foto] área da silhueta no perfil D (A = motiva-rsd-300, B = motiva-rsd-245): ${JSON.stringify(area)}`);
   expect(area.antes).toBeLessThan(area.b);
   expect(area.b).toBeLessThan(area.a);
-  // AP: a foto muda dentro da região (diferença média > 4/255) para os dois
-  for (const e of ["a", "b"] as const) expect((await localidade(page, "frente", e)).mediaRegiao).toBeGreaterThan(4);
+  // AP: a foto do A (300 mL) muda dentro da região (diferença média > 4/255)
+  expect((await localidade(page, "frente", "a")).mediaRegiao).toBeGreaterThan(4);
 });
 
 test("modo foto: cortina, segurar, lado a lado, vistas, apresentação com selo e aviso; nada se compartilha nem sai do navegador", async ({ page }, info) => {

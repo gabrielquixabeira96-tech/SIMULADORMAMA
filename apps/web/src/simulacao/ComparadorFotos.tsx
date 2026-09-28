@@ -76,6 +76,8 @@ interface Quadro {
 
 interface Transicao {
   tipo: "morph" | "esvanecer";
+  /** esvanecer: cópia da foto que estava na tela (não precisa ser redesenhada) */
+  origem?: HTMLCanvasElement;
   de: EstadoFoto;
   para: EstadoFoto;
   inicio: number;
@@ -90,7 +92,7 @@ export interface GanchoFotos {
   readonly tamanho: { largura: number; altura: number };
   renderizar(vista: VistaClinica, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): Promise<{ largura: number; altura: number; sha256: string }>;
   imagem(vista: VistaClinica, estado: EstadoFoto, opts?: { qualidade?: QualidadeFoto; peso?: number }): { largura: number; altura: number; dados: Uint8ClampedArray };
-  mascaraRegiao(vista: VistaClinica): Uint8Array;
+  mascaraRegiao(vista: VistaClinica, qualidade?: QualidadeFoto): Uint8Array;
   definirPeso(p: number): Record<string, unknown>;
   removerHalo(): void;
   restaurarHalo(): void;
@@ -98,6 +100,7 @@ export interface GanchoFotos {
   definirRefino(ligado: boolean): void;
   ocupado(): boolean;
   contexto(): WebGLContextAttributes | null;
+  tempos(): Record<string, number> | null;
 }
 
 function ganchoSim(instrumentar: boolean): { fotos?: GanchoFotos } | null {
@@ -307,6 +310,13 @@ class Controlador {
   private iniciarTransicao(de: EstadoFoto, para: EstadoFoto): void {
     const tipo = de !== "antes" && para !== "antes" ? "esvanecer" : "morph";
     const t: Transicao = { tipo, de, para, inicio: performance.now(), pesoAtual: de === "antes" ? 0 : 1, raf: 0 };
+    if (tipo === "esvanecer" && this.telas.principal && this.telas.principal.width > 1) {
+      const c = document.createElement("canvas");
+      c.width = this.telas.principal.width;
+      c.height = this.telas.principal.height;
+      c.getContext("2d")?.drawImage(this.telas.principal, 0, 0);
+      t.origem = c;
+    }
     this.transicao = t;
     this.quadroDaTransicao(t, performance.now() + 16); // primeiro quadro já no evento
     const passo = () => {
@@ -333,8 +343,20 @@ class Controlador {
     if (f >= 1) return true;
     const s = suavizar(f);
     if (t.tipo === "esvanecer") {
-      pintar(this.telas.principal, this.melhor(this.pedido(q.vista, t.de, q.largura, q.altura)));
-      pintar(this.telas.principal, this.melhor(this.pedido(q.vista, t.para, q.largura, q.altura)), s);
+      const para = this.melhor(this.pedido(q.vista, t.para, q.largura, q.altura));
+      pintar(this.telas.principal, t.origem ?? this.melhor(this.pedido(q.vista, t.de, q.largura, q.altura)));
+      // a origem pode ter outra resolução (refinada): o destino segue a da foto nova
+      const ctx = this.telas.principal?.getContext("2d");
+      if (ctx && this.telas.principal) {
+        if (t.origem && (t.origem.width !== para.width || t.origem.height !== para.height)) {
+          this.telas.principal.width = para.width;
+          this.telas.principal.height = para.height;
+          ctx.drawImage(t.origem, 0, 0, para.width, para.height);
+        }
+        ctx.globalAlpha = s;
+        ctx.drawImage(para, 0, 0, this.telas.principal.width, this.telas.principal.height);
+        ctx.globalAlpha = 1;
+      }
     } else {
       const alvo = t.para === "antes" ? t.de : t.para;
       const peso = t.para === "antes" ? 1 - s : s;
@@ -380,7 +402,7 @@ class Controlador {
     const g = this.geracao;
     const faltam: VistaClinica[] = [];
     for (const v of VISTAS_CLINICAS) {
-      const p = this.pedido(v, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true);
+      const p: PedidoFoto = { ...this.pedido(v, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true), papel: "tira" };
       const pronta = this.r!.emCache(p);
       if (pronta) pintar(this.telas.mini[v], pronta);
       else faltam.push(v);
@@ -388,7 +410,7 @@ class Controlador {
     const uma = (i: number) => {
       if (i >= faltam.length || g !== this.geracao) return;
       try {
-        pintar(this.telas.mini[faltam[i]!], this.r!.foto(this.pedido(faltam[i]!, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true)));
+        pintar(this.telas.mini[faltam[i]!], this.r!.foto({ ...this.pedido(faltam[i]!, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true), papel: "tira" }));
       } catch {
         apagar(this.telas.mini[faltam[i]!]);
       }
@@ -528,7 +550,7 @@ export function ComparadorFotos(props: Props) {
       let c: HTMLCanvasElement;
       if (o.peso !== undefined) {
         const alvo = e === "antes" ? "a" : e;
-        c = r.quadroTransicao(ctrl.pedido(v, alvo, w, h), o.peso);
+        c = r.quadroTransicao(ctrl.pedido(v, alvo, w, h, o.qualidade ?? "interativa"), o.peso);
       } else c = r.foto(p, { forcar: true });
       const d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height);
       return { largura: c.width, altura: c.height, dados: d.data };
@@ -541,7 +563,7 @@ export function ComparadorFotos(props: Props) {
       const mostrado = q.segurando ? "antes" : q.estado;
       return {
         pronto: true,
-        ...r.estadoCena(q.plano, q.imf),
+        ...r.estadoUltima(),
         estado: q.estado,
         mostrado,
         modo: q.modo,
@@ -578,9 +600,10 @@ export function ComparadorFotos(props: Props) {
         return { largura: im.largura, altura: im.altura, sha256: [...h].map((b) => b.toString(16).padStart(2, "0")).join("") };
       },
       imagem: imagemDe,
-      mascaraRegiao(v) {
+      mascaraRegiao(v, qualidade = "interativa") {
         const q = ctrl.q!;
-        return ctrl.r!.mascaraRegiao(v, q.plano, q.imf, q.ids, q.largura, q.altura);
+        const t = ctrl.r!.tamanhoPixels({ largura: q.largura || 640, altura: q.altura || 480, qualidade });
+        return ctrl.r!.mascaraRegiao(v, q.plano, q.imf, q.ids, t.largura, t.altura);
       },
       definirPeso(p) {
         const q = ctrl.q!;
@@ -602,6 +625,7 @@ export function ComparadorFotos(props: Props) {
       },
       ocupado: () => ctrl.ocupado,
       contexto: () => ctrl.r?.atributosContexto() ?? null,
+      tempos: () => ctrl.r?.ultimoTempo ?? null,
     };
     g.fotos = fotos;
     return () => {

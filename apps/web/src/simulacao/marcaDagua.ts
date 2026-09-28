@@ -49,8 +49,9 @@ export interface Contexto2D {
   rotate(a: number): void;
 }
 
-export function tamanhoFonteSelo(largura: number): number {
-  return Math.max(FONTE_MIN_PX, Math.round(largura / 52));
+/** Fonte do selo em px da imagem: ≥ 16 px de referência (CSS), multiplicada pela escala da imagem. */
+export function tamanhoFonteSelo(largura: number, escala = 1): number {
+  return Math.max(FONTE_MIN_PX, Math.round(largura / escala / 52)) * escala;
 }
 
 /** Quebra uma linha em pedaços que cabem em `max` px (primeiro em " · ", depois em palavras). */
@@ -80,15 +81,16 @@ export function quebrarLinha(ctx: Pick<Contexto2D, "measureText">, texto: string
 
 /**
  * Desenha a marca diagonal (8 %) e a faixa do selo na parte de baixo. Devolve a altura da faixa.
- * A faixa é desenhada por último, por cima de tudo.
+ * A faixa é desenhada por último, por cima de tudo. `escala` = pixels da imagem por px de
+ * referência (CSS): o quadro interativo reduzido e o final em dpr 2 saem com o mesmo desenho.
  */
-export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, linhas: readonly string[]): { alturaFaixa: number; fontePx: number } {
-  const fonte = tamanhoFonteSelo(largura);
+export function desenharSelo(ctx: Contexto2D, largura: number, altura: number, linhas: readonly string[], escala = 1): { alturaFaixa: number; fontePx: number } {
+  const fonte = tamanhoFonteSelo(largura, escala);
   const pad = Math.round(fonte * 0.6);
   const familia = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
   // marca diagonal repetida (−30°), branca a 8 %
-  const fonteMarca = Math.max(12, Math.round(largura / 40));
+  const fonteMarca = Math.max(12, Math.round(largura / escala / 40)) * escala;
   ctx.save();
   ctx.globalAlpha = ALFA_MARCA_DIAGONAL;
   ctx.fillStyle = COR_TEXTO_SELO;
