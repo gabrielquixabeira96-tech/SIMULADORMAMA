@@ -1,6 +1,6 @@
 "use client";
 
-import type { Imf, Landmarks, Plano } from "@simulador/contratos";
+import { IMFS, PLANOS, type Imf, type Landmarks, type Plano } from "@simulador/contratos";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as KE, type PointerEvent as PE } from "react";
 import { ROTULOS_VISTAS_CLINICAS, VISTAS_CLINICAS, type VistaClinica } from "./cameraClinica";
 import css from "./foto.module.css";
@@ -408,7 +408,8 @@ class Controlador {
       else faltam.push(v);
     }
     const uma = (i: number) => {
-      if (i >= faltam.length || g !== this.geracao) return;
+      if (g !== this.geracao) return;
+      if (i >= faltam.length) return this.agendar(() => this.preaquecer(g), 0);
       try {
         pintar(this.telas.mini[faltam[i]!], this.r!.foto({ ...this.pedido(faltam[i]!, q.estado, MINIATURA.largura, MINIATURA.altura, "interativa", true), papel: "tira" }));
       } catch {
@@ -416,7 +417,37 @@ class Controlador {
       }
       this.agendar(() => uma(i + 1), 0);
     };
-    if (faltam.length) this.agendar(() => uma(0), 30);
+    this.agendar(() => uma(0), faltam.length ? 30 : 0);
+  }
+
+  /**
+   * Com o comparador ocioso, adianta (uma por tarefa, cancelável) as fotos "depois" das outras
+   * combinações de plano e sulco na vista e no tamanho atuais: a troca seguinte sai do cache, e a
+   * cena de cada combinação já fica com o descarte de faces de costas pronto para a vista.
+   */
+  private preaquecer(g: number): void {
+    const q = this.q;
+    if (!q || !this.r) return;
+    const lado = q.modo === "lado";
+    const w = lado ? q.larguraLado : q.largura, h = lado ? q.alturaLado : q.altura;
+    const pedidos: PedidoFoto[] = [];
+    for (const plano of PLANOS)
+      for (const imf of IMFS)
+        for (const e of ["a", "b"] as const) {
+          if (!this.id(e, q) || (e === "b" && q.ids.length < 2)) continue;
+          const p = { ...this.pedido(q.vista, e, w, h), plano, imf };
+          if (!this.r.emCache(p)) pedidos.push(p);
+        }
+    const um = (i: number) => {
+      if (i >= pedidos.length || g !== this.geracao || !this.r) return;
+      try {
+        this.r.foto(pedidos[i]!);
+      } catch {
+        return; // a foto visível já mostra o erro, se houver
+      }
+      this.agendar(() => um(i + 1), 0);
+    };
+    if (pedidos.length) this.agendar(() => um(0), 0);
   }
 
   descartar(): void {
@@ -563,7 +594,7 @@ export function ComparadorFotos(props: Props) {
       const mostrado = q.segurando ? "antes" : q.estado;
       return {
         pronto: true,
-        ...r.estadoUltima(),
+        ...r.estadoDe(q.plano, q.imf, ctrl.id(mostrado, q)),
         estado: q.estado,
         mostrado,
         modo: q.modo,

@@ -11,7 +11,7 @@
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { cpus, totalmem } from "node:os";
+import { cpus, loadavg, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
@@ -31,6 +31,7 @@ import {
   rodarRoteiro,
   rodarRoteiroFoto,
 } from "../src/simulacao/benchmark";
+import { LARGURA_INTERATIVA_MAX } from "../src/simulacao/RenderizadorFotos";
 import { IMPLANTE_1, IMPLANTE_2, abrirExplorar3D, esperarFotos, esperarQuadro, prepararSimulacao, versaoFotos } from "./simulacao-apoio";
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
@@ -43,6 +44,7 @@ test.use({ viewport: VIEWPORT });
 test("latência da simulação: 1 painel (p95 < 100 ms), lado a lado (p95 ≤ 85 ms) e modo foto (1 foto < 100 ms, 2 fotos ≤ 85 ms, cortina < 16 ms)", async ({ page, browser }, info) => {
   test.skip(info.project.name !== "desenho-B", "benchmark roda uma vez (desenho B)");
   test.setTimeout(15 * 60_000);
+  const cargaInicio = loadavg().map((x) => +x.toFixed(2));
   await prepararSimulacao(page, [IMPLANTE_1, IMPLANTE_2]);
   // roteiro 3D (aba "Explorar 3D"): o mesmo de antes
   await abrirExplorar3D(page);
@@ -91,7 +93,10 @@ test("latência da simulação: 1 painel (p95 < 100 ms), lado a lado (p95 ≤ 85
     webgl: "SwiftShader (software) — NÃO é o iPad nem GPU",
     viewport: `${VIEWPORT.width}x${VIEWPORT.height}`,
     canvas_px: canvas ? `${Math.round(canvas.width)}x${Math.round(canvas.height)}` : null,
+    /** carga média do sistema (1, 5, 15 min) no início e no fim: a CI pode estar dividida com outros processos */
+    carga_media: { inicio: cargaInicio, fim: loadavg().map((x) => +x.toFixed(2)) },
   };
+  const escalaInterativa = Math.min(1, LARGURA_INTERATIVA_MAX / tamanhoFoto.largura);
   const base = { versao_software: VERSAO, data: new Date().toISOString().slice(0, 10), commit_base: execSync("git rev-parse --short HEAD", { cwd: RAIZ }).toString().trim() };
   const r = {
     esquema: "validacao_componente/web-marco2-latencia",
@@ -118,11 +123,11 @@ test("latência da simulação: 1 painel (p95 < 100 ms), lado a lado (p95 ≤ 85
   const rf = {
     esquema: "validacao_componente/web-modo-foto-latencia",
     ...base,
-    maquina: { ...maquina, canvas_px: `${tamanhoFoto.largura}x${tamanhoFoto.altura}` },
+    maquina: { ...maquina, canvas_px: `${tamanhoFoto.largura}x${tamanhoFoto.altura}`, quadro_interativo_px: `${Math.round(tamanhoFoto.largura * escalaInterativa)}x${Math.round(tamanhoFoto.altura * escalaInterativa)}` },
     parametros: {
       torso: "t01_simetrico_300 (processado pelo services/mesh, ~40 mil vértices)",
       implantes: [IMPLANTE_1, IMPLANTE_2],
-      desenho: "um contexto WebGL fora do DOM (antialias off, preserveDrawingBuffer false, dpr 1 no quadro interativo) para todas as fotos; a mesma cena (pele-foto + halo) por plano × IMF; câmera clínica (FOV 15°); cada foto copiada para um canvas 2D com o selo nos pixels; refinamento (MSAA 4×, dpr ≤ 2) 150 ms depois, fora da latência",
+      desenho: `um contexto WebGL fora do DOM (antialias off, preserveDrawingBuffer false) para todas as fotos; uma cena (pele-foto + halo) por plano × IMF × implante, com o descarte de faces de costas válido entre as trocas; câmera clínica (FOV 15°); quadro interativo com até ${LARGURA_INTERATIVA_MAX} px de largura, lido na mesma tarefa e copiado para um canvas 2D com o selo nos pixels; com o comparador ocioso, as outras combinações de plano e sulco da vista atual são adiantadas e o quadro final (MSAA 4×, dpr ≤ 2) substitui o interativo — tudo fora da latência`,
       medida: "clique → foto nova pintada no canvas 2D + leitura de 1 px de cada foto visível (rasterizado, critério); cortina: pointermove alinhado ao início do quadro → quadro pintado (tarefa seguinte)",
       pior_caso: "as fotos 'depois' saem do cache antes de cada amostra (o 'antes' fica: não depende de implante, plano nem sulco); o comparador ocioso (sem transição, refinamento nem miniaturas) antes de cada amostra",
       aquecimento_descartado: ROTEIRO_FOTO.aquecimento.length,
@@ -168,7 +173,7 @@ versao_software: ${r.versao_software}
 data: ${r.data}
 commit_base: ${r.commit_base}
 desenho_testado: [B]
-ambiente: { os: ${r.maquina.os}, cpu: "${r.maquina.cpu}", n_cpus: ${r.maquina.n_cpus}, memoria_gb: ${r.maquina.memoria_gb}, node: "${r.maquina.node}", navegador: "${r.maquina.navegador}", webgl: "SwiftShader (software)", viewport: "${r.maquina.viewport}", foto_px: "${r.maquina.canvas_px}" }
+ambiente: { os: ${r.maquina.os}, cpu: "${r.maquina.cpu}", n_cpus: ${r.maquina.n_cpus}, memoria_gb: ${r.maquina.memoria_gb}, node: "${r.maquina.node}", navegador: "${r.maquina.navegador}", webgl: "SwiftShader (software)", viewport: "${r.maquina.viewport}", foto_px: "${r.maquina.canvas_px}", quadro_interativo_px: "${r.maquina.quadro_interativo_px}", carga_media_inicio: [${r.maquina.carga_media.inicio.join(", ")}], carga_media_fim: [${r.maquina.carga_media.fim.join(", ")}] }
 resultados:
   foto_troca_1: ${fm("foto_troca_1")}
   foto_troca_2: ${fm("foto_troca_2")}
@@ -188,7 +193,7 @@ Gerado automaticamente por \`apps/web/e2e/latencia.spec.ts\` (Playwright contra 
 - ${r.parametros.desenho}.
 - **Latência (critério)** = ${r.parametros.medida}.
 - Pior caso: ${r.parametros.pior_caso}.
-- ${r.parametros.aquecimento_descartado} interações de aquecimento descartadas. Foto de ${r.maquina.canvas_px} px (viewport ${r.maquina.viewport}).
+- ${r.parametros.aquecimento_descartado} interações de aquecimento descartadas. Foto de ${r.maquina.canvas_px} px CSS (quadro interativo de ${r.maquina.quadro_interativo_px} px; viewport ${r.maquina.viewport}). Carga média do sistema (1/5/15 min): ${r.maquina.carga_media.inicio.join(" / ")} no início, ${r.maquina.carga_media.fim.join(" / ")} no fim (4 CPUs).
 - Critérios: p95 < ${r.parametros.limite_p95_ms} ms trocando implante, plano ou sulco com 1 foto; p95 ≤ ${r.parametros.limite_p95_2_fotos_ms} ms trocando plano ou sulco com A e B lado a lado (2 fotos novas; o "antes" vem do cache); p95 < ${r.parametros.limite_p95_cortina_ms} ms no arraste da cortina (cabe num quadro de 60 Hz). Roteiro e n iguais aos da página \`/benchmark\` (\`apps/web/src/simulacao/benchmark.ts\`).
 
 ## Resultados (ms)
@@ -221,6 +226,7 @@ Amostras brutas em \`v${r.versao_software}-web-modo-foto-latencia.json\`.
 ## Desvios e pendências
 
 - Medido em software (SwiftShader), não no iPad; a página \`/benchmark\` roda o mesmo roteiro no aparelho e baixa o JSON (campos \`resultados_foto\` e \`amostras_foto_ms\`).
+- No SwiftShader o custo de cada foto é dominado pelo processamento de vértices (~40 mil vértices com morph, mais o halo), quase independente do tamanho da imagem: 2 fotos lado a lado custam ~2 fotos. Com a CI dividida com outros processos (carga média acima de 1), o p95 sobe junto com o do roteiro 3D.
 - O refinamento (MSAA 4× e dpr até 2) acontece 150 ms depois da última interação e fica fora da latência; no SwiftShader ele custa centenas de ms por foto, numa GPU real poucos ms (não medido).
 `;
   const destinos = [join(AQUI, "../test-results/validacao")];
@@ -247,7 +253,7 @@ versao_software: ${r.versao_software}
 data: ${r.data}
 commit_base: ${r.commit_base}
 desenho_testado: [B]
-ambiente: { os: ${r.maquina.os}, cpu: "${r.maquina.cpu}", n_cpus: ${r.maquina.n_cpus}, memoria_gb: ${r.maquina.memoria_gb}, node: "${r.maquina.node}", navegador: "${r.maquina.navegador}", webgl: "SwiftShader (software)", viewport: "${r.maquina.viewport}", canvas_px: "${r.maquina.canvas_px}" }
+ambiente: { os: ${r.maquina.os}, cpu: "${r.maquina.cpu}", n_cpus: ${r.maquina.n_cpus}, memoria_gb: ${r.maquina.memoria_gb}, node: "${r.maquina.node}", navegador: "${r.maquina.navegador}", webgl: "SwiftShader (software)", viewport: "${r.maquina.viewport}", canvas_px: "${r.maquina.canvas_px}", carga_media_inicio: [${r.maquina.carga_media.inicio.join(", ")}], carga_media_fim: [${r.maquina.carga_media.fim.join(", ")}] }
 resultados:
   marco2_latencia_p95_ms: ${r.resultados.geral_1_painel.p95_ms}
   slider: { n: ${r.resultados.slider.n}, p50_ms: ${r.resultados.slider.p50_ms}, p95_ms: ${r.resultados.slider.p95_ms}, max_ms: ${r.resultados.slider.max_ms} }
@@ -304,7 +310,8 @@ Amostras brutas em \`v${r.versao_software}-web-marco2-latencia.json\`.
 ## Desvios e pendências
 
 - Medido em software (SwiftShader), não no iPad; falta a medição no hardware-alvo (Safari/WebKit + GPU Apple). A página \`/benchmark\` (com \`BENCHMARK_HABILITADO=1\`) roda o mesmo roteiro no aparelho e baixa o JSON; \`python3 scripts/importar_latencia.py <json>\` gera o registro "medido em hardware real".
-- Em máquina compartilhada (outros processos disputando a CPU), o SwiftShader fica mais lento e o p95 sobe: medir com a máquina ociosa.
+- Em máquina compartilhada (outros processos disputando a CPU), o SwiftShader fica mais lento e o p95 sobe: medir com a máquina ociosa. Carga média nesta medição (1/5/15 min, 4 CPUs): ${r.maquina.carga_media.inicio.join(" / ")} no início, ${r.maquina.carga_media.fim.join(" / ")} no fim.
+- Desde a v0.2.0 (ADR 0019) este roteiro roda na aba "Explorar 3D", com a câmera clínica (FOV 15°: o torso ocupa mais do quadro que na vista orbital antiga, então há mais pixels a preencher) e o material do modo foto.
 - A geração dos morphs (\`POST /morphs\`, segundos) não entra na latência de interação: acontece uma vez por escolha de implantes, antes da interação.
 `;
   const destinos = [join(AQUI, "../test-results/validacao")];

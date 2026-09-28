@@ -106,7 +106,6 @@ export class RenderizadorFotos {
   private readonly mapas = new Map<THREE.Texture, THREE.Texture>();
   private rtMascara: THREE.WebGLRenderTarget | null = null;
   private pixels: Uint8Array | null = null;
-  private ultimaCena: CenaSimulada | null = null;
   private margem = false;
   private perdido = false;
 
@@ -262,9 +261,9 @@ export class RenderizadorFotos {
     return this.rascunho;
   }
 
-  /** Estado da cena da última imagem. */
-  estadoUltima() {
-    return (this.ultimaCena ?? this.cena("subglandular", "manter", null)).estado();
+  /** Estado da cena de uma combinação (a que aparece na tela), como ficou no último desenho dela. */
+  estadoDe(plano: Plano, imf: Imf, implanteId: string | null) {
+    return this.cena(plano, imf, implanteId).estado();
   }
 
   /** Tamanho em pixels de uma foto: quadro final em dpr ≤ 2; interativo limitado a `larguraInterativaMax`. */
@@ -289,7 +288,6 @@ export class RenderizadorFotos {
 
   private ativar(cena: CenaSimulada): void {
     for (const c of this.cenas.values()) c.mostrar(c === cena);
-    this.ultimaCena = cena;
   }
 
   private alvoFinal(w: number, h: number): THREE.WebGLRenderTarget {
