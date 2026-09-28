@@ -64,6 +64,21 @@ async function doisQuadros(page: Page) {
   await page.evaluate(() => new Promise<void>((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok()))));
 }
 
+/**
+ * O viewer fica no passo 2: deixa-o inteiro na tela e abaixo das barras fixas (aviso + passos);
+ * senão o clique projetado pode cair na barra.
+ */
+export async function alinharViewer(page: Page) {
+  const rolou = await page.evaluate(() => {
+    const v = document.querySelector('[data-testid="viewer"]')!.getBoundingClientRect();
+    const barra = document.querySelector(".passos")?.getBoundingClientRect().bottom ?? 0;
+    if (v.top >= barra + 4 && v.bottom <= window.innerHeight) return false;
+    window.scrollBy(0, v.top - barra - 8);
+    return true;
+  });
+  if (rolou) await doisQuadros(page);
+}
+
 export async function projetar(page: Page, p: V3): Promise<Projecao> {
   const r = await page.evaluate((pp) => {
     const g = (window as unknown as { __simuladorViewer?: { projetar: (x: number[]) => unknown } }).__simuladorViewer;
@@ -83,6 +98,7 @@ export async function escolherVista(page: Page, v: NomeVista) {
 
 /** Vista em que o ponto está visível e o raio é mais perpendicular à superfície (avaliada no gancho, sem renderizar). */
 export async function melhorVista(page: Page, p: V3): Promise<{ vista: NomeVista; cos: number }> {
+  await alinharViewer(page);
   const r = await page.evaluate((pp) => {
     const g = (window as unknown as { __simuladorViewer?: { melhorVista: (x: number[]) => unknown } }).__simuladorViewer;
     return g ? g.melhorVista(pp) : "sem_gancho";
@@ -103,11 +119,7 @@ const rotuloBotao = (id: LandmarkId) => {
  */
 export async function clicarPonto(page: Page, p: V3, vista: NomeVista, rng: () => number, jitterPx = 1): Promise<{ dx: number; dy: number }> {
   await escolherVista(page, vista);
-  const vw = await page.getByTestId("viewer").boundingBox();
-  if (!vw || vw.y < 0 || vw.y + vw.height > (page.viewportSize()?.height ?? Infinity)) {
-    await page.getByTestId("viewer").scrollIntoViewIfNeeded();
-    await doisQuadros(page);
-  }
+  await alinharViewer(page);
   const proj = await projetar(page, p);
   const dx = (rng() * 2 - 1) * jitterPx;
   const dy = (rng() * 2 - 1) * jitterPx;
