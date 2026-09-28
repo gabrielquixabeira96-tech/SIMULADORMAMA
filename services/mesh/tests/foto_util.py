@@ -91,3 +91,33 @@ def avaliar(res: aj.ResultadoAjuste, pasta_torso: Path, torso_verdade=None) -> d
            / g["volumes"][lado]["adicionado_ml"] * 100 for lado in ("dir", "esq")}
     return {"rms_mm": rms, "landmarks_mm": lm, "landmark_max_mm": max(lm.values()), "volume_pct": vol,
             "volume_max_pct": max(abs(v) for v in vol.values())}
+
+
+VISTAS_3 = ("frente", "obliqua_dir", "perfil_dir")
+_FOTOS: dict = {}
+_AJUSTES: dict = {}
+
+
+def garantir_fotos(pasta_torso: Path, vistas=VISTAS_3) -> dict:
+    """Gera (uma vez por sessao de testes) as fotos sinteticas do torso."""
+    from mesh.foto.sintetica import fotos_sinteticas
+
+    chave = (str(pasta_torso), tuple(vistas))
+    if chave not in _FOTOS:
+        _FOTOS[chave] = fotos_sinteticas(pasta_torso, tuple(vistas))
+    return _FOTOS[chave]
+
+
+def ajuste_avaliado(pasta_torso: Path, vistas=VISTAS_3, **kw) -> tuple:
+    """(ResultadoAjuste, metricas, segundos), memorizado por (torso, vistas, opcoes)."""
+    import time
+
+    chave = (str(pasta_torso), tuple(vistas), tuple(sorted(kw.items())))
+    if chave not in _AJUSTES:
+        garantir_fotos(pasta_torso)
+        fotos = carregar_fotos(pasta_torso, vistas, **kw)
+        t0 = time.perf_counter()
+        res = aj.ajustar(fotos, escala_ssn_n(pasta_torso))
+        dt = time.perf_counter() - t0
+        _AJUSTES[chave] = (res, avaliar(res, pasta_torso), dt)
+    return _AJUSTES[chave]
