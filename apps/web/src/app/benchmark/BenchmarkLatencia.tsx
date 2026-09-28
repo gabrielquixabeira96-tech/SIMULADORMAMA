@@ -6,22 +6,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AQUECIMENTO_DESCARTADO,
   CRITERIOS,
+  CRITERIOS_FOTO,
   LIMITE_P95_2_PAINEIS_MS,
+  LIMITE_P95_CORTINA_MS,
   LIMITE_P95_MS,
   ROTEIRO,
+  ROTEIRO_FOTO,
   dentroDoCriterio,
   medirInteracao,
+  medirInteracaoFoto,
   resumir,
+  resumirFoto,
   rodarRoteiro,
+  rodarRoteiroFoto,
+  type AmostrasFoto,
   type AmostrasRoteiro,
+  type ChaveFoto,
   type ChaveResultado,
   type Resumo,
-} from "./benchmark";
-import type { ConjuntoMorph, PainelVista } from "./VisualizadorSimulacao";
+} from "@/simulacao/benchmark";
+import type { ConjuntoMorph, PainelVista } from "@/simulacao/VisualizadorSimulacao";
 
-const VisualizadorSimulacao = dynamic(() => import("./VisualizadorSimulacao"), {
+const VisualizadorSimulacao = dynamic(() => import("@/simulacao/VisualizadorSimulacao"), {
   ssr: false,
   loading: () => <div className="viewer-vazio">Carregando simulação…</div>,
+});
+const ComparadorFotos = dynamic(() => import("@/simulacao/ComparadorFotos").then((m) => m.ComparadorFotos), {
+  ssr: false,
+  loading: () => <div className="viewer-vazio">Preparando as fotos…</div>,
 });
 
 type Fase = "ocioso" | "preparando" | "carregando" | "medindo" | "concluido" | "erro";
@@ -32,6 +44,11 @@ const ROTULOS: Record<ChaveResultado, string> = {
   troca_implante: "troca de implante (1 painel)",
   geral_1_painel: "todas as interações de 1 painel",
   slider_comparacao_2_paineis: "slider na comparação lado a lado (2 painéis)",
+};
+const ROTULOS_FOTO: Record<ChaveFoto, string> = {
+  foto_troca_1: "modo foto: troca de implante / plano / sulco (1 foto)",
+  foto_troca_2: "modo foto: troca de plano / sulco com A e B lado a lado (2 fotos)",
+  cortina: "modo foto: arraste da cortina (input → quadro pintado)",
 };
 
 const raf = () => new Promise<void>((ok) => requestAnimationFrame(() => ok()));
@@ -48,6 +65,22 @@ function infoWebgl(): { renderer: string | null; vendor: string | null } {
   } catch {
     return { renderer: null, vendor: null };
   }
+}
+
+type GanchoFoto = { versao: number; ocupado(): boolean };
+const ganchoFoto = () => (window as unknown as { __simuladorSim?: { fotos?: GanchoFoto } }).__simuladorSim?.fotos;
+
+/** Espera o comparador de fotos pintar e ficar ocioso (sem transição, refinamento ou miniaturas). */
+async function esperarFotos(versaoMinima = 1): Promise<void> {
+  const t0 = performance.now();
+  for (;;) {
+    const g = ganchoFoto();
+    if (g && g.versao >= versaoMinima && !g.ocupado()) break;
+    if (performance.now() - t0 > 60_000) throw new Error("o comparador de fotos não desenhou em 60 s");
+    await new Promise((ok) => setTimeout(ok, 20));
+  }
+  await raf();
+  await raf();
 }
 
 /** Espera o viewer desenhar pelo menos um quadro em cada painel visível. */
@@ -69,7 +102,7 @@ async function esperarPaineis(n: number): Promise<void> {
  * implantes, roda o roteiro de `benchmark.ts` (o mesmo do e2e) e mostra p50/p95 por interação,
  * com o JSON para baixar e importar (`scripts/importar_latencia.py`).
  */
-export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftware: string; envelopeMm: number }) {
+export function BenchmarkLatencia({ versaoSoftware, envelopeMm, demo = false }: { versaoSoftware: string; envelopeMm: number; demo?: boolean }) {
   const [fase, setFase] = useState<Fase>("ocioso");
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<[number, number]>([0, 0]);
@@ -79,7 +112,8 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
   const [peso, setPeso] = useState(1);
   const [comparar, setComparar] = useState(false);
   const [mostrado, setMostrado] = useState<0 | 1>(0);
-  const [resultado, setResultado] = useState<{ resultados: Record<ChaveResultado, Resumo>; json: string } | null>(null);
+  const [viewer, setViewer] = useState<"3d" | "foto">("3d");
+  const [resultado, setResultado] = useState<{ resultados: Record<ChaveResultado, Resumo>; foto: Record<ChaveFoto, Resumo>; json: string } | null>(null);
   const [urlJson, setUrlJson] = useState<string | null>(null);
   const executando = useRef(false);
 
@@ -96,6 +130,9 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
     const id = mostrado === 0 ? a : b;
     return [{ chave: "i1", rotulo: id, implanteId: id }];
   }, [dados, comparar, mostrado]);
+
+  const implantesFoto = useMemo(() => (dados ? dados.implantes.map((id) => ({ id, rotulo: id })) : []), [dados]);
+  const selo = useMemo(() => ({ envelopeMm, versao: versaoSoftware, demo }), [envelopeMm, versaoSoftware, demo]);
 
   async function rodar() {
     if (executando.current) return;
@@ -132,6 +169,7 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
       setImf("manter");
       setMostrado(0);
       setPeso(1);
+      setViewer("3d");
       await esperarPaineis(comparar ? 2 : 1);
       const amostras: AmostrasRoteiro = await rodarRoteiro({
         medir: medirInteracao,
@@ -141,11 +179,29 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
         },
         progresso: (feito, total) => setProgresso([feito, total]),
       });
+      // modo foto (ADR 0019): o viewer 3D sai de cena e entra o comparador (um contexto WebGL só)
+      setComparar(false);
+      setViewer("foto");
+      await esperarFotos();
+      const amostrasFoto: AmostrasFoto = await rodarRoteiroFoto({
+        medir: medirInteracaoFoto,
+        modo: async (m) => {
+          const v = ganchoFoto()?.versao ?? 0;
+          const botao = document.querySelector(`[data-testid="foto-modo-${m}"]`) as HTMLButtonElement;
+          const mudou = botao.getAttribute("aria-pressed") !== "true";
+          botao.click();
+          await esperarFotos(mudou ? v + 1 : v);
+        },
+        progresso: (feito, total) => setProgresso([feito, total]),
+      });
       const resultados = resumir(amostras, "rasterizado");
+      const resultadosFoto = resumirFoto(amostrasFoto, "rasterizado");
       const canvas = document.querySelector('[data-testid="sim-painel-i1"] canvas')?.getBoundingClientRect();
       const gl = infoWebgl();
       const nav = navigator as Navigator & { deviceMemory?: number };
-      const aprovado = CRITERIOS.every((c) => dentroDoCriterio(c, resultados[c.chave].p95_ms));
+      const aprovado3d = CRITERIOS.every((c) => dentroDoCriterio(c, resultados[c.chave].p95_ms));
+      const aprovadoFoto = CRITERIOS_FOTO.every((c) => dentroDoCriterio(c, resultadosFoto[c.chave].p95_ms));
+      const aprovado = aprovado3d && aprovadoFoto;
       const r = {
         esquema: "validacao_componente/web-marco2-latencia",
         origem: "pagina_benchmark",
@@ -172,14 +228,24 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
           limite_p95_2_paineis_ms: LIMITE_P95_2_PAINEIS_MS,
           aquecimento_descartado: AQUECIMENTO_DESCARTADO,
           n_por_interacao: { slider: ROTEIRO.slider.n, troca_plano_imf: ROTEIRO.troca_plano_imf.n, troca_implante: ROTEIRO.troca_implante.n, slider_comparacao_2_paineis: ROTEIRO.slider_comparacao_2_paineis.n },
+          modo_foto: {
+            n_por_interacao: { foto_troca_1: ROTEIRO_FOTO.foto_troca_1.n, foto_troca_2: ROTEIRO_FOTO.foto_troca_2.n, cortina: ROTEIRO_FOTO.cortina.n },
+            limite_p95_cortina_ms: LIMITE_P95_CORTINA_MS,
+            medida: "rasterizado: clique → foto nova pintada + leitura de 1 px de cada foto visível (fotos 'depois' fora do cache antes de cada amostra); cortina: pointermove alinhado ao quadro → quadro pintado",
+          },
         },
         resultados,
         raf_apos_emissao: resumir(amostras, "quadro"),
         amostras_ms: amostras,
+        resultados_foto: resultadosFoto,
+        quadro_pintado_foto: resumirFoto(amostrasFoto, "quadro"),
+        amostras_foto_ms: amostrasFoto,
+        aprovado_3d: aprovado3d,
+        aprovado_foto: aprovadoFoto,
         aprovado,
       };
       const json = JSON.stringify(r, null, 2) + "\n";
-      setResultado({ resultados, json });
+      setResultado({ resultados, foto: resultadosFoto, json });
       setUrlJson(URL.createObjectURL(new Blob([json], { type: "application/json" })));
       setFase("concluido");
       setMensagem(null);
@@ -237,6 +303,20 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
                   </tr>
                 );
               })}
+              {(Object.keys(ROTULOS_FOTO) as ChaveFoto[]).map((k) => {
+                const x = resultado.foto[k];
+                const c = CRITERIOS_FOTO.find((y) => y.chave === k)!;
+                return (
+                  <tr key={k} data-testid={`benchmark-linha-${k}`}>
+                    <td>{ROTULOS_FOTO[k]}</td>
+                    <td className="num">{x.n}</td>
+                    <td className="num">{x.p50_ms.toFixed(1)}</td>
+                    <td className="num">{x.p95_ms.toFixed(1)}</td>
+                    <td className="num">{x.max_ms.toFixed(1)}</td>
+                    <td>{`${c.estrito ? "<" : "≤"} ${c.limite} ms: ${dentroDoCriterio(c, x.p95_ms) ? "atingido" : "NÃO atingido"}`}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <p className="nota">
@@ -282,7 +362,23 @@ export function BenchmarkLatencia({ versaoSoftware, envelopeMm }: { versaoSoftwa
                 </label>
               ))}
           </div>
-          <VisualizadorSimulacao conjuntos={dados.conjuntos} paineis={paineis} plano={plano} imf={imf} peso={peso} envelopeMm={envelopeMm} vista="frente" instrumentar />
+          {viewer === "3d" ? (
+            <VisualizadorSimulacao conjuntos={dados.conjuntos} paineis={paineis} plano={plano} imf={imf} peso={peso} envelopeMm={envelopeMm} vista="frente" instrumentar />
+          ) : (
+            <ComparadorFotos
+              conjuntos={dados.conjuntos}
+              implantes={implantesFoto}
+              plano={plano}
+              imf={imf}
+              rotuloPlano={ROTULOS_PLANO[plano]}
+              rotuloImf={ROTULOS_IMF[imf]}
+              envelopeMm={envelopeMm}
+              volumeFator={0.15}
+              landmarks={null}
+              selo={selo}
+              instrumentar
+            />
+          )}
         </div>
       )}
     </section>

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
-import { AQUECIMENTO_DESCARTADO, ROTEIRO } from "../src/simulacao/benchmark";
+import { AQUECIMENTO_DESCARTADO, ROTEIRO, ROTEIRO_FOTO } from "../src/simulacao/benchmark";
 
 const RAIZ = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -24,7 +24,7 @@ test("benchmark desligado por padrão: /benchmark e /api/benchmark dão 404", as
 
 test("benchmark ligado: roda o roteiro, mostra p50/p95 e baixa o JSON importável", async ({ page, request }, info) => {
   test.skip(info.project.name !== "desenho-B", "o servidor B roda com BENCHMARK_HABILITADO=1");
-  test.setTimeout(10 * 60_000);
+  test.setTimeout(15 * 60_000);
   // só a lista fixa de arquivos
   expect((await request.get("/api/benchmark/arquivo?nome=processada.obj")).status()).toBe(400);
   expect((await request.get("/api/benchmark/arquivo?nome=../../pacientes/x.glb")).status()).toBe(400);
@@ -41,8 +41,10 @@ test("benchmark ligado: roda o roteiro, mostra p50/p95 e baixa o JSON importáve
   const r = await page.goto("/benchmark");
   expect(r?.status()).toBe(200);
   await page.getByTestId("benchmark-rodar").click();
-  await expect(page.getByTestId("benchmark-resultado")).toBeVisible({ timeout: 9 * 60_000 });
-  for (const k of ["slider", "troca_plano_imf", "troca_implante", "geral_1_painel", "slider_comparacao_2_paineis"]) await expect(page.getByTestId(`benchmark-linha-${k}`)).toBeVisible();
+  await expect(page.getByTestId("benchmark-resultado")).toBeVisible({ timeout: 14 * 60_000 });
+  for (const k of ["slider", "troca_plano_imf", "troca_implante", "geral_1_painel", "slider_comparacao_2_paineis", "foto_troca_1", "foto_troca_2", "cortina"]) await expect(page.getByTestId(`benchmark-linha-${k}`)).toBeVisible();
+  // o comparador de fotos mediu com o selo nos pixels (o /benchmark também não baixa imagem)
+  await expect(page.getByTestId("foto-comparador")).toBeVisible();
   // nenhum número previsto (dado calculado) sai na página
   await expect(page.getByTestId("previsto-simulacao")).toHaveCount(0);
 
@@ -63,6 +65,12 @@ test("benchmark ligado: roda o roteiro, mostra p50/p95 e baixa o JSON importáve
     expect(j.resultados.slider_comparacao_2_paineis.n).toBe(ROTEIRO.slider_comparacao_2_paineis.n);
     expect(j.resultados.geral_1_painel.n).toBe(ROTEIRO.slider.n + ROTEIRO.troca_plano_imf.n + ROTEIRO.troca_implante.n);
     for (const x of Object.values(j.resultados) as Array<{ p50_ms: number; p95_ms: number }>) expect(x.p95_ms).toBeGreaterThanOrEqual(x.p50_ms);
+    // modo foto (ADR 0019): mesmo roteiro e n do e2e de latência
+    expect(j.resultados_foto.foto_troca_1.n).toBe(ROTEIRO_FOTO.foto_troca_1.n);
+    expect(j.resultados_foto.foto_troca_2.n).toBe(ROTEIRO_FOTO.foto_troca_2.n);
+    expect(j.resultados_foto.cortina.n).toBe(ROTEIRO_FOTO.cortina.n);
+    expect(j.amostras_foto_ms.foto_troca_1).toHaveLength(ROTEIRO_FOTO.foto_troca_1.n);
+    expect(typeof j.aprovado_foto).toBe("boolean");
     expect(JSON.stringify(j)).not.toMatch(/pseud|paciente|P-[0-9A-Z]{6}/i);
 
     // importador: gera o registro "medido em hardware real" com o userAgent

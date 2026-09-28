@@ -5,6 +5,8 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { EnvelopeAusenteError, criarCenaSimulada, garantirEnvelope, geometriaOtimizada, indicesDeFrente, maximoCubico, ordenarTriangulosCache } from "@/simulacao/cena";
+import { shDeLuz } from "@/simulacao/materialFoto";
+import { prepararCenaParaFoto } from "@/simulacao/RenderizadorFotos";
 
 /** Malha pequena com 2 targets: um que desloca 2 vértices em +Z (5 mm) e um lateral (dir). */
 function malhaComMorphs(): THREE.Mesh {
@@ -90,6 +92,67 @@ describe("cena simulada", () => {
     expect(c.grupo.visible).toBe(false);
     c.mostrar(true);
     expect(c.grupo.visible).toBe(true);
+  });
+});
+
+/**
+ * Modo foto (ADR 0019): pele sem luz somada (MeshBasicMaterial + razão SH9) e halo âmbar como casca
+ * invertida. A invariante `garantirEnvelope` é a mesma: sem halo, nenhuma foto "depois".
+ */
+describe("cena simulada no modo foto", () => {
+  const ALVO = "mt__imp-a__dual_plane__manter";
+  const uAtivo = (m: THREE.Material) => (m.userData.uniforms as { uAtivo: { value: number } }).uAtivo.value;
+
+  it("pele-foto sem luz (MeshBasicMaterial) e halo invertido (BackSide) a +envelope; nenhuma luz no grupo", () => {
+    const c = criarCenaSimulada(malhaComMorphs(), 4.5);
+    expect(c.pele.material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect((c.cascas[0].material as THREE.Material).side).toBe(THREE.BackSide);
+    let luzes = 0;
+    c.grupo.traverse((o) => void ((o as THREE.Light).isLight && luzes++));
+    expect(luzes).toBe(0);
+  });
+
+  it("peso 0 → uAtivo 0 na pele e no halo (R ≡ 1, sem marcas); qualquer peso > 0 (inclusive 0,3 da transição) → envelope visível", () => {
+    const c = criarCenaSimulada(malhaComMorphs(), 4.5);
+    c.definir(ALVO, 0);
+    expect(uAtivo(c.pele.material as THREE.Material)).toBe(0);
+    expect(uAtivo(c.cascas[0].material as THREE.Material)).toBe(0);
+    for (const w of [0.3, 0.01, 1]) {
+      prepararCenaParaFoto(c, ALVO, w);
+      expect(uAtivo(c.pele.material as THREE.Material)).toBe(1);
+      expect(c.estado()).toMatchObject({ alvo: ALVO, peso: w, envelope_visivel: true, pele_visivel: true });
+    }
+  });
+
+  it("definirIluminacao exige 9 coeficientes finitos; margem completa só acrescenta (não muda estado())", () => {
+    const c = criarCenaSimulada(malhaComMorphs(), 4.5);
+    const sh = shDeLuz(0.4, 0.6, [0, 0.35, 0.94]);
+    c.definirIluminacao(sh);
+    expect((c.pele.material as THREE.Material).userData.uniforms.uSH.value).toEqual(sh);
+    expect(() => c.definirIluminacao(sh.slice(0, 8))).toThrow();
+    expect(() => c.definirIluminacao([...sh.slice(0, 8), Number.NaN])).toThrow();
+    c.definir(ALVO, 1);
+    const antes = JSON.stringify(c.estado());
+    c.definirMargemCompleta(true);
+    expect((c.pele.material as THREE.Material).userData.uniforms.uMargemCompleta.value).toBe(1);
+    expect(JSON.stringify(c.estado())).toBe(antes);
+    c.definirMargemCompleta(false);
+    expect(JSON.stringify(c.estado())).toBe(antes);
+  });
+
+  it("FALHA no modo foto se o halo sair do grupo com peso > 0: EnvelopeAusenteError e a pele some (a foto 'depois' não sai)", () => {
+    const c = criarCenaSimulada(malhaComMorphs(), 4.5);
+    prepararCenaParaFoto(c, ALVO, 1);
+    c.grupo.remove(c.cascas[0]);
+    expect(() => prepararCenaParaFoto(c, ALVO, 1)).toThrow(EnvelopeAusenteError);
+    expect(c.pele.visible).toBe(false);
+    expect(() => prepararCenaParaFoto(c, ALVO, 0.3)).toThrow(EnvelopeAusenteError);
+    // o "antes" (peso 0) continua possível: não é imagem simulada
+    expect(() => prepararCenaParaFoto(c, null, 0)).not.toThrow();
+    // halo de volta: a foto "depois" volta a sair
+    c.grupo.add(c.cascas[0]);
+    expect(() => prepararCenaParaFoto(c, ALVO, 1)).not.toThrow();
+    expect(c.pele.visible).toBe(true);
   });
 });
 

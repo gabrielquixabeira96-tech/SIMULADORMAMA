@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { benchmarkHabilitado } from "@/benchmark/servidor";
 import { configPublica } from "@/config/publica";
-import { BenchmarkLatencia } from "@/simulacao/BenchmarkLatencia";
+import { BenchmarkLatencia } from "./BenchmarkLatencia";
 
 // A flag é lida em runtime no servidor (nunca no build nem no cliente).
 export const dynamic = "force-dynamic";
@@ -21,11 +21,11 @@ export default function PaginaBenchmark() {
       <header className="cabecalho">
         <h1>Benchmark de latência da simulação</h1>
         <p className="nota">
-          Torso sintético paramétrico (nenhum dado de paciente). Mede, NESTE aparelho, do toque/arraste até o quadro desenhado: slider antes/depois, troca de plano/IMF e de implante (1 painel) e
-          slider na comparação lado a lado (2 painéis). Deixe a aba em primeiro plano e o aparelho sem outras tarefas durante a medição.
+          Torso sintético paramétrico (nenhum dado de paciente). Mede, NESTE aparelho, do toque/arraste até o quadro desenhado: slider antes/depois, troca de plano/IMF e de implante (1 painel),
+          slider na comparação lado a lado (2 painéis) e, no modo foto, a troca com 1 e com 2 fotos e o arraste da cortina. Deixe a aba em primeiro plano e o aparelho sem outras tarefas durante a medição.
         </p>
       </header>
-      <BenchmarkLatencia versaoSoftware={config.versao_software} envelopeMm={config.envelope_rms_mm} />
+      <BenchmarkLatencia versaoSoftware={config.versao_software} envelopeMm={config.envelope_rms_mm} demo={config.demo} />
     </>
   );
 }

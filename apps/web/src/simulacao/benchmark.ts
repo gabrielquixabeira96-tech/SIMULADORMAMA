@@ -177,6 +177,143 @@ export const CRITERIOS: ReadonlyArray<{ chave: ChaveResultado; limite: number; e
   { chave: "slider_comparacao_2_paineis", limite: LIMITE_P95_2_PAINEIS_MS, estrito: false },
 ];
 
-export function dentroDoCriterio(c: (typeof CRITERIOS)[number], p95: number): boolean {
+export function dentroDoCriterio(c: { limite: number; estrito: boolean }, p95: number): boolean {
   return c.estrito ? p95 < c.limite : p95 <= c.limite;
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * Modo foto (ADR 0019). O gesto mais frequente (comparar) deixa de desenhar 3D: trocar implante,
+ * plano ou sulco redesenha 1 foto (ou 2, lado a lado) num único contexto WebGL fora do DOM e copia
+ * para o canvas 2D visível; a cortina é só composição 2D (clip-path sobre 2 canvases prontos).
+ *
+ * - foto_troca_1: troca de plano / sulco / implante com 1 foto (critério p95 < 100 ms);
+ * - foto_troca_2: troca de plano / sulco com A e B lado a lado (2 fotos; p95 ≤ 85 ms);
+ * - cortina: arraste (pointermove alinhado ao início do quadro, como o navegador entrega o input
+ *   contínuo) até o quadro pintado (p95 < 16 ms = cabe num quadro de 60 Hz).
+ * Pior caso: as fotos "depois" saem do cache antes de cada amostra (o "antes" fica: não depende
+ * de implante, plano nem sulco), então toda troca paga um render WebGL completo.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type AcaoFoto = { tipo: "clique"; testid: string } | { tipo: "cortina"; posicao: number };
+
+export const LIMITE_P95_CORTINA_MS = 16;
+
+export const ROTEIRO_FOTO = {
+  aquecimento: ["plano-dual_plane", "imf-rebaixar", "foto-estado-b", "plano-subglandular", "imf-manter", "foto-estado-a"],
+  foto_troca_1: { n: 24, ciclo: ["plano-dual_plane", "foto-estado-b", "imf-rebaixar", "foto-estado-a", "plano-subglandular", "imf-manter"] },
+  foto_troca_2: { n: 20, ciclo: ["plano-dual_plane", "imf-rebaixar", "plano-subglandular", "imf-manter"] },
+  cortina: { n: 60, posicoes: [20, 35, 50, 65, 80, 50] },
+} as const;
+
+export const TOTAL_INTERACOES_FOTO = ROTEIRO_FOTO.aquecimento.length + ROTEIRO_FOTO.foto_troca_1.n + ROTEIRO_FOTO.foto_troca_2.n + ROTEIRO_FOTO.cortina.n;
+
+export interface AmostrasFoto {
+  foto_troca_1: Amostra[];
+  foto_troca_2: Amostra[];
+  cortina: Amostra[];
+}
+export type ChaveFoto = keyof AmostrasFoto;
+
+/**
+ * Mede UMA interação do modo foto dentro da página (autocontida, como `medirInteracao`). Espera o
+ * comparador ocioso (sem transição, refinamento ou miniaturas pendentes), tira as fotos "depois"
+ * do cache e mede do clique até a composição nova pintada (`quadro`) e até a leitura de 1 px de
+ * cada foto visível, que força o fim do trabalho de GPU e da cópia (`rasterizado`, critério).
+ */
+export async function medirInteracaoFoto(a: AcaoFoto): Promise<Amostra> {
+  type G = { versao: number; ocupado(): boolean; limparCache(o?: { manterAntes?: boolean }): void };
+  const g = (window as unknown as { __simuladorSim?: { fotos?: G } }).__simuladorSim?.fotos;
+  if (!g) throw new Error("ganchos do modo foto ausentes (comparador sem instrumentação)");
+  const raf = () => new Promise<void>((ok) => requestAnimationFrame(() => ok()));
+  const t00 = performance.now();
+  while (g.ocupado()) {
+    if (performance.now() - t00 > 30_000) throw new Error("comparador não ficou ocioso em 30 s");
+    await new Promise((ok) => setTimeout(ok, 15));
+  }
+  await raf();
+  await raf();
+  await new Promise((ok) => setTimeout(ok, 30));
+  if (a.tipo === "cortina") {
+    const palco = document.querySelector('[data-testid="foto-principal"]') as HTMLElement;
+    const topo = palco.querySelectorAll("canvas")[1] as HTMLCanvasElement;
+    const b = palco.getBoundingClientRect();
+    const x = b.left + (b.width * a.posicao) / 100;
+    const y = b.top + b.height / 2;
+    const disparar = (tipo: string) => palco.dispatchEvent(new PointerEvent(tipo, { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 1, pointerType: "touch", isPrimary: true }));
+    // o input contínuo chega alinhado ao início do quadro; mede até o quadro pintado (a tarefa seguinte)
+    return new Promise<Amostra>((ok, erro) =>
+      requestAnimationFrame(() => {
+        const t0 = performance.now();
+        disparar("pointerdown");
+        disparar("pointermove");
+        const ch = new MessageChannel();
+        ch.port1.onmessage = () => {
+          const dt = performance.now() - t0;
+          disparar("pointerup");
+          const pos = parseFloat(topo.style.clipPath.trim().split(/\s+/).pop() ?? "");
+          if (!(Math.abs(pos - a.posicao) < 0.6)) return erro(new Error(`cortina não moveu: ${topo.style.clipPath}`));
+          ok({ quadro: dt, rasterizado: dt });
+        };
+        ch.port2.postMessage(0);
+      }),
+    );
+  }
+  g.limparCache({ manterAntes: true });
+  const v0 = g.versao;
+  const t0 = performance.now();
+  (document.querySelector(`[data-testid="${a.testid}"]`) as HTMLElement).click();
+  const quadro = await new Promise<number>((ok, erro) => {
+    const passo = () => {
+      const agora = performance.now();
+      if (g.versao > v0) return ok(agora - t0);
+      if (agora - t0 > 10_000) return erro(new Error(`foto não atualizada em 10 s (${a.testid})`));
+      requestAnimationFrame(passo);
+    };
+    passo();
+  });
+  for (const c of document.querySelectorAll('[data-testid="foto-principal"] canvas, [data-testid^="foto-lado-"] canvas')) {
+    (c as HTMLCanvasElement).getContext("2d")?.getImageData(0, 0, 1, 1);
+  }
+  return { quadro, rasterizado: performance.now() - t0 };
+}
+
+export interface ExecutorFoto {
+  medir(a: AcaoFoto): Promise<Amostra>;
+  /** Liga o modo do comparador ("foto", "lado", "cortina") e espera a composição nova. */
+  modo(m: "foto" | "lado" | "cortina"): Promise<void>;
+  progresso?(feito: number, total: number): void;
+}
+
+/** Roteiro do modo foto (o mesmo no e2e e na página /benchmark). */
+export async function rodarRoteiroFoto(x: ExecutorFoto): Promise<AmostrasFoto> {
+  let feito = 0;
+  const medir = async (a: AcaoFoto) => {
+    const r = await x.medir(a);
+    x.progresso?.(++feito, TOTAL_INTERACOES_FOTO);
+    return r;
+  };
+  await x.modo("foto");
+  for (const t of ROTEIRO_FOTO.aquecimento) await medir({ tipo: "clique", testid: t });
+  const r: AmostrasFoto = { foto_troca_1: [], foto_troca_2: [], cortina: [] };
+  const t1 = ROTEIRO_FOTO.foto_troca_1;
+  for (let i = 0; i < t1.n; i++) r.foto_troca_1.push(await medir({ tipo: "clique", testid: t1.ciclo[i % t1.ciclo.length]! }));
+  await x.modo("lado");
+  const t2 = ROTEIRO_FOTO.foto_troca_2;
+  for (let i = 0; i < t2.n; i++) r.foto_troca_2.push(await medir({ tipo: "clique", testid: t2.ciclo[i % t2.ciclo.length]! }));
+  await x.modo("cortina");
+  const c = ROTEIRO_FOTO.cortina;
+  for (let i = 0; i < c.n; i++) r.cortina.push(await medir({ tipo: "cortina", posicao: c.posicoes[i % c.posicoes.length]! }));
+  await x.modo("foto");
+  return r;
+}
+
+export function resumirFoto(a: AmostrasFoto, m: keyof Amostra = "rasterizado"): Record<ChaveFoto, Resumo> {
+  const v = (xs: Amostra[]) => xs.map((x) => x[m]);
+  return { foto_troca_1: resumo(v(a.foto_troca_1)), foto_troca_2: resumo(v(a.foto_troca_2)), cortina: resumo(v(a.cortina)) };
+}
+
+export const CRITERIOS_FOTO: ReadonlyArray<{ chave: ChaveFoto; limite: number; estrito: boolean }> = [
+  { chave: "foto_troca_1", limite: LIMITE_P95_MS, estrito: true },
+  { chave: "foto_troca_2", limite: LIMITE_P95_2_PAINEIS_MS, estrito: false },
+  { chave: "cortina", limite: LIMITE_P95_CORTINA_MS, estrito: true },
+];

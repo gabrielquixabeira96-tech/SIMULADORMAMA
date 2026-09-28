@@ -1,12 +1,14 @@
 import * as THREE from "three";
+import { criarMaterialHalo, criarMaterialPeleFoto, type SH9, type UniformsHalo, type UniformsPeleFoto } from "./materialFoto";
 
 /**
- * Cena de uma superfície simulada (contratos §10.3; restrição 3 da PROMPT):
+ * Cena de uma superfície simulada (contratos §10.3; restrição 3 da PROMPT; ADR 0019):
  * a pele deformada por morph targets NUNCA existe sem o envelope de incerteza. O único jeito de
  * obter a malha simulada é `criarCenaSimulada`, que devolve a pele JÁ com o envelope ±envelope_rms_mm
- * sobre a região que o implante altera: casca translúcida azul a +envelope ao longo da normal da
- * superfície deformada (limite externo) e faixa laranja pintada na própria pele (a superfície
- * −envelope fica sob a pele; vê-la "através" da pele equivale a essa faixa, a um custo menor).
+ * sobre a região que o implante altera: halo âmbar (casca invertida a +envelope ao longo da
+ * normal da superfície deformada, visível como faixa hachurada na silhueta) e linha pontilhada
+ * na borda da região simulada, pintada na própria pele. A pele é a textura do scan SEM luz somada
+ * ("modo foto", `materialFoto.ts`): o "depois" é a mesma foto com a razão de sombreamento SH9.
  * O web não calcula deformação: só interpola os targets pré-computados pelo services/mesh.
  */
 
@@ -20,7 +22,7 @@ export class EnvelopeAusenteError extends Error {
 export interface CenaSimulada {
   readonly grupo: THREE.Group;
   readonly pele: THREE.Mesh;
-  /** casca externa (+envelope) */
+  /** halo da incerteza: casca invertida a +envelope (faixa âmbar na silhueta) */
   readonly cascas: readonly [THREE.Mesh];
   readonly envelopeMm: number;
   readonly nomesTargets: readonly string[];
@@ -28,6 +30,12 @@ export interface CenaSimulada {
   definir(nomeTarget: string | null, peso: number): void;
   /** Mostra/esconde a cena inteira (pele + envelope juntos: nunca a pele sozinha). */
   mostrar(visivel: boolean): void;
+  /** Coeficientes SH9 (contrato C1) usados na razão de sombreamento do "depois". */
+  definirIluminacao(sh9: SH9): void;
+  /** "Mostrar margem completa": a faixa pintada antiga por cima da pele. Só acrescenta; não muda `estado()`. */
+  definirMargemCompleta(ligada: boolean): void;
+  /** Pixels do dispositivo por pixel de referência (a hachura e o pontilhado mantêm a largura aparente). */
+  definirEscalaTracejado(pxPorReferencia: number): void;
   /**
    * Posição do olho da câmera (mundo) para o descarte antecipado das faces de costas da pele;
    * null desliga (desenha o índice completo). Só retira triângulos que a GPU descartaria de
@@ -342,38 +350,6 @@ function geometriaCasca(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return c;
 }
 
-function materialCasca(deslocMm: number, cor: string): THREE.MeshBasicMaterial {
-  // Sem iluminação (casca é marcação, não pele): mais barato em GPU fraca.
-  const m = new THREE.MeshBasicMaterial({
-    color: cor,
-    transparent: true,
-    opacity: 0.6,
-    depthWrite: false,
-    side: THREE.FrontSide,
-  });
-  m.userData.deslocMm = deslocMm;
-  m.userData.uniforms = { uDesloc: { value: deslocMm }, uAtivo: { value: 0 } };
-  m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, m.userData.uniforms);
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float mascaraEnvelope;\nvarying float vMascara;\nvarying vec3 vNormalV;\nvarying vec3 vVista;\nuniform float uDesloc;")
-      // o shader básico só calcula a normal com envmap/skinning: calcula aqui a normal DEFORMADA
-      .replace("#include <begin_vertex>", "#include <beginnormal_vertex>\n#include <morphnormal_vertex>\n#include <begin_vertex>")
-      .replace("#include <morphtarget_vertex>", "#include <morphtarget_vertex>\ntransformed += normalize(objectNormal) * uDesloc;\nvMascara = mascaraEnvelope;")
-      .replace("#include <project_vertex>", "#include <project_vertex>\nvVista = -mvPosition.xyz;\nvNormalV = normalize(normalMatrix * objectNormal);");
-    // casca mais visível no contorno (onde o afastamento de +envelope se lê) e tênue de frente,
-    // para não esconder a faixa pintada na pele
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vMascara;\nvarying vec3 vNormalV;\nvarying vec3 vVista;\nuniform float uAtivo;")
-      .replace(
-        "#include <opaque_fragment>",
-        "float borda = 1.0 - abs(dot(normalize(vNormalV), normalize(vVista)));\ndiffuseColor.a *= vMascara * uAtivo * (0.2 + 0.8 * borda * borda);\nif (diffuseColor.a < 0.004) discard;\n#include <opaque_fragment>",
-      );
-  };
-  m.customProgramCacheKey = () => "casca-envelope";
-  return m;
-}
-
 /**
  * @param malhaBase malha do .glb de morphs (com `morphTargetDictionary` vindo de `mesh.extras.targetNames`)
  * @param envelopeMm ±envelope_rms_mm de config/simulacao.json (obrigatório, > 0)
@@ -392,25 +368,15 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
   const dic: Record<string, number> = Object.fromEntries(nomes.map((n, i) => [n, i]));
   const g = geometriaCompartilhada(base, escolhidos.map(([, i]) => i));
   const morphPos = g.morphAttributes.position!;
-  // Pele em Lambert (mesma textura/cor do .glb): sombreamento difuso basta para a ilustração e
-  // custa muito menos que PBR em GPUs fracas (e no SwiftShader da CI).
+  // Pele-foto: a textura do .glb sem luz somada; o "depois" leva só a razão de sombreamento SH9.
   const orig = (Array.isArray(malhaBase.material) ? malhaBase.material[0]! : malhaBase.material) as THREE.MeshStandardMaterial;
-  const matPele = new THREE.MeshLambertMaterial({ map: orig.map ?? null, color: orig.color ?? new THREE.Color(0xd9b8a3), vertexColors: !!orig.vertexColors });
-  const uniformsPele = { uAtivo: { value: 0 } };
-  matPele.userData.uniforms = uniformsPele;
-  matPele.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniformsPele);
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float mascaraEnvelope;\nvarying float vMascara;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvMascara = mascaraEnvelope;");
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vMascara;\nuniform float uAtivo;")
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.91, 0.54, 0.05), 0.55 * vMascara * uAtivo);");
-  };
-  matPele.customProgramCacheKey = () => "pele-com-faixa-envelope";
+  const matPele = criarMaterialPeleFoto(orig.map ?? null, { cor: orig.color?.clone() ?? new THREE.Color(orig.map ? 0xffffff : 0xd9b8a3), vertexColors: !!orig.vertexColors });
+  const uniformsPele = matPele.userData.uniforms as UniformsPeleFoto;
   const pele = new THREE.Mesh(g, matPele);
   const gCasca = geometriaCasca(g);
-  const externa = new THREE.Mesh(gCasca, materialCasca(+envelopeMm, "#2f81f7"));
+  const matHalo = criarMaterialHalo(+envelopeMm);
+  const uniformsHalo = matHalo.userData.uniforms as UniformsHalo;
+  const externa = new THREE.Mesh(gCasca, matHalo);
   externa.renderOrder = 2;
   for (const m of [pele, externa]) {
     m.morphTargetDictionary = dic;
@@ -529,6 +495,18 @@ export function criarCenaSimulada(malhaBase: THREE.Mesh, envelopeMm: number, usa
     },
     mostrar(visivel) {
       grupo.visible = visivel;
+    },
+    definirIluminacao(sh9) {
+      if (sh9.length !== 9 || !sh9.every(Number.isFinite)) throw new Error("iluminação SH9 inválida");
+      uniformsPele.uSH.value = [...sh9];
+    },
+    definirMargemCompleta(ligada) {
+      uniformsPele.uMargemCompleta.value = ligada ? 1 : 0;
+    },
+    definirEscalaTracejado(px) {
+      const e = Number.isFinite(px) && px > 0 ? px : 1;
+      uniformsPele.uEscalaPx.value = e;
+      uniformsHalo.uEscalaPx.value = e;
     },
     estado() {
       const simulada = alvo !== null && peso > 0;
