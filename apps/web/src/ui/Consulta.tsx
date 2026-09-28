@@ -637,24 +637,25 @@ export function Consulta({ config }: { config: ConfigPublica }) {
                 </div>
               ))}
             </div>
-          </details>
-        )}
-
-        {comFoto.length > 0 && (
-          <details className="torsos" open={fonte?.tipo !== "servidor"} data-testid="fotos-exemplo">
-            <summary>{fonte?.tipo === "servidor" ? "Trocar de foto de exemplo" : "Fotos de exemplo (modelo 3D estimado das fotos)"}</summary>
-            <p className="nota">Fotos sintéticas do torso, já reconstruídas em 3D: a simulação edita a própria foto.</p>
-            <div className="cards-torsos" role="list" aria-label="Fotos de exemplo">
-              {comFoto.map((t) => (
-                <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fotoImportada?.torso === t.nome ? "1" : "0"}>
-                  <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome} — foto de exemplo</div>
-                  <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
-                  <button type="button" onClick={() => void importarFoto(t)} disabled={carregando} data-testid={`importar-foto-${t.nome}`}>
-                    Usar a foto de exemplo
-                  </button>
+            {comFoto.length > 0 && (
+              // no mesmo <details> dos torsos: recolhido, o passo 1 não cresce (critério de altura do fluxo guiado)
+              <div className="fotos-exemplo" data-testid="fotos-exemplo">
+                <p className="nota">
+                  <strong>Fotos de exemplo</strong> — fotos sintéticas do torso, já reconstruídas em 3D: a simulação edita a própria foto.
+                </p>
+                <div className="cards-torsos" role="list" aria-label="Fotos de exemplo">
+                  {comFoto.map((t) => (
+                    <div key={t.nome} className="card-torso" role="listitem" data-selecionado={fotoImportada?.torso === t.nome ? "1" : "0"}>
+                      <div className="card-torso-titulo">{NOMES_TORSOS[t.nome]?.titulo ?? t.nome} — foto de exemplo</div>
+                      <div className="nota">{NOMES_TORSOS[t.nome]?.descricao ?? "torso sintético"}</div>
+                      <button type="button" onClick={() => void importarFoto(t)} disabled={carregando} data-testid={`importar-foto-${t.nome}`}>
+                        Usar a foto de exemplo
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </details>
         )}
 

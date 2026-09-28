@@ -22,7 +22,7 @@ type Qualidade = "interativa" | "final";
 async function prepararFotoReal(page: Page, implantes: string[]): Promise<string> {
   await page.goto("/");
   await novoAtendimento(page);
-  if (!(await page.getByTestId(`importar-foto-${TORSO}`).isVisible())) await page.getByTestId("fotos-exemplo").locator("summary").click();
+  if (!(await page.getByTestId(`importar-foto-${TORSO}`).isVisible())) await page.getByTestId("torsos-sinteticos").locator("summary").click();
   await page.getByTestId(`importar-foto-${TORSO}`).click();
   const msg = page.getByRole("status").filter({ hasText: `Modelo 3D de ${TORSO} estimado de 1 foto` });
   await expect(msg).toBeVisible({ timeout: 120_000 });
