@@ -98,6 +98,7 @@ def test_distancias_do_gabarito_coerentes(torsos):
 
 
 def test_superficie_deterministica_e_textura_neutra():
+    """Textura neutra do Marco 0 (hoje `textura.realismo: "esquematico"`; ADR 0020)."""
     p = esquemas.completar_parametros(esquemas.presets_torso()["t02_assimetrico"])
     s, y = np.array([10.0, -80.0, 120.0]), np.array([-5.0, -200.0, -260.0])
     assert np.array_equal(Torso(p).avaliar(s, y), Torso(p).avaliar(s, y))
@@ -152,3 +153,55 @@ def test_normais_para_fora_e_uv_sem_arrasto(torsos, dir_sinteticos, nome):
         duv = np.linalg.norm(uvmm[m.F[:, i]] - uvmm[m.F[:, j]], axis=1)
         razoes.append(duv / np.maximum(d3, 1e-9))
     assert np.max(razoes) < 1.5
+
+
+def test_torso_esquematico_textura_neutra_e_morphs_antigos_apagados(tmp_path):
+    """`textura.realismo: "esquematico"` gera exatamente a textura neutra (1024 x 1024) e o gabarito
+    registra o bloco `textura`; regerar o torso apaga `morphs/` (derivados da malha/textura antigas);
+    `torso_atualizado` reconhece o que ja esta gerado e o que ficou para tras."""
+    import json
+
+    from mesh.sintetico.gerador import gerar_torso, torso_atualizado
+
+    p = dict(esquemas.presets_torso()["t01_simetrico_300"])
+    p.update({"nome": "t98_esquematico", "resolucao": {"densa_faces": 60000, "decimada_vertices": 30000},
+              "textura": {"realismo": "esquematico"}})
+    pasta = tmp_path / "t98_esquematico"
+    (pasta / "morphs").mkdir(parents=True)
+    (pasta / "morphs" / "velho.glb").write_bytes(b"glTF")
+    assert not torso_atualizado(pasta, p)
+    g = gerar_torso(p, tmp_path, escrever_densa=False)
+    assert not (pasta / "morphs").exists()
+    esquemas.validar("gabarito", {k: v for k, v in g.items() if not k.startswith("_")})
+    assert g["textura"]["realismo"] == "esquematico" and g["textura"]["sh9"][1:] == [0.0] * 8
+    from PIL import Image
+
+    with Image.open(pasta / "textura.png") as im:
+        assert im.size == (1024, 1024)
+        assert im.convert("RGB").tobytes() == textura_neutra(p["semente"]).tobytes()
+    assert torso_atualizado(pasta, p)
+    assert not torso_atualizado(pasta, {**p, "semente": 7})
+    assert not torso_atualizado(pasta, {**p, "textura": {"realismo": "fotografico"}})
+    gab = json.loads((pasta / "gabarito.json").read_text(encoding="utf-8"))
+    gab.pop("textura")  # gabarito da v0.1.x: sem textura.esquema -> desatualizado
+    (pasta / "gabarito.json").write_text(json.dumps(gab), encoding="utf-8")
+    assert not torso_atualizado(pasta, p)
+
+
+def test_cli_se_desatualizado_pula_o_que_ja_esta_gerado(torsos, dir_sinteticos, capsys):
+    from mesh import cli
+
+    antes = (dir_sinteticos / "t03_pequeno_ptose" / "gabarito.json").stat().st_mtime_ns
+    assert cli.main(["torso", "--preset", "t03_pequeno_ptose", "--saida", str(dir_sinteticos),
+                     "--se-desatualizado"]) == 0
+    assert "nada a regerar" in capsys.readouterr().out
+    assert (dir_sinteticos / "t03_pequeno_ptose" / "gabarito.json").stat().st_mtime_ns == antes
+
+
+def test_preset_fotografico_nao_e_a_textura_neutra(torsos, dir_sinteticos):
+    from PIL import Image
+
+    with Image.open(dir_sinteticos / "t01_simetrico_300" / "textura.png") as im:
+        arr = np.asarray(im.convert("RGB"), dtype=float)
+    assert arr.shape[1] > 1024 and arr.shape[0] > 1024  # 4 px/mm, nao 1024 x 1024
+    assert np.abs(arr - COR_BASE).max() > 60            # ha areola/mamilo e sombra: nao e o tom liso

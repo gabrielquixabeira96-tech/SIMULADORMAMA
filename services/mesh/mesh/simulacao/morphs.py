@@ -3,6 +3,12 @@
 Um `.glb` por (plano, imf) com a malha base completa (mesma geometria, textura e ordem de vertices
 da malha processada) + um target por (implante, lado), deltas de POSITION e NORMAL em acessores
 esparsos (|delta| > 0,01 mm), nomes em `mesh.extras.targetNames`, e `manifest.json` (`morphs/1.0`).
+
+Cada `.glb` de morph leva tambem `asset.extras.iluminacao` (`iluminacao_sh9/1.0`, contratos §10.6;
+contrato C1 do ADR 0020): os 9 coeficientes SH9 da luz ja assada na textura, ajustados por minimos
+quadrados robustos a luminancia da textura nos vertices (`origem: "ajuste"`), ou a luz padrao
+frontal-superior no quadro anatomico dos landmarks (`origem: "padrao"`) quando nao ha textura ou o
+ajuste nao explica os dados. O web usa isso so para a razao de sombreamento do modo foto (ADR 0019).
 """
 
 from __future__ import annotations
@@ -17,9 +23,10 @@ import numpy as np
 from mesh import esquemas
 from mesh.malha.geometria import normais_vertices, soldar
 from mesh.malha.glb import escrever_glb
-from mesh.malha.io import ler_malha, sha256_arquivo
+from mesh.malha.io import ler_malha, png_bytes, sha256_arquivo
 from mesh.medir.antropometria import LANDMARKS, _pos
 from mesh.simulacao.geometrico import ErroSimulacao, SimuladorGeometrico, previsto
+from mesh.simulacao.iluminacao import ajustar_sh9, eixos_anatomicos
 from mesh.versao import VERSAO_SOFTWARE
 
 PLANOS = ("subglandular", "dual_plane")
@@ -60,6 +67,9 @@ def gerar_morphs(pasta: Path, landmarks: dict, implantes: list[dict], planos=PLA
     base = ler_malha(pasta / arquivo_obj)
     Vw, Fw, mapa = soldar(base.V, base.F)
     Nw = normais_vertices(Vw, Fw)
+    # luz assada na textura (contrato C1): ajuste SH9 nas normais da malha lida, ou padrao
+    iluminacao = ajustar_sh9(base.textura, base.uv, Nw[mapa], eixos=eixos_anatomicos(landmarks))
+    imagem_png = png_bytes(base.textura) if base.textura is not None and base.uv is not None else None
     sim = SimuladorGeometrico()
     saida = pasta / "morphs"
     saida.mkdir(parents=True, exist_ok=True)
@@ -87,10 +97,11 @@ def gerar_morphs(pasta: Path, landmarks: dict, implantes: list[dict], planos=PLA
                                          "indice": len(meta_targets),
                                          "previsto": previsto(campos, landmarks) if numeros_calculados else None})
             arq = f"{plano}__{imf}.glb"
-            escrever_glb(saida / arq, base, quadro=quadro, alvos=alvos,
+            escrever_glb(saida / arq, base, quadro=quadro, alvos=alvos, imagem_png=imagem_png,
                          extras_asset={"esquema": "morphs/1.0",
                                        "versao_config_simulacao": str(config.get("versao", "?")),
-                                       "nao_calibrado": True, "modelo": sim.modelo})
+                                       "nao_calibrado": True, "modelo": sim.modelo,
+                                       "iluminacao": iluminacao})
             arquivos.append({"arquivo": arq, "plano": plano, "imf": imf, "sha256": sha256_arquivo(saida / arq),
                              "targets": meta_targets})
             n_targets += len(meta_targets)
@@ -111,4 +122,5 @@ def gerar_morphs(pasta: Path, landmarks: dict, implantes: list[dict], planos=PLA
     manifest_interno["_duracao_s"] = round(time.perf_counter() - t0, 2)
     manifest_interno["_n_targets"] = n_targets
     manifest_interno["_bytes"] = {a["arquivo"]: (saida / a["arquivo"]).stat().st_size for a in arquivos}
+    manifest_interno["_iluminacao"] = iluminacao
     return manifest_interno

@@ -73,6 +73,26 @@
         "versao": { "type": "string" },
         "malha": { "enum": ["densa", "decimada"] }
       }
+    },
+    "textura": {
+      "description": "Textura gerada e a luz SH9 assada nela (docs/contratos.md secao 4.5; ADR 0020). Opcional para gabaritos anteriores a v0.2.0.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["esquema", "realismo", "sh9", "r2", "origem"],
+      "properties": {
+        "esquema": { "const": "iluminacao_sh9/1.0" },
+        "realismo": { "enum": ["esquematico", "fotografico"] },
+        "sh9": { "type": "array", "items": { "type": "number" }, "minItems": 9, "maxItems": 9 },
+        "r2": { "type": "number", "maximum": 1 },
+        "origem": { "const": "sintetico" },
+        "fototipo": { "enum": ["I", "II", "III", "IV", "V", "VI"] },
+        "px_por_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "largura_px": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "altura_px": { "type": "integer", "minimum": 1, "maximum": 2048 },
+        "areola_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "mamilo_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
     }
   },
   "$defs": {

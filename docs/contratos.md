@@ -155,7 +155,7 @@ O gabarito do torso sintético informa o **volume adicionado real** (seção 4),
 
 ## 4. Torso sintético: parâmetros e gabarito (`gabarito/1.0`)
 
-Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`). Determinístico dado `semente`. Sem textura fotográfica: textura **neutra procedural** (tom uniforme com ruído leve, para exercitar o carregamento de `map_Kd`).
+Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`). Determinístico dado `semente`. A textura é **sempre procedural, gerada por código, sem nenhuma imagem real** (ADR 0009 item 5; ADR 0020), em um de dois modos (`textura.realismo`, seção 4.5): `"esquematico"` — a neutra do Marco 0 (tom uniforme com ruído leve), padrão quando os parâmetros não pedem textura — ou `"fotografico"` — pele por fototipo com aréola e mamilo desenhados por código e uma luz de estúdio SH9 conhecida "assada", usada pelos 3 presets para que a demo e o modo foto do web (ADR 0019) tenham o que mostrar.
 
 ### 4.1 Parâmetros de entrada
 
@@ -174,7 +174,14 @@ Gerador: `services/mesh` (`python -m mesh.cli torso` e `POST /torso-sintetico`).
     "delta_altura_mamilo_mm": 0,            // Y(mamilo_esq) − Y(mamilo_dir) além do que ptose/volume já produzem
     "delta_lateral_mamilo_mm": 0            // deslocamento extra de mamilo_esq em X (positivo = mais lateral)
   },
-  "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 }
+  "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 },
+  "textura": {                              // opcional (ADR 0020); ausente = { "realismo": "esquematico" }
+    "realismo": "fotografico",              // "esquematico" | "fotografico"
+    "fototipo": "III",                      // Fitzpatrick "I".."VI"; padrão "III"
+    "px_por_mm": 4,                         // [1, 8]; padrão 4 (só no fotográfico)
+    "areola_mm": 40,                        // diâmetro nominal [25, 70]; padrão 40
+    "mamilo_mm": 10                         // diâmetro nominal [5, 16]; padrão 10
+  }
 }
 ```
 
@@ -189,9 +196,11 @@ Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona
   denso.obj            # malha densa (~300k faces), mm, quadro anatômico — só para gerar o gabarito; PODE ser apagada
   torso.obj            # malha decimada 30–50k vértices, mm, quadro anatômico
   torso.mtl            # `map_Kd textura.png`
-  textura.png          # 1024×1024, neutra
+  textura.png          # esquemático: 1024×1024 neutra; fotográfico: min(4096, P·px_por_mm) × min(2048, altura·px_por_mm), largura múltipla de 4 (t01: 3392×1900, ~4,9 MB)
   torso.glb            # a mesma malha decimada, com textura embutida, para o viewer (seção 5.3)
 ```
+
+Regerar um torso **apaga** `<saida>/<nome>/morphs/`: os `.glb` de morph embutem a malha e a textura antigas (e `sha256_malha_base` deixaria de bater). `python -m mesh.cli torso ... --se-desatualizado` (usado por `scripts/mesh.sh torsos` e `scripts/demo_sandbox.sh`) só regera o que falta, o que tem gabarito sem `textura.esquema` (torsos da v0.1.x) ou parâmetros/versão diferentes; `MESH_TORSOS_FORCAR=1` regera todos.
 
 ### 4.3 `gabarito.json`
 
@@ -233,7 +242,13 @@ Nota: `volume_ml`, `ptose` e `n_imf_mm` são por lado; `assimetria` só adiciona
     "densa":    { "arquivo": "denso.obj", "n_vertices": 150312, "n_faces": 300000 },
     "decimada": { "arquivo": "torso.obj", "n_vertices": 40011, "n_faces": 79802, "sha256": "..." }
   },
-  "geodesica": { "algoritmo": "mmp", "biblioteca": "pygeodesic", "malha": "densa" }
+  "geodesica": { "algoritmo": "mmp", "biblioteca": "pygeodesic", "malha": "densa" },
+  "textura": {                                   // opcional em gabaritos anteriores à v0.2.0; seção 4.5
+    "esquema": "iluminacao_sh9/1.0", "realismo": "fotografico", "origem": "sintetico", "r2": 1.0,
+    "sh9": [2.073771, 0.369248, 0.673878, 0.0, 0.0, 0.226547, 0.13512, 0.0, 0.055279],  // luz assada (seção 10.6)
+    "fototipo": "III", "px_por_mm": 4.0, "largura_px": 3392, "altura_px": 1900,
+    "areola_mm": 40.0, "mamilo_mm": 10.0, "sha256": "..."                                 // sha256 de textura.png
+  }
 }
 ```
 
@@ -255,7 +270,18 @@ Os três torsos do critério do Marco 0, gerados por `python -m mesh.cli torso -
 | `t02_assimetrico` | 320 | 350/280 | 0.3/0.2 | 75/68 | +8 mm altura, +5 mm lateral |
 | `t03_pequeno_ptose` | 280 | 180/180 | 0.6/0.6 | 90/90 | 0 |
 
-Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI).
+Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI). Os 3 presets pedem `"textura": { "realismo": "fotografico", "fototipo": "III" }` (ADR 0020).
+
+### 4.5 Textura do torso sintético (`textura.realismo`; ADR 0020)
+
+Tudo é código determinístico (`services/mesh/mesh/sintetico/textura_pele.py`); nenhum arquivo de imagem é lido. Mesma `semente` e mesmos parâmetros → o mesmo `textura.png` byte a byte (na mesma plataforma); sementes diferentes → texturas diferentes.
+
+- **`"esquematico"`**: `textura_neutra(semente)` (1024×1024; tom `(206, 192, 182)` com ruído de ±3 níveis), sem luz: o bloco do gabarito leva `sh9` de luz uniforme (`[1/0,282095; 0; …; 0]`, E ≡ 1).
+- **`"fotografico"`**: textura não quadrada de `px_por_mm` texels por mm nas duas direções, periódica em u. O centro do texel (linha i de cima para baixo, coluna j) fica em `s = −P/2 + (j + 0,5)/W · P`, `y = y_base + (1 − (i + 0,5)/H) · (y_topo − y_base)` (a mesma UV cilíndrica da malha). Camadas:
+  1. albedo por fototipo (tabela I–VI de pele, aréola e mamilo), com mosqueado de baixa frequência (±3 % de matiz), poros/microtextura (fBm periódico em u), subtom rosado leve nos polos inferiores e esternal e alguns nevos pequenos a mais de 45 mm dos mamilos;
+  2. **aréola** (Ø `areola_mm`, borda suave de 2 mm) e **mamilo** (Ø `mamilo_mm`) desenhados pela distância 3D de cada texel, levado à superfície por `(s, y) → torso.avaliar`, ao ponto do mamilo `torso.ponto(*mama.param_mamilo())` (raio nominal = metade do diâmetro nessa métrica); 8–12 tubérculos de Montgomery e rugas radiais do mamilo como relevo fino (normal perturbada) e cor;
+  3. **luz assada**: `albedo × E_SH9(N) × sombra_do_sulco × brilho`, com `E_SH9` = ambiente 0,36 + duas direcionais de 0,45 vindas de `(±0,55; 0,40; 0,73)` (fotografia clínica com duas fontes simétricas), no quadro anatômico (= espaço do objeto do torso). Os 9 coeficientes vão para `gabarito.textura.sh9` (`origem: "sintetico"`, `r2: 1.0`).
+- Saída em sRGB 8 bits, sem tone mapping; o PNG não tem metadados.
 
 ---
 
@@ -279,6 +305,7 @@ Saída padrão: `data/sinteticos/<nome>/` (ignorado pelo git; gerado pela CI).
 - **Unidade: mm** (desvio consciente da convenção "metros" do glTF; ADR 0010). O arquivo DEVE declarar `asset.extras.unidade = "mm"` e `asset.extras.quadro = "scan" | "anatomico"`. O carregador do web DEVE rejeitar `.glb` sem `asset.extras.unidade == "mm"`.
 - `asset.generator = "simulador-mamario/mesh <versao>"`.
 - Material único, `pbrMetallicRoughness` com `baseColorTexture` (textura embutida como imagem PNG/JPG no GLB), `metallicFactor 0`, `roughnessFactor 0.8`, `doubleSided false`.
+- Os `.glb` de morph (seção 10) levam também `asset.extras.iluminacao` (`iluminacao_sh9/1.0`, seção 10.6): a luz já assada na textura, para o sombreamento por razão do modo foto (ADR 0019/0020).
 - A malha é `Y` para cima, sem nós com transformação (nó raiz com matriz identidade). O web NUNCA aplica escala ao carregar.
 - Ordem dos vértices do `.glb` processado é a **mesma** de `processada.obj` (mesmo índice de vértice nos dois arquivos). Isso permite `landmarks.vertice` valer nos dois.
 
@@ -595,6 +622,7 @@ mt__<implante_id>__<plano>__<imf>
 - `asset.extras.unidade = "mm"`, `asset.extras.quadro` igual ao da malha base, `asset.extras.esquema = "morphs/1.0"`, `asset.extras.versao_config_simulacao = "1.0"`.
 - Pesos: o web usa `morphTargetInfluences[i] ∈ [0, 1]`; **1 = implante inteiro**. Interpolação entre dois volumes vizinhos do mesmo modelo/plano/imf é permitida com pesos `w` e `1−w` (documentada na UI como "interpolado"). Somar targets de planos diferentes é proibido.
 - O envelope de incerteza (±`envelope_rms_mm`) é renderizado pelo web deslocando a superfície deformada ao longo das normais (shader ou segunda malha translúcida), não é um morph target.
+- `asset.extras.iluminacao` (seção 10.6) em todo `.glb` de morph, igual nos 4 arquivos da mesma malha.
 
 ### 10.4 `manifest.json`
 
@@ -635,6 +663,25 @@ Requisição `POST /morphs`:
 2. Carrega o `.glb` do (plano, imf) selecionado com `GLTFLoader`; confere `asset.extras.unidade === "mm"` e `esquema === "morphs/1.0"`.
 3. Seleciona targets por nome via `morphTargetDictionary`; slider antes/depois = peso 0 → 1; comparação lado a lado = dois `<Canvas>`/viewports com a mesma câmera sincronizada, cada um com seu target (ou `__dir`/`__esq` em um viewport).
 4. Troca de plano/imf = troca de `.glb` (pré-carregar os 4).
+
+### 10.6 `asset.extras.iluminacao` (`iluminacao_sh9/1.0`; contrato C1 do ADR 0020)
+
+```jsonc
+"iluminacao": { "esquema": "iluminacao_sh9/1.0", "sh9": [9 floats], "r2": 0.95, "origem": "ajuste" }   // ou "padrao"
+```
+
+- **Para que serve**: o modo foto do web (ADR 0019) desenha a textura sem somar luz e aplica depois do morph só a mudança de sombreamento, `R = E(N_depois) / E(N_antes)`. `E` é a irradiância da luz que já está na textura; a escala de `sh9` não importa (só a razão), e no ajuste ela carrega o albedo médio.
+- **Base e convenção** (idênticas no Python e no web): harmônicos esféricos reais de ordem 2, sem fase de Condon-Shortley, ordem `(l, m)` com `m = −l..l`, `n = (x, y, z)` unitário **no espaço do objeto do `.glb`** (a luz acompanha a paciente, não a câmera); normalização de Ramamoorthi & Hanrahan (2001). `sh9` são coeficientes de **irradiância** (já convoluídos com o cosseno: A0 = π, A1 = 2π/3, A2 = π/4), `E(n) = Σ sh9[i] · Y_i(n)`, luminância linear em [0, 1]:
+
+  | i | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Y_i(n) | 0,282095 | 0,488603·y | 0,488603·z | 0,488603·x | 1,092548·xy | 1,092548·yz | 0,315392·(3z²−1) | 1,092548·xz | 0,546274·(x²−y²) |
+
+  (a mesma base e ordem de `THREE.SphericalHarmonics3`). Luz ambiente `a` + direcional `d` vinda de `L`: `sh9[i] = d · A_l(i) · Y_i(L)` e `sh9[0] += a / 0,282095`.
+- **`origem: "ajuste"`**: `services/mesh/mesh/simulacao/iluminacao.py` (`ajustar_sh9`) amostra a luminância linear da textura (bilinear, REPEAT em u e CLAMP em v, como o sampler) na UV de cada vértice da malha lida, só onde `N · z_anatômico > −0,2` (sem landmarks: `N · (0,0,1)_obj`), e ajusta os 9 coeficientes por mínimos quadrados robustos (IRLS com peso de Huber, k = 1,345·MAD). `r2` é o R² ponderado pelos pesos finais, em [0, 1].
+- **`origem: "padrao"`**: sem textura/UV, menos de 500 amostras, textura lisa, R² < 0,3 ou irradiância ajustada ≤ 0 em alguma normal amostrada. `sh9` = ambiente 0,45 + direcional 0,55 com `L = normalizar(0; 0,35; 0,94)` **no quadro anatômico dos landmarks** (seção 1.1), levada ao espaço do objeto (`L_obj = [x y z] · L`); `r2` = 0 quando não houve ajuste. O web trata ausente ou `"padrao"` do mesmo jeito (luz padrão calculada por ele a partir dos landmarks).
+- **Números de referência**: luz padrão no quadro identidade (torsos sintéticos), `sh9 = [2,082632; 0,196393; 0,527454; 0; 0; 0,154329; 0,222715; 0; −0,028731]`, E mínima ≈ 0,43 e E(L) = 0,45 + 0,55 × 1,0625; vetor de conferência para outra implementação: E(0,0,1) = 0,985701, E(0,1,0) = 0,628911, E(1,0,0) = 0,501563, E(0,−1,0) = 0,436995, E(normalizar(0,3; −0,2; 0,93)) = 0,889187. No t01 fotográfico (catálogo de teste): `origem: "ajuste"`, R² ≈ 0,95, `E` ajustada = `E` assada a menos da escala com RMS de 0,7 % sobre os vértices (teste T11).
+- Nada muda em nomes de targets, `manifest.json` ou API HTTP.
 
 ---
 
