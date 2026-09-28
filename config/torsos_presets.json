@@ -14,7 +14,7 @@
       "n_imf_mm": { "dir": 70, "esq": 70 },
       "assimetria": { "delta_altura_mamilo_mm": 0, "delta_lateral_mamilo_mm": 0 },
       "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 },
-      "textura": { "realismo": "fotografico", "fototipo": "III" }
+      "textura": { "realismo": "fotografico", "fototipo": "III", "px_por_mm": 2 }
     },
     {
       "esquema": "torso_parametros/1.0",
@@ -28,7 +28,7 @@
       "n_imf_mm": { "dir": 75, "esq": 68 },
       "assimetria": { "delta_altura_mamilo_mm": 8, "delta_lateral_mamilo_mm": 5 },
       "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 },
-      "textura": { "realismo": "fotografico", "fototipo": "III" }
+      "textura": { "realismo": "fotografico", "fototipo": "III", "px_por_mm": 2 }
     },
     {
       "esquema": "torso_parametros/1.0",
@@ -42,7 +42,7 @@
       "n_imf_mm": { "dir": 90, "esq": 90 },
       "assimetria": { "delta_altura_mamilo_mm": 0, "delta_lateral_mamilo_mm": 0 },
       "resolucao": { "densa_faces": 300000, "decimada_vertices": 40000 },
-      "textura": { "realismo": "fotografico", "fototipo": "III" }
+      "textura": { "realismo": "fotografico", "fototipo": "III", "px_por_mm": 2 }
     }
   ]
 }
