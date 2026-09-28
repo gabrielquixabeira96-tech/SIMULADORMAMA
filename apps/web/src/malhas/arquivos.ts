@@ -1,7 +1,15 @@
-/** Lista fixa de arquivos de malha servíveis por rota (ADR 0003 item 7). */
+import { ARQUIVO_FOTO_REGEX } from "@simulador/contratos";
+
+/**
+ * Lista fixa de arquivos de malha servíveis por rota (ADR 0003 item 7). Malha reconstruída de
+ * fotos (plano "foto → 3D", C4): as fotos SEM rosto da própria malha (`original/foto_<vista>.jpg|png`)
+ * e o `observado.png` (C3). O `reconstrucao.json` não sai por aqui (tem números calculados): sai
+ * redigido por desenho em `/api/malhas/<id>/foto-real`.
+ */
 const NOMES_FIXOS: Record<string, string> = {
   "processada.glb": "model/gltf-binary",
   "morphs/manifest.json": "application/json",
+  "observado.png": "image/png",
 };
 const REGEX_MORPH = /^morphs\/(subglandular|dual_plane)__(manter|rebaixar)\.glb$/;
 
@@ -9,6 +17,7 @@ const REGEX_MORPH = /^morphs\/(subglandular|dual_plane)__(manter|rebaixar)\.glb$
 export function tipoDoArquivo(nome: string): string | null {
   if (Object.hasOwn(NOMES_FIXOS, nome)) return NOMES_FIXOS[nome] ?? null;
   if (REGEX_MORPH.test(nome)) return "model/gltf-binary";
+  if (ARQUIVO_FOTO_REGEX.test(nome)) return nome.endsWith(".png") ? "image/png" : "image/jpeg";
   return null;
 }
 

@@ -26,7 +26,8 @@ export async function GET() {
       // modo demo (ADR 0018): só torsos gerados pelo services/mesh aparecem
       if (!(await torsoUtilizavel(nome))) continue;
       const tem = async (a: string) => stat(caminhoEmDataDir(`sinteticos/${nome}/${a}`)).then((s) => s.isFile()).catch(() => false);
-      torsos.push({ nome, glb: await tem("torso.glb"), obj: await tem("torso.obj"), gabarito: await tem("gabarito.json") });
+      // `foto`: fotos de exemplo já reconstruídas pelo pipeline (plano "foto → 3D"; importar-foto)
+      torsos.push({ nome, glb: await tem("torso.glb"), obj: await tem("torso.obj"), gabarito: await tem("gabarito.json"), foto: await tem("foto/reconstrucao.json") });
     }
     return json({ torsos });
   } catch (e) {
