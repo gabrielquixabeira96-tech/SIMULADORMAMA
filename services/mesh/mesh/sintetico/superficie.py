@@ -181,7 +181,7 @@ class Mama:
 def forma_lado(p: dict, chave: str) -> dict:
     """Fatores de forma de um lado (torso_parametros/1.1), completados com os padroes."""
     f = dict(FORMA_PADRAO)
-    f.update(((p.get("forma") or {}).get(chave) or {}))
+    f.update((p.get("forma") or {}).get(chave) or {})
     return {k: float(v) for k, v in f.items()}
 
 
@@ -216,14 +216,15 @@ def criar_mama(lado: int, p: dict) -> Mama:
 class Torso:
     """S(s, y) = W(s, y) + (h_dir + h_esq + incisura) * n_W(s, y) + (0, 0, INCISURA_PROF_MM)."""
 
-    def __init__(self, parametros: dict, amostras_secao: int = 400001):
+    def __init__(self, parametros: dict, amostras_secao: int = 400001, secao: Secao | None = None):
         self.p = parametros
         self.largura = float(parametros["largura_toracica_mm"])
         self.profundidade = float(parametros.get("profundidade_toracica_mm", 200))
         self.altura = float(parametros.get("altura_torso_mm", 450))
         pa = parede_parametros(parametros)
-        self.secao = Secao(self.largura / 2, self.profundidade / 2, pa["expoente_secao"], amostras_secao,
-                           pa["achatamento_anterior"])
+        self.secao = secao if secao is not None else Secao(self.largura / 2, self.profundidade / 2,
+                                                           pa["expoente_secao"], amostras_secao,
+                                                           pa["achatamento_anterior"])
         self.mama_dir = criar_mama(-1, parametros)
         self.mama_esq = criar_mama(+1, parametros)
         sulco_min = min(self.mama_dir.y_sulco, self.mama_esq.y_sulco)

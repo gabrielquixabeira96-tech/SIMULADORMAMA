@@ -36,7 +36,37 @@ def faces_de_frente(S: np.ndarray, F: np.ndarray) -> np.ndarray:
     return (area < 0) & z_ok
 
 
-def pintor(S: np.ndarray, F: np.ndarray, largura: int, altura: int, cull: bool = True) -> np.ndarray:
+def _centro_dentro(S, F, face, jj, ii) -> np.ndarray:
+    T = S[F[face[jj, ii]]]
+    cx, cy = ii + 0.5, jj + 0.5
+    a, b, c = T[:, 0], T[:, 1], T[:, 2]
+
+    def aresta(p, q):
+        return (q[:, 0] - p[:, 0]) * (cy - p[:, 1]) - (q[:, 1] - p[:, 1]) * (cx - p[:, 0])
+
+    w0, w1, w2 = aresta(b, c), aresta(c, a), aresta(a, b)
+    return ((w0 <= 0) & (w1 <= 0) & (w2 <= 0)) | ((w0 >= 0) & (w1 >= 0) & (w2 >= 0))
+
+
+def aparar_contorno(S: np.ndarray, F: np.ndarray, face: np.ndarray) -> np.ndarray:
+    """O `polygon` do Pillow pinta todo pixel que a borda toca (cobertura ~1 px a mais no contorno).
+    No contorno (pixel coberto vizinho de fundo), so fica o pixel cujo centro esta dentro da propria
+    face: a mascara passa a amostrar o centro do pixel, como o z-buffer."""
+    face = face.copy()
+    cob = face >= 0
+    viz_fundo = np.zeros_like(cob)
+    viz_fundo[1:] |= ~cob[:-1]
+    viz_fundo[:-1] |= ~cob[1:]
+    viz_fundo[:, 1:] |= ~cob[:, :-1]
+    viz_fundo[:, :-1] |= ~cob[:, 1:]
+    jj, ii = np.nonzero(cob & viz_fundo)
+    fora = ~_centro_dentro(S, F, face, jj, ii)
+    face[jj[fora], ii[fora]] = -1
+    return face
+
+
+def pintor(S: np.ndarray, F: np.ndarray, largura: int, altura: int, cull: bool = True,
+           aparar: bool = True) -> np.ndarray:
     idx = np.nonzero(faces_de_frente(S, F))[0] if cull else np.arange(len(F))
     prof = S[F[idx], 2].mean(1)
     ordem = idx[np.argsort(-prof, kind="stable")]
@@ -47,7 +77,8 @@ def pintor(S: np.ndarray, F: np.ndarray, largura: int, altura: int, cull: bool =
     for k, face in enumerate(ordem.tolist()):
         p = tri[k]
         d.polygon([(p[0, 0], p[0, 1]), (p[1, 0], p[1, 1]), (p[2, 0], p[2, 1])], fill=face)
-    return np.asarray(img, dtype=np.int32)
+    out = np.asarray(img, dtype=np.int32)
+    return aparar_contorno(S, F, out) if aparar else out
 
 
 def zbuffer(S: np.ndarray, F: np.ndarray, largura: int, altura: int, cull: bool = True,
