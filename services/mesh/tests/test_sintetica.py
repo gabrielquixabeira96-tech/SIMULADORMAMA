@@ -89,7 +89,8 @@ def test_pintor_igual_ao_zbuffer(vista, largura, torsos, dir_sinteticos):
     n = np.cross(Xc[Fb[:, 1]] - Xc[Fb[:, 0]], Xc[Fb[:, 2]] - Xc[Fb[:, 0]])
     c = Xc[Fb].mean(1)
     cos = np.abs(np.einsum("ij,ij->i", n, c)) / (np.linalg.norm(n, axis=1) * np.linalg.norm(c, axis=1))
-    d = np.abs(prof_a - prof_b)[(a >= 0) & (b >= 0)]
+    with np.errstate(invalid="ignore"):
+        d = np.abs(prof_a - prof_b)[(a >= 0) & (b >= 0)]
     assert (d[cos > 0.3] < 2.0).mean() >= 0.995
     assert (d < 2.0).mean() >= 0.99
 
